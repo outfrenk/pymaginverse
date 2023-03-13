@@ -6,6 +6,7 @@ import pandas as pd
 import pyshtools as pysh
 from typing import Union, Literal
 from pathlib import Path
+from tqdm import tqdm
 
 from geomagnetic_field_inversions.geomagnetic_field_inversions.data_prep import StationData
 _DampingMethods = Literal['spatial_G', 'temporal']
@@ -122,7 +123,7 @@ class FieldInversion:
         self.cmb_earth = cmb_earth
         self.geodetic = geodetic
         self.verbose = verbose
-        # initiate blank data, error, type, coordinate, and conversion arrays
+        # initiate blank data, error, type, coordinate, conversion arrays, etc.
         self.schmidt_P = np.empty(0)
         self.schmidt_dP = np.empty(0)
         self.data_array = np.zeros((0, len(time_array)))
@@ -407,7 +408,7 @@ class FieldInversion:
 
     def run_inversion(self,
                       x0: Union[np.ndarray, list],
-                      max_iter: int = 20,
+                      max_iter: int = 5,
                       int_mult: float = 1,
                       **prep_kwargs):
         """
@@ -424,7 +425,7 @@ class FieldInversion:
             multiplies intensity values with this parameter, default 1
         **prep_kwargs
             optional keyword arguments in case the prepare_inversion function
-            has not been run yet. Requires at least x0, spatial_df, and
+            has not been run yet. Requires at least spatial_df and
             temporal_df. See self.prepare_inversion for more information.
         Returns
         -------
@@ -481,8 +482,10 @@ class FieldInversion:
                         ] += np.matmul(frechet_matrix.T * self._bspline(j + 1)
                                        / self.error_array[:, t]**2,
                                        frechet_matrix * self._bspline(k + 1))
-            self.res_iter[iteration, :7] = np.sqrt(self.res_iter[iteration, :7]
-                                                   / count_all)
+            for i in range(7):
+                if count_all[i] != 0:
+                    self.res_iter[iteration, i] = np.sqrt(
+                        self.res_iter[iteration, i] / count_all[i])
             self.res_iter[iteration, 7] = np.sqrt(self.res_iter[iteration, 7]
                                                   / np.sum(count_all))
             rhs_splined = np.zeros(self.nr_splines * self._nm_total)
@@ -524,8 +527,10 @@ class FieldInversion:
                     count_all += count
                     self.res_iter[iteration+1, 7] += np.sum(
                         (res_obs / self.error_array[:, t]) ** 2)
-                self.res_iter[iteration+1, :7] =\
-                    np.sqrt(self.res_iter[iteration+1, :7] / count_all)
+                for i in range(7):
+                    if count_all[i] != 0:
+                        self.res_iter[iteration+1, i] = np.sqrt(
+                                self.res_iter[iteration+1, i] / count_all[i])
                 self.res_iter[iteration+1, 7] =\
                     np.sqrt(self.res_iter[iteration+1, 7] / np.sum(count_all))
                 if self.verbose:
@@ -533,6 +538,7 @@ class FieldInversion:
 
     def save_spherical_coefficients(self,
                                     basedir: Union[Path, str] = '.',
+                                    file_name: str = '',
                                     save_iterations: bool = True,
                                     save_residual: bool = False):
         """
@@ -541,9 +547,11 @@ class FieldInversion:
         ----------
         basedir
             path where files will be saved
+        file_name
+            optional name to add to files
         save_iterations
             boolean indicating whether to save coefficients after
-            each iteration
+            each iteration. if True last coefficients is not saved separately.
         save_residual
             boolean indicating whether to save the residuals of each timestep
         """
@@ -556,10 +564,12 @@ class FieldInversion:
                                                    'res hor', 'res int',
                                                    'res incl', 'res decl',
                                                    'res total'])
-            residual_frame.to_csv(basedir / 'residual.csv', sep=';')
+            residual_frame.to_csv(basedir / f'{file_name}_residual.csv',
+                                  sep=';')
         if save_iterations:
-            np.save(basedir / 'all_coefficients', self.unsplined_iter)
-        np.save(basedir / 'final_coefficients', self.unsplined_gh)
+            np.save(basedir / f'{file_name}_all_coeff', self.unsplined_iter)
+        else:
+            np.save(basedir / f'{file_name}_final_coeff', self.unsplined_gh)
 
     def damping(self,
                 damp_type: _DampingMethods,
@@ -737,7 +747,6 @@ class FieldInversion:
             int_prod += iint_prod * dt
         return int_prod
 
-    # Function should be called per station, calculates modeled observation
     def forward_frechet(self,
                         coeff: Union[list, np.ndarray],
                         t: int,
@@ -815,3 +824,46 @@ class FieldInversion:
                     res_obs[counter] / self.error_array[counter, t])**2
                 counter += 1
         return forw_obs, frechet_matrix, res_obs, count
+
+    def sweep_damping(self,
+                      x0: Union[list, np.ndarray],
+                      spatial_range: Union[list, np.ndarray] = [0],
+                      temporal_range: Union[list, np.ndarray] = [0],
+                      damp_dipole=False,
+                      max_iter: int = 5,
+                      int_mult: float = 1,
+                      **save_kwargs):
+        """ Sweep through damping parameters to find ideal set
+
+        Parameters
+        ----------
+        x0
+            starting model gaussian coefficients, should be a float or
+            as long as (spherical_order + 1)^2 - 1
+        spatial_range
+            array or list to vary spatial damping parameters. Can be None if
+            temporal_range is inputted
+        temporal_range
+            array or list to vary temporal damping parameters.  Can be None if
+            spatial_range is inputted
+        damp_dipole
+            if False, damping is not applied to dipole coefficients (first 3).
+            If True, dipole coefficients are damped.
+        max_iter
+            maximum amount of iterations
+        int_mult
+            multiplies intensity values with this parameter, default 1
+        **save_kwargs
+            keyword arguments for saving files
+
+        """
+
+        for spatial_df in tqdm(spatial_range):
+            for temporal_df in temporal_range:
+                self.prepare_inversion(spatial_df=spatial_df,
+                                       temporal_df=temporal_df,
+                                       damp_dipole=damp_dipole)
+                self.run_inversion(x0=x0, max_iter=max_iter, int_mult=int_mult)
+                self.save_spherical_coefficients(
+                    file_name= f'{spatial_df:.2e}s+{temporal_df:.2e}t',
+                    **save_kwargs)
