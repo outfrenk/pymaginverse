@@ -7,7 +7,7 @@ import pyshtools as pysh
 from typing import Union, Literal
 from pathlib import Path
 
-from geomagnetic_field_inversion.geomagnetic_field_inversion.data_prep import StationData
+from geomagnetic_field_inversions.geomagnetic_field_inversions.data_prep import StationData
 _DampingMethods = Literal['spatial_G', 'temporal']
 
 
@@ -95,7 +95,7 @@ class FieldInversion:
         Parameters
         ----------
         time_array
-            Sets timearray for the inversion in kyr 
+            Sets timearray for the inversion in yr
         maxdegree
             maximum order for spherical harmonics model, default 3
         spl_order
@@ -352,10 +352,9 @@ class FieldInversion:
         self.nr_splines = len(self._t_array) + self._spl_order - 1
 
         # location of timeknots
-        # kyr correction
         self.time_knots = np.linspace(
-            self._t_array[0] - self._spl_order * self._t_step * 1e3,
-            self._t_array[-1] + self._spl_order * self._t_step * 1e3,
+            self._t_array[0] - self._spl_order * self._t_step,
+            self._t_array[-1] + self._spl_order * self._t_step,
             num=len(self._t_array) + 2 * self._spl_order)
 
         # Prepare damping matrices
@@ -459,6 +458,7 @@ class FieldInversion:
             gh_timesteps = BSpline(c=self.splined_gh, t=self.time_knots,
                                    k=self._spl_order, axis=0,
                                    extrapolate=False)(self._t_array)
+
             for t in range(len(self._t_array)):
                 # Calculate the forward observation
                 forw_obs, frechet_matrix, res_obs, count =\
@@ -667,8 +667,7 @@ class FieldInversion:
         bspline = BSpline.basis_element(np.arange(self._spl_order + 2),
                                         extrapolate=False)
         # necessary to get sum = 1 for weigh factors
-        # kyr correction
-        dt = self._t_step / newcot_order * 1e3
+        dt = self._t_step / newcot_order
         for i in range(self._spl_order + 1):
             # create correct splines to convolve with!
             bspline_matrix[i] = bspline(
@@ -712,18 +711,16 @@ class FieldInversion:
         bspline_matrix = np.zeros((temp_order + 1, newcot_order + 1))
         bspline = BSpline.basis_element(np.arange(temp_order + 2),
                                         extrapolate=False)
-        # kyr correction
-        dt = self._t_step * 1e3 / newcot_order
+        dt = self._t_step / newcot_order
         for i in range(temp_order + 1):
             # create correct splines to convolve with!
             bspline_matrix[i] = bspline(
                 np.linspace(i, i + 1, newcot_order + 1)
             )[::-1]
         coeff = np.zeros(3)
-        # kyr correction (square because of _t_step * _t_step
-        coeff[0] = 1e-6 / self._t_step
-        coeff[1] = -2e-6 / self._t_step
-        coeff[2] = 1e-6 / self._t_step
+        coeff[0] = 1 / self._t_step**2
+        coeff[1] = -2 / self._t_step**2
+        coeff[2] = 1 / self._t_step**2
         int_prod = 0
         # integrate for time 'spend' with the spline combination
         for t in range(low, high + 1):
@@ -799,7 +796,7 @@ class FieldInversion:
             frechet[5] = (forw[3]*frechet[2] - forw[2]*frechet[3]) / forw[4]**2
             forw[6] = np.arctan2(forw[1], forw[0])  # decl
             frechet[6] = (forw[0]*frechet[1] - forw[1]*frechet[0]) / forw[3]**2
-
+            # print(forw)
             # fill arrays and matrices with required datatype
             for j in station_types:
                 count[j] += 1

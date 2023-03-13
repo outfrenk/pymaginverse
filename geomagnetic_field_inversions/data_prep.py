@@ -46,6 +46,7 @@ def interpolate_data(t: Union[np.ndarray, list],
 
 def check_data(ttype: _DataTypes,
                data: Union[list, np.ndarray],
+               time_factor: int,
                error: Union[list, np.ndarray] = None):
     """
     Checks if the data is correctly inputted and datatypes exist.
@@ -58,6 +59,10 @@ def check_data(ttype: _DataTypes,
         string containing the datatype of the corresponding data array
     data
         numpy array containing 2 rows: data and time
+    time_factor
+            unit of the time vector. E.g. if timevector is inputted in kyr,
+            factor should be 1.000. If timevector is inputted in Myr, factor
+            should be 1.000.000.
     error
         error of the data, which should be list or numpy array with length
         equal length to time vector. If no error is included in data,
@@ -97,6 +102,7 @@ def check_data(ttype: _DataTypes,
                         f'It should have length {len(data[0])} or length 1')
         
     data = np.array(data)
+    data[0] *= time_factor
     sorting = data[0].argsort()  # sort on time; small to large
     data = data[:, sorting]  # data, time
     error = error[sorting]
@@ -123,10 +129,12 @@ class StationData:
         self.data = []
         self.types = []
         self.fit_data = None
+        self.time_factor = 1
 
     def add_data(self,
                  ttype: _DataTypes,
                  data: Union[list, np.ndarray],
+                 time_factor: int,
                  error: Union[list, np.ndarray] = None):
         """
         Add magnetic data and data type to the class
@@ -143,6 +151,10 @@ class StationData:
             magnetic data (x, y, z, hor, inc, dec, or int):
             [[time_1, time_2, time_3, ..., time_n]
              [inc_1, inc_2, inc_3, ..., inc_n]]
+        time_factor
+            unit of the time vector. E.g. if timevector is inputted in kyr,
+            factor should be 1.000. If timevector is inputted in Myr, factor
+            should be 1.000.000.
         error
             error of the data, which should be list or numpy array with length
             equal length of time vector. If no error is included in data,
@@ -150,7 +162,7 @@ class StationData:
 
         self.data contains time, data, and error
         """
-        self.data.append(check_data(ttype, data, error))
+        self.data.append(check_data(ttype, data, time_factor, error))
         self.types.append(ttype)
 
     def fitting(self,
