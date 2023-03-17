@@ -158,12 +158,16 @@ class FieldInversion:
 
     @t_array.setter
     def t_array(self, array: Union[list, np.ndarray]):
-        self._t_step = array[1] - array[0]
-        self._t_array = array
-        for i in range(len(self._t_array) - 1):
-            if self._t_array[i+1] - self._t_array[i] != self._t_step:
-                raise Exception("Time vector has different timesteps."
-                                " Redefine vector with same timestep")
+        if len(array) == 1:
+            self._t_step = 0
+            self._t_array = array
+        else:
+            self._t_step = array[1] - array[0]
+            self._t_array = array
+            for i in range(len(self._t_array) - 1):
+                if self._t_array[i+1] - self._t_array[i] != self._t_step:
+                    raise Exception("Time vector has different timesteps."
+                                    " Redefine vector with same timestep")
         self.matrix_ready = False
 
     @property
@@ -363,7 +367,7 @@ class FieldInversion:
         self.spatial_damp_matrix = np.zeros(
             (self._nm_total * self.nr_splines,
              self._nm_total * self.nr_splines))
-        if spatial_df != 0:
+        if spatial_df != 0 and self._t_step != 0:
             if self.verbose:
                 print('Setting up spatial damping matrix')
             spatial_damp = self.damping('spatial_G', damp_dipole)
@@ -385,7 +389,7 @@ class FieldInversion:
         self.temporal_damp_matrix = np.zeros(
             (self._nm_total * self.nr_splines,
              self._nm_total * self.nr_splines))
-        if temporal_df != 0:
+        if temporal_df != 0 and self._t_step != 0:
             if self.verbose:
                 print('Setting up temporal damping matrix')
             temporal_damp = self.damping('temporal', True)
@@ -427,14 +431,16 @@ class FieldInversion:
             optional keyword arguments in case the prepare_inversion function
             has not been run yet. Requires at least spatial_df and
             temporal_df. See self.prepare_inversion for more information.
-        Returns
-        -------
 
         """
+        if len(self._t_array) == 1:
+            raise Exception('Switch to function "run_inversion_notime" to'
+                  ' execute calculations for one timestep')
         if self.matrix_ready is False:
             if self.verbose:
                 print('Preparing matrices for iterative inversion')
             self.prepare_inversion(**prep_kwargs)
+
         self.res_iter = np.zeros((max_iter+1, 8))
         self.unsplined_iter = np.zeros((max_iter,
                                         self._nm_total * len(self._t_array)))
@@ -536,9 +542,93 @@ class FieldInversion:
                 if self.verbose:
                     print('Residual is %.2f' % self.res_iter[iteration+1, 7])
 
+    def run_inversion_notime(self,
+                             x0: Union[np.ndarray, list] = None,
+                             max_iter: int = 5,
+                             int_mult: float = 1):
+        """
+        Run the iterative inversion for a single time
+
+        Parameters
+        ----------
+         x0
+            starting model gaussian coefficients, should be a float or
+            as long as (spherical_order + 1)^2 - 1
+        max_iter
+            maximum amount of iterations
+        int_mult
+            multiplies intensity values with this parameter, default 1
+
+        """
+        if self.matrix_ready is False:
+            if self.verbose:
+                print('Preparing matrices for iterative inversion')
+            self.prepare_inversion(spatial_df=0, temporal_df=0)
+
+        self.res_iter = np.zeros((max_iter + 1, 8))
+        self.unsplined_iter = np.zeros((max_iter, self._nm_total))
+        # initiate splined values with starting model
+        assert len(x0) == self._nm_total, \
+            f'x0 has incorrect shape: {len(x0)},' \
+            f' it should be: {self._nm_total}'
+        self.unsplined_gh = x0
+        for iteration in range(max_iter):
+            if self.verbose:
+                print(f'Start iteration {iteration + 1}')
+            count_all = np.zeros(7)
+
+            # Calculate the forward observation
+            forw_obs, frechet_matrix, res_obs, count = \
+                self.forward_frechet(self.unsplined_gh, 0, iteration, int_mult)
+            count_all += count
+            # save residual
+            self.res_iter[iteration, 7] += np.sum(
+                (res_obs / self.error_array[:, 0]) ** 2)
+            # multiply the 'right hand side' and apply covariance matrix
+            rhs_unsplined = np.matmul(
+                frechet_matrix.T / self.error_array[:, 0],
+                res_obs / self.error_array[:, 0])
+            normal_eq_unsplined = np.matmul(frechet_matrix.T
+                                            / self.error_array[:, 0]**2,
+                                            frechet_matrix)
+            for i in range(7):
+                if count_all[i] != 0:
+                    self.res_iter[iteration, i] = np.sqrt(
+                        self.res_iter[iteration, i] / count_all[i])
+            self.res_iter[iteration, 7] = np.sqrt(self.res_iter[iteration, 7]
+                                                  / np.sum(count_all))
+
+            # solve the equations
+            update = np.matmul(pinv(normal_eq_unsplined), rhs_unsplined)
+            self.unsplined_gh += update
+            # cut of the sides that do not have physical meaning
+            self.unsplined_iter[iteration, :] = self.unsplined_gh
+            if self.verbose:
+                print('Residual is %.2f' % self.res_iter[iteration, 7])
+            # residual after last iteration
+            if iteration == max_iter - 1:
+                if self.verbose:
+                    print('Calculate residual last iteration')
+                count_all = np.zeros(7)
+                forw_obs, frechet_matrix, res_obs, count = \
+                    self.forward_frechet(self.unsplined_gh, 0, iteration + 1,
+                                         int_mult)
+                count_all += count
+                self.res_iter[iteration + 1, 7] += np.sum(
+                    (res_obs / self.error_array[:, 0]) ** 2)
+                for i in range(7):
+                    if count_all[i] != 0:
+                        self.res_iter[iteration + 1, i] = np.sqrt(
+                            self.res_iter[iteration + 1, i] / count_all[i])
+                self.res_iter[iteration + 1, 7] = \
+                    np.sqrt(
+                        self.res_iter[iteration + 1, 7] / np.sum(count_all))
+                if self.verbose:
+                    print('Residual is %.2f' % self.res_iter[iteration + 1, 7])
+
     def save_spherical_coefficients(self,
                                     basedir: Union[Path, str] = '.',
-                                    file_name: str = '',
+                                    file_name: str = 'result',
                                     save_iterations: bool = True,
                                     save_residual: bool = False):
         """
@@ -830,9 +920,8 @@ class FieldInversion:
                       spatial_range: Union[list, np.ndarray] = [0],
                       temporal_range: Union[list, np.ndarray] = [0],
                       damp_dipole=False,
-                      max_iter: int = 5,
-                      int_mult: float = 1,
-                      **save_kwargs):
+                      inv_kwargs={'max_iter': 5, 'int_mult': 1},
+                      save_kwargs={'basedir': '.', 'save_residual': True}):
         """ Sweep through damping parameters to find ideal set
 
         Parameters
@@ -849,12 +938,13 @@ class FieldInversion:
         damp_dipole
             if False, damping is not applied to dipole coefficients (first 3).
             If True, dipole coefficients are damped.
-        max_iter
-            maximum amount of iterations
-        int_mult
-            multiplies intensity values with this parameter, default 1
-        **save_kwargs
-            keyword arguments for saving files
+        inv_kwargs
+            keyword arguments for running the inversion: number of iterations
+            (max_iter) and intensity multiplier (int_mult)
+        save_kwargs
+            keyword arguments for saving files: directory to save files
+            (basedir) and whether to save residuals (save_residual).
+            For more info see method save_spherical_coefficients
 
         """
 
@@ -863,7 +953,7 @@ class FieldInversion:
                 self.prepare_inversion(spatial_df=spatial_df,
                                        temporal_df=temporal_df,
                                        damp_dipole=damp_dipole)
-                self.run_inversion(x0=x0, max_iter=max_iter, int_mult=int_mult)
+                self.run_inversion(x0=x0, **inv_kwargs)
                 self.save_spherical_coefficients(
-                    file_name= f'{spatial_df:.2e}s+{temporal_df:.2e}t',
+                    file_name=f'{spatial_df:.2e}s+{temporal_df:.2e}t',
                     **save_kwargs)
