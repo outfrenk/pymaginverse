@@ -433,6 +433,7 @@ class FieldInversion:
             temporal_df. See self.prepare_inversion for more information.
 
         """
+        # TODO: add uncertainty
         if len(self._t_array) == 1:
             raise Exception('Switch to function "run_inversion_notime" to'
                   ' execute calculations for one timestep')
