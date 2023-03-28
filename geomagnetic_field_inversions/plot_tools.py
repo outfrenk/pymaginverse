@@ -5,6 +5,7 @@ from typing import Union
 import pandas as pd
 import pyshtools as pysh
 
+
 def plot_residuals(ax,
                    invmodel):
     """ Plots the residuals of the geomagnetic field inversion per iteration

@@ -8,7 +8,7 @@ from typing import Union, Literal
 from pathlib import Path
 from tqdm import tqdm
 
-from geomagnetic_field_inversions.geomagnetic_field_inversions.data_prep import StationData
+from geomagnetic_field_inversions.data_prep import StationData
 _DampingMethods = Literal['spatial_G', 'temporal']
 
 
