@@ -351,7 +351,7 @@ class FieldInversion:
         self.station_frechet[:, 2*self._nm_total:] = dz
 
         if self.verbose:
-            print('Setting up splines, timeknots, and starting model')
+            print('Setting up splines and timeknots')
         # TODO: check physical meaning nr_splines
         # number of temporal splines, convolution spline-order with time array
         self.nr_splines = len(self._t_array) + self._spl_order - 1
@@ -446,6 +446,8 @@ class FieldInversion:
         self.unsplined_iter = np.zeros((max_iter,
                                         self._nm_total * len(self._t_array)))
         # initiate splined values with starting model
+        if self.verbose:
+            print('Setting up starting model')
         assert len(x0) == self._nm_total, \
             f'x0 has incorrect shape: {len(x0)},'\
             f' it should be: {self._nm_total}'
