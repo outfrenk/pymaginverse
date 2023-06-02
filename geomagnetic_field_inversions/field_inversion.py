@@ -506,10 +506,8 @@ class FieldInversion:
                 # multiply the 'right hand side' and apply covariance matrix
                 # also apply time_cover to delete data not covering timestep
                 rhs_matrix[t, :] =\
-                    np.matmul(frechet_matrix.T / self.error_array[:, t]
-                              * self.time_cover[:, t, np.newaxis].T,
-                              res_obs * self.time_cover[:, t, np.newaxis]
-                              / self.error_array[:, t])
+                    np.matmul(frechet_matrix.T / self.error_array[:, t],
+                              res_obs / self.error_array[:, t])
                 # Apply B-Splines straight away (much easier)
                 # Apply time_cover to cancel out data not for relevant timestep
                 for j in range(self._spl_order):
@@ -518,10 +516,8 @@ class FieldInversion:
                             (t+j) * self._nm_total:(t+j+1) * self._nm_total,
                             (t+k) * self._nm_total:(t+k+1) * self._nm_total
                         ] += np.matmul(frechet_matrix.T * self._bspline(j + 1)
-                                       * self.time_cover[:, t, np.newaxis].T
                                        / self.error_array[:, t]**2,
-                                       frechet_matrix * self._bspline(k + 1)
-                                       * self.time_cover[:, t, np.newaxis])
+                                       frechet_matrix * self._bspline(k + 1))
             for i in range(7):
                 if count_all[i] != 0:
                     self.res_iter[iteration, i] = np.sqrt(
@@ -926,9 +922,9 @@ class FieldInversion:
             forw[4] = np.linalg.norm(forw[0:3])  # intens
             frechet[4] = (forw[3]*frechet[3] + forw[2]*frechet[2]) / forw[4]
             forw[5] = np.arcsin(forw[2] / forw[4])  # incl
-            frechet[5] = (forw[3]*frechet[2] - forw[2]*frechet[3]) / forw[4]**2  # should be forw[4]**1?
+            frechet[5] = (forw[3]*frechet[2] - forw[2]*frechet[3]) / forw[4]**2
             forw[6] = np.arctan2(forw[1], forw[0])  # decl
-            frechet[6] = (forw[0]*frechet[1] - forw[1]*frechet[0]) / forw[3]**2  # should be forw[3]**1?
+            frechet[6] = (forw[0]*frechet[1] - forw[1]*frechet[0]) / forw[3]**2
             # print(forw)
             # fill arrays and matrices with required datatype
             for j in station_types:
@@ -944,6 +940,12 @@ class FieldInversion:
                         res_obs[counter] -= 2 * np.pi
                     while res_obs[counter] < -np.pi:
                         res_obs[counter] += 2 * np.pi
+                # if no data, set to zero, otherwise one
+                if self.time_cover[counter, t] == 0:
+                    res_obs[counter] = 0
+                    forw_obs[counter] = 0
+                    frechet_matrix[counter, :] = 0
+                    count[j] -= 1
                 self.res_iter[iteration, j] += (
                     res_obs[counter] / self.error_array[counter, t])**2
                 counter += 1
