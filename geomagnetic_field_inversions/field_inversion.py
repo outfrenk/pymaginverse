@@ -201,7 +201,8 @@ class FieldInversion:
                     "int": 4, "inc": 5, "dec": 6}
         if isinstance(data_class, StationData):
             data_entry = np.zeros((len(data_class.types), len(self._t_array)))
-            error_entry = np.zeros((len(data_class.types), len(self._t_array)))
+            # set unknown errors to one to avoid divide by zero error frechet
+            error_entry = np.ones((len(data_class.types), len(self._t_array)))
             # time_cover indicates timerange of data (used in Fréchet)
             time_cover = np.zeros((len(data_class.types), len(self._t_array)))
             types_entry = []
@@ -313,7 +314,7 @@ class FieldInversion:
 
         # calculate schmidt polynomials and frechet x,y,z for all stations
         if self.verbose:
-            print('Calculating Schmidt polynomials and Frechet coefficients')
+            print('Calculating Schmidt polynomials and Fréchet coefficients')
         self.schmidt_P = np.zeros((len(self.station_coord),
                                    int((self.maxdegree + 1)
                                        * (self.maxdegree + 2) / 2)))
@@ -505,9 +506,9 @@ class FieldInversion:
                 # multiply the 'right hand side' and apply covariance matrix
                 # also apply time_cover to delete data not covering timestep
                 rhs_matrix[t, :] =\
-                    np.matmul(frechet_matrix.T * self.time_cover[:, t].T
-                              / self.error_array[:, t],
-                              res_obs * self.time_cover[:, t]
+                    np.matmul(frechet_matrix.T / self.error_array[:, t]
+                              * self.time_cover[:, t, np.newaxis].T,
+                              res_obs * self.time_cover[:, t, np.newaxis]
                               / self.error_array[:, t])
                 # Apply B-Splines straight away (much easier)
                 # Apply time_cover to cancel out data not for relevant timestep
@@ -517,10 +518,10 @@ class FieldInversion:
                             (t+j) * self._nm_total:(t+j+1) * self._nm_total,
                             (t+k) * self._nm_total:(t+k+1) * self._nm_total
                         ] += np.matmul(frechet_matrix.T * self._bspline(j + 1)
-                                       * self.time_cover[:, t].T
+                                       * self.time_cover[:, t, np.newaxis].T
                                        / self.error_array[:, t]**2,
                                        frechet_matrix * self._bspline(k + 1)
-                                       * self.time_cover[:, t])
+                                       * self.time_cover[:, t, np.newaxis])
             for i in range(7):
                 if count_all[i] != 0:
                     self.res_iter[iteration, i] = np.sqrt(
