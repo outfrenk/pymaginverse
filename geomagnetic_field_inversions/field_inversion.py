@@ -206,22 +206,8 @@ class FieldInversion:
             time_cover = np.zeros((len(data_class.types), len(self._t_array)))
             types_entry = []
             for c, types in enumerate(data_class.types):
-                arg_min, arg_max = 0, len(self._t_array)
-                if self.verbose:
-                    print(f'Adding {types}-type')
-                if types == 'inc' or types == 'dec':
-                    data_entry[c, :] = np.radians(
-                        data_class.fit_data[c](self._t_array))
-                else:
-                    data_entry[c, :] = data_class.fit_data[c](self._t_array)
-                # sample errors for time_array
-                f = interp1d(data_class.data[c][0],
-                             data_class.data[c][2],
-                             kind=error_interp)
-                error_entry[c, :] = f(self._t_array)
-
-                types_entry.append(typedict[types])
                 # check coverage data timevector begin
+                arg_min, arg_max = 0, len(self._t_array)
                 if data_class.data[c][0][0] > self._t_array[0]:
                     if self.verbose:
                         print(f'{types} of dataclass not covering start time')
@@ -234,6 +220,7 @@ class FieldInversion:
                         arg_min = args[0]
                     else:
                         arg_min = args[1]
+
                 # check coverage data timevector end
                 if data_class.data[c][0][-1] < self._t_array[-1]:
                     if self.verbose:
@@ -248,6 +235,23 @@ class FieldInversion:
                     else:
                         arg_max = args[1] + 1
                 time_cover[c, arg_min:arg_max] = 1
+
+                if self.verbose:
+                    print(f'Adding {types}-type')
+                if types == 'inc' or types == 'dec':
+                    data_entry[c, arg_min:arg_max] = np.radians(
+                        data_class.fit_data[c](self._t_array[arg_min:arg_max]))
+                else:
+                    data_entry[c, arg_min:arg_max] = data_class.fit_data[c](
+                        self._t_array[arg_min:arg_max])
+                # sample errors for time_array
+                f = interp1d(data_class.data[c][0],
+                             data_class.data[c][2],
+                             kind=error_interp)
+                error_entry[c, arg_min:arg_max] = f(self._t_array[arg_min:
+                                                                  arg_max])
+
+                types_entry.append(typedict[types])
 
             # change coordinates to geocentric if required
             if self.geodetic:
