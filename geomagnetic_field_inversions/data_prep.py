@@ -1,10 +1,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.interpolate import UnivariateSpline
+from scipy.interpolate import UnivariateSpline, interp1d
 from typing import Union, Literal, Optional
 import warnings
 
-_IpMethods = Literal['polyfit', 'USpline']
+_IpMethods = Literal['polyfit', 'USpline', 'linear']
 _DataTypes = Literal['x', 'y', 'z', 'hor', 'inc', 'dec', 'int']
 
 
@@ -32,7 +32,8 @@ def interpolate_data(t: Union[np.ndarray, list],
         method of fitting data. either NumPy's polyfit or
         SciPy's UnivariateSpline
     """
-
+    kind = ['linear', 'nearest',  'nearest-up', 'zero', 'slinear',
+            'quadratic', 'cubic', 'previous','next']
     if method == 'polyfit':
         polyn = np.polyfit(t, y, order)  # order of polynome
         linefit = np.poly1d(polyn)
@@ -40,6 +41,9 @@ def interpolate_data(t: Union[np.ndarray, list],
     elif method == 'USpline':
         unispline = UnivariateSpline(t, y, k=order, s=smoothing)
         return unispline
+    elif method == 'linear':
+        linear = interp1d(t, y, kind=kind[order])
+        return linear
     else:
         raise Exception('Method %s not recognized' % method)
 
@@ -169,7 +173,7 @@ class StationData:
                 order: Union[int, list, np.ndarray] = None,
                 smoothing: Union[int, float, list, np.ndarray] = None,
                 method: _IpMethods = None,
-                output: Optional[str] = None):
+                ax: plt.axis = None):
         """
         Fits a function to the data, required for running the inverse at
         values between datapoints as well.
@@ -182,8 +186,8 @@ class StationData:
             smoothing applied to fit
         method
             method of fitting; either polyfit or UnivariateSpline
-        output
-            if a path is passed to output, a datafigure is created
+        ax
+            Optional matplotlib axes to show result of plotting
 
         Returns
         -------
@@ -203,18 +207,19 @@ class StationData:
                                                 order[i],
                                                 smoothing[i],
                                                 method[i])
-            if output is not None:
+            if ax is not None:
                 time_arr = np.linspace(self.data[i][0][0],
-                                       self.data[i][0][-1], 100)
-                fig, ax = plt.subplots()
-                ax.set_title('Fitting %s of data' % self.types[i])
+                                       self.data[i][0][-1], 1000)
+                ax[i].set_title('Fitting %s of data' % self.types[i])
                 if self.types[i] == 'inc' or self.types[i] == 'dec':
-                    ax.set_ylabel('%s (degrees)' % self.types[i])
+                    ax[i].set_ylabel('%s (degrees)' % self.types[i])
                 else:
-                    ax.set_ylabel('%s' % self.types[i])
-                ax.set_xlabel('Time (kyr)')
-                ax.plot(time_arr, self.fit_data[i](time_arr),
+                    ax[i].set_ylabel('%s' % self.types[i])
+                ax[i].set_xlabel('Time')
+                ax[i].plot(time_arr, self.fit_data[i](time_arr),
                         label='fit', color='orange')
-                ax.scatter(self.data[i][0], self.data[i][1], label='data')
-                ax.legend()
-                plt.savefig('%s/plot_%s.png' % (output, self.types[i]))
+                ax[i].scatter(self.data[i][0], self.data[i][1], label='data')
+                ax[i].legend()
+
+        if ax is not None:
+            return ax

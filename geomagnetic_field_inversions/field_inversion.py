@@ -504,12 +504,10 @@ class FieldInversion:
                 self.res_iter[iteration, 7] += np.sum(
                     (res_obs / self.error_array[:, t])**2)
                 # multiply the 'right hand side' and apply covariance matrix
-                # also apply time_cover to delete data not covering timestep
                 rhs_matrix[t, :] =\
                     np.matmul(frechet_matrix.T / self.error_array[:, t],
                               res_obs / self.error_array[:, t])
                 # Apply B-Splines straight away (much easier)
-                # Apply time_cover to cancel out data not for relevant timestep
                 for j in range(self._spl_order):
                     for k in range(self._spl_order):
                         normal_eq_splined[
@@ -792,12 +790,14 @@ class FieldInversion:
             integration product of splines
 
         """
+
         newcot, error = newton_cotes(newcot_order)  # get the weigh factor
         bspline_matrix = np.zeros((self._spl_order + 1, newcot_order + 1))
         bspline = BSpline.basis_element(np.arange(self._spl_order + 2),
                                         extrapolate=False)
         # necessary to get sum = 1 for weigh factors
         dt = self._t_step / newcot_order
+
         for i in range(self._spl_order + 1):
             # create correct splines to convolve with!
             bspline_matrix[i] = bspline(

@@ -169,7 +169,7 @@ def plot_powerspectrum(ax,
     else:
         if plot_time[0] == -1:
             coeff_gem = np.sum(coeff, axis=1) / len(im.t_array)
-            coeff_std = np.sqrt(np.sum((coeff - coeff_gem) ** 2,
+            coeff_std = np.sqrt(np.sum((coeff - coeff_gem[:, np.newaxis]) ** 2,
                                        axis=1) / len(im.t_array))
         else:
             coeff_gem = coeff[:, plot_time]
