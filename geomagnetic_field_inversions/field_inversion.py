@@ -211,9 +211,9 @@ class FieldInversion:
                 arg_min, arg_max = 0, len(self._t_array)
                 if data_class.data[c][0][0] > self._t_array[0]:
                     if self.verbose:
-                        print(f'{types} of dataclass not covering start time')
+                        print(f'{types} of {data_class.__name__} not covering start time')
                     if data_class.data[c][0][0] > self._t_array[-1]:
-                        raise Exception(f'{types} of dataclass does not cover'
+                        raise Exception(f'{types} of {data_class.__name__} does not cover'
                                         ' any timestep of timevector')
                     args = np.argsort(np.abs(data_class.data[c][0][0]
                                              - self._t_array))
@@ -225,9 +225,9 @@ class FieldInversion:
                 # check coverage data timevector end
                 if data_class.data[c][0][-1] < self._t_array[-1]:
                     if self.verbose:
-                        print(f'{types} of dataclass not covering end time')
+                        print(f'{types} of {data_class.__name__} not covering end time')
                     if data_class.data[c][0][-1] < self._t_array[0]:
-                        raise Exception(f'{types} of dataclass does not cover'
+                        raise Exception(f'{types} of {data_class.__name__} does not cover'
                                         ' any timestep of timevector')
                     args = np.argsort(np.abs(data_class.data[c][0][-1]
                                              - self._t_array))
@@ -236,12 +236,19 @@ class FieldInversion:
                     else:
                         arg_max = args[1] + 1
                 time_cover[c, arg_min:arg_max] = 1
-
+                # TODO: change data entry into geocentric frame (small)
                 if self.verbose:
                     print(f'Adding {types}-type')
-                if types == 'inc' or types == 'dec':
-                    data_entry[c, arg_min:arg_max] = np.radians(
-                        data_class.fit_data[c](self._t_array[arg_min:arg_max]))
+                if types == 'inc':
+                    temp = data_class.fit_data[c](self._t_array[arg_min:
+                                                                arg_max])
+                    data_entry[c, arg_min:
+                                  arg_max] = np.radians(temp)
+                elif types == 'dec':
+                    temp = data_class.fit_data[c](self._t_array[arg_min:
+                                                                arg_max])
+                    data_entry[c, arg_min:
+                                  arg_max] = np.radians(temp)
                 else:
                     data_entry[c, arg_min:arg_max] = data_class.fit_data[c](
                         self._t_array[arg_min:arg_max])
@@ -276,7 +283,7 @@ class FieldInversion:
 
             # add data to attributes of the class if all is fine
             if self.verbose:
-                print(f'Data is added to class')
+                print(f'Data of {data_class.__name__} is added to class')
             self.data_array = np.vstack((self.data_array, data_entry))
             self.error_array = np.vstack((self.error_array, error_entry))
             self.time_cover = np.vstack((self.time_cover, time_cover))
@@ -303,9 +310,6 @@ class FieldInversion:
             boolean indicating whether to damp dipole coefficients or not.
             Default is set to False.
 
-        Returns
-        -------
-        
         """
         # check data and model space
         assert self._nm_total <= len(self.data_array), \
@@ -438,7 +442,6 @@ class FieldInversion:
     def run_inversion(self,
                       x0: Union[np.ndarray, list],
                       max_iter: int = 5,
-                      int_mult: float = 1,
                       **prep_kwargs):
         """
         Run the iterative inversion
@@ -450,8 +453,6 @@ class FieldInversion:
             as long as (spherical_order + 1)^2 - 1
         max_iter
             maximum amount of iterations
-        int_mult
-            multiplies intensity values with this parameter, default 1
         **prep_kwargs
             optional keyword arguments in case the prepare_inversion function
             has not been run yet. Requires at least spatial_df and
@@ -497,8 +498,7 @@ class FieldInversion:
             for t in range(len(self._t_array)):
                 # Calculate the forward observation
                 forw_obs, frechet_matrix, res_obs, count =\
-                    self.forward_frechet(gh_timesteps[t], t, iteration,
-                                         int_mult)
+                    self.forward_frechet(gh_timesteps[t], t, iteration)
                 count_all += count
                 # save residual
                 self.res_iter[iteration, 7] += np.sum(
@@ -556,8 +556,7 @@ class FieldInversion:
                 count_all = np.zeros(7)
                 for t in range(len(self._t_array)):
                     forw_obs, frechet_matrix, res_obs, count = \
-                        self.forward_frechet(gh_timesteps[t], t, iteration+1,
-                                             int_mult)
+                        self.forward_frechet(gh_timesteps[t], t, iteration+1)
                     count_all += count
                     self.res_iter[iteration+1, 7] += np.sum(
                         (res_obs / self.error_array[:, t]) ** 2)
@@ -607,7 +606,7 @@ class FieldInversion:
 
             # Calculate the forward observation
             forw_obs, frechet_matrix, res_obs, count = \
-                self.forward_frechet(self.unsplined_gh, 0, iteration, int_mult)
+                self.forward_frechet(self.unsplined_gh, 0, iteration)
             count_all += count
             # save residual
             self.res_iter[iteration, 7] += np.sum(
@@ -639,8 +638,7 @@ class FieldInversion:
                     print('Calculate residual last iteration')
                 count_all = np.zeros(7)
                 forw_obs, frechet_matrix, res_obs, count = \
-                    self.forward_frechet(self.unsplined_gh, 0, iteration + 1,
-                                         int_mult)
+                    self.forward_frechet(self.unsplined_gh, 0, iteration + 1)
                 count_all += count
                 self.res_iter[iteration + 1, 7] += np.sum(
                     (res_obs / self.error_array[:, 0]) ** 2)
@@ -870,8 +868,7 @@ class FieldInversion:
     def forward_frechet(self,
                         coeff: Union[list, np.ndarray],
                         t: int,
-                        iteration: int,
-                        int_mult: float = 1):
+                        iteration: int):
         """ Calculates forward observations, frechet matrix, and residual
 
         Parameters
@@ -882,8 +879,6 @@ class FieldInversion:
             time index at forward calculation
         iteration
             iterationnumber in run_inversion
-        int_mult
-            multiplication factor for intensity data
 
         Returns
         -------
@@ -932,9 +927,6 @@ class FieldInversion:
                 forw_obs[counter] = forw[j]
                 frechet_matrix[counter, :] = frechet[j]
                 res_obs[counter] = self.data_array[counter, t] - forw[j]
-                if j == 4:  # intensity
-                    res_obs[counter] = self.data_array[counter, t] * int_mult\
-                                       - forw[j]
                 if j == 5 or j == 6:  # inclination or declination
                     while res_obs[counter] > np.pi:
                         res_obs[counter] -= 2 * np.pi
@@ -956,7 +948,7 @@ class FieldInversion:
                       spatial_range: Union[list, np.ndarray] = [0],
                       temporal_range: Union[list, np.ndarray] = [0],
                       damp_dipole=False,
-                      inv_kwargs={'max_iter': 5, 'int_mult': 1},
+                      inv_kwargs={'max_iter': 5},
                       save_kwargs={'basedir': '.', 'save_residual': True}):
         """ Sweep through damping parameters to find ideal set
 
@@ -976,7 +968,7 @@ class FieldInversion:
             If True, dipole coefficients are damped.
         inv_kwargs
             keyword arguments for running the inversion: number of iterations
-            (max_iter) and intensity multiplier (int_mult)
+            (max_iter)
         save_kwargs
             keyword arguments for saving files: directory to save files
             (basedir) and whether to save residuals (save_residual).

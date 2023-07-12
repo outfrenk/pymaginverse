@@ -1,9 +1,11 @@
 from matplotlib import cm
 import numpy as np
 from pathlib import Path
-from typing import Union
+from typing import Union, Literal
 import pandas as pd
 import pyshtools as pysh
+
+_DataTypes = Literal['x', 'y', 'z', 'hor', 'inc', 'dec', 'int']
 
 
 def plot_residuals(ax,
@@ -135,6 +137,7 @@ def plot_gaussian(ax,
 def plot_powerspectrum(ax,
                        invmodel,
                        power: bool = True,
+                       variance: bool = False,
                        plot_time: Union[list, np.ndarray] = [-1],
                        plot_iter: int = -1):
     """ Plots the powerspectrum of gaussian coefficients and its variance
@@ -147,8 +150,11 @@ def plot_powerspectrum(ax,
         An instance of the `geomagnetic_field_inversion` class. This function
         uses the unsplined_iter, t_array, _nm_total, and maxdegree attributes.
     power
-        If True, plots powerspectrum of spherical orders.
+        If True, plots powerspectrum or variance of spherical orders (default)
         If False, plots average gaussian coefficient per order and mode.
+    variance
+        If True, plots variance
+        If False, plots powerspectrum (default)
     plot_time
         Determines which timestep is used to plot powerspectrum
         (list of indices). Defaults to averaging over all timesteps,
@@ -158,41 +164,44 @@ def plot_powerspectrum(ax,
         final iteration.
     """
     im = invmodel
-    coeff_std = np.zeros(im._nm_total)
-    coeff = im.unsplined_iter[plot_iter, :].reshape(im._nm_total, -1)
+    coeff = im.unsplined_iter[plot_iter, :].reshape(len(im.t_array),
+                                                    im._nm_total)
     if len(plot_time) > 1:
-        coeff_gem = np.sum(coeff[:, plot_time],
-                           axis=1) / len(im.t_array[plot_time])
-        coeff_std = np.sqrt(np.sum((coeff[:, plot_time]
-                                    - coeff_gem[:, np.newaxis])**2,
-                                   axis=1) / len(im.t_array[plot_time]))
+        coeff_mean = np.mean(coeff[plot_time], axis=0)
+        coeff_pow = np.sum(coeff[plot_time]**2,
+                           axis=0) / len(im.t_array[plot_time])
+        coeff_var = np.std(coeff[plot_time], axis=0)**2
     else:
         if plot_time[0] == -1:
-            coeff_gem = np.sum(coeff, axis=1) / len(im.t_array)
-            coeff_std = np.sqrt(np.sum((coeff - coeff_gem[:, np.newaxis]) ** 2,
-                                       axis=1) / len(im.t_array))
+            coeff_mean = np.mean(coeff, axis=0)
+            coeff_pow = np.sum(coeff**2, axis=0) / len(im.t_array)
+            coeff_var = np.std(coeff, axis=0)**2
         else:
-            coeff_gem = coeff[:, plot_time]
+            coeff_mean = coeff[plot_time]
+            coeff_pow = coeff[plot_time]**2
     if power:
         counter = 0
-        sum_coeff_gem = np.zeros(im.maxdegree)
+        sum_coeff_pow = np.zeros(im.maxdegree)
         sum_coeff_var = np.zeros(im.maxdegree)
         for l in range(im.maxdegree):
             for m in range(l+1):
-                sum_coeff_gem[l] += coeff_gem[counter]**2
-                sum_coeff_var[l] += coeff_std[counter]**2
+                sum_coeff_pow[l] += coeff_pow[counter]
+                sum_coeff_var[l] += coeff_var[counter]
                 counter += 1
-        ax.plot(np.arange(1, im.maxdegree+1), sum_coeff_gem,
-                marker='o', label='power')
-        if any(coeff_std != np.zeros(im._nm_total)):
+
+        if variance:
             ax.plot(np.arange(1, im.maxdegree+1), sum_coeff_var,
                     marker='s', label='variance')
-    else:
-        if any(coeff_std != np.zeros(im._nm_total)):
-            ax.errorbar(np.arange(1, im._nm_total+1), coeff_gem,
-                        yerr=coeff_std, capsize=4, marker='o')
         else:
-            ax.plot(np.arange(1, im._nm_total + 1), coeff_gem, marker='o')
+            ax.plot(np.arange(1, im.maxdegree + 1), sum_coeff_pow,
+                    marker='o', label='power')
+
+    else:
+        if any(coeff_var != np.zeros(im._nm_total)):
+            ax.errorbar(np.arange(1, im._nm_total+1), coeff_mean,
+                        yerr=np.sqrt(coeff_var), capsize=4, marker='o')
+        else:
+            ax.plot(np.arange(1, im._nm_total + 1), coeff_mean, marker='o')
     return ax
 
 
@@ -251,9 +260,8 @@ def plot_world(axes,
     world_coord[:, 1] = longrid * np.pi/180
     world_coord[:, 2] = im.r_earth
     X, Y, Z = create_forward(im, world_coord,
-                             im.unsplined_iter[plot_iter,
-                                               plot_time * im._nm_total:
-                                               (plot_time + 1) * im._nm_total])
+                             im.unsplined_iter[plot_iter, :].reshape(
+                             len(im.t_array), im._nm_total)[plot_time])
     H = np.sqrt(X ** 2 + Y ** 2)
     forward_int = (np.sqrt(X ** 2 + Y ** 2 + Z ** 2)).reshape(179, 360)
     forward_inc = (np.arctan2(Z, H) * 180 / np.pi).reshape(179, 360)
@@ -300,8 +308,11 @@ def plot_world(axes,
 def plot_place(ax,
                invmodel,
                input_coord: Union[list, np.ndarray],
-               incdecint: bool = True,
-               plot_iter: int = -1):
+               type: _DataTypes,
+               plot_iter: int = -1,
+               plot_kwargs={'color': 'black', 'linestyle': 'dashed',
+                            'marker': 'o'}
+               ):
     """ Plots the magnetic field on Earth given gaussian coefficients
 
     Parameters
@@ -313,12 +324,14 @@ def plot_place(ax,
         uses the unsplined_iter, t_array, _nm_total, and maxdegree attributes.
     input_coord
         Array of coordinates containing latitude, longitude, and radius.
-    incdecint
-        If True, inclination, declination, and intensity is plotted. If False,
-        X, Y, and Z-components are plotted
+    type
+        type of data to be plotted; should be either: 'x', 'y', 'z', 'hor',
+        'inc' (degrees), 'dec' (degrees), or 'int'
     plot_iter
         Determines which iteration is used to plot powerspectrum. Defaults to
         final iteration.
+    plot_kwargs
+        optional plotting keyword arguments
     """
     im = invmodel
     X = np.zeros(len(im.t_array))
@@ -333,36 +346,97 @@ def plot_place(ax,
         coord[0, 2] = input_coord[2]
     for time in range(len(im.t_array)):
         X[time], Y[time], Z[time] = create_forward(
-            im, coord, im.unsplined_iter[plot_iter,
-                                         time * im._nm_total:
-                                         (time + 1) * im._nm_total])
-    if incdecint:
-        H = np.sqrt(X ** 2 + Y ** 2)
-        inty = (np.sqrt(X ** 2 + Y ** 2 + Z ** 2))
-        inc = (np.arctan2(Z, H) * 180 / np.pi)
-        dec = (np.arctan2(Y, X) * 180 / np.pi)
-        ax2 = ax.twinx()
-        ax.plot(im.t_array, inc, color='black', label='inc', marker='o')
-        ax.plot(im.t_array, dec, color='black', label='dec',
-                linestyle='dashed', marker='^')
-        ax2.plot(im.t_array, inty, color='red', label='int',
-                 linestyle='dashdot', marker='s')
-        return ax, ax2
+            im, coord, im.unsplined_iter[plot_iter, :].reshape(
+                len(im.t_array), im._nm_total)[time])
+
+    H = np.sqrt(X ** 2 + Y ** 2)
+    inty = (np.sqrt(X ** 2 + Y ** 2 + Z ** 2))
+    inc = (np.arctan2(Z, H) * 180 / np.pi)
+    dec = (np.arctan2(Y, X) * 180 / np.pi)
+    if type == 'inc':
+        ax.plot(im.t_array, inc, label='inc', **plot_kwargs)
+    elif type == 'dec':
+        ax.plot(im.t_array, dec, label='dec', **plot_kwargs)
+    elif type == 'int':
+        ax.plot(im.t_array, inty, label='int', **plot_kwargs)
+    elif type == 'x':
+        ax.plot(im.t_array, X, label='X', **plot_kwargs)
+    elif type == 'y':
+        ax.plot(im.t_array, Y, label='Y', **plot_kwargs)
+    elif type == 'z':
+        ax.plot(im.t_array, Z, label='Z', **plot_kwargs)
     else:
-        ax.plot(im.t_array, X, color='black', label='X', marker='o')
-        ax.plot(im.t_array, Y, color='black', label='Y', linestyle='dashed',
-                marker='^')
-        ax.plot(im.t_array, Z, color='black', label='Z', linestyle='dashdot',
-                marker='s')
-        return ax
+        raise Exception(f'datatype {type} not recognized')
+    return ax
 
 
+def compare_loc(axes,
+                invmodel,
+                data_class,
+                plot_kwargs={'color': 'black', 'linestyle': 'dashed',
+                            'marker': 'o'}
+                ):
+    """Plots the modeled magnetic field at the location of a data input class
+
+    Parameters
+    ----------
+    axes
+        Matplotlib axes objects
+    invmodel
+        An instance of the `geomagnetic_field_inversion` class. This function
+        uses the unsplined_iter, t_array, _nm_total, and maxdegree attributes.
+    data_class
+        An instance of the "StationData" class. This function uses the
+        location, types, and data attributes of this class
+    plot_kwargs
+        optional plotting keyword arguments
+
+    This function calls plot_place for plotting of the modeled field
+    """
+    dc = data_class
+    # circumvent no length errors
+    if len(dc.types) == 1:
+        axes = [axes]
+    if len(axes) != len(dc.types):
+        raise Exception('Not enough axes defined'
+                        f', you need {len(dc.types)} axes.')
+    for i in range(len(dc.types)):
+        # time_arr = np.linspace(dc.data[i][0][0],
+        #                        dc.data[i][0][-1], 1000)
+        if dc.types[i] == 'inc':
+            temp = np.array(dc.data[i][1])
+            temp = temp % 180
+            temp = np.where(temp > 90, temp - 180, temp)
+            axes[i].set_ylabel('%s (degrees)' % dc.types[i])
+            axes[i].scatter(dc.data[i][0], temp, label='data')
+        elif dc.types[i] == 'dec':
+            temp = np.array(dc.data[i][1])
+            temp = temp % 360
+            temp = np.where(temp > 180, temp - 360, temp)
+            axes[i].set_ylabel('%s (degrees)' % dc.types[i])
+            axes[i].scatter(dc.data[i][0], temp, label='data')
+        else:
+            axes[i].set_ylabel('%s' % dc.types[i])
+            axes[i].scatter(dc.data[i][0], dc.data[i][1], label='data')
+        mindata, maxdata = min(dc.data[i][0]), max(dc.data[i][0])
+        minmodel, maxmodel = min(invmodel.t_array), max(invmodel.t_array)
+        axes[i].set_xlabel('Time')
+        # axes[i].plot(time_arr, bc.fit_data[i](time_arr),
+        #              label='fit', color='orange')
+        axes[i] = plot_place(axes[i], invmodel, [dc.lat, dc.lon],
+                             dc.types[i], plot_kwargs=plot_kwargs)
+        axes[i].set_xlim(max(mindata, minmodel)*0.9,
+                         min(maxdata, maxmodel)*1.1)
+        axes[i].legend()
+    return axes
+
+
+# TODO: update plots
 def plot_sweep(ax,
                spatial_range: Union[list, np.ndarray],
                temporal_range: Union[list, np.ndarray],
-               plot_spatial: bool = True,
                basedir: Union[str, Path] = '.',
-               cmap: str = 'RdYlBu'):
+               reverse: bool = False):
     """ Produces a residual-modelsize plot to determine optimal damp parameters
     This function only works after running field_inversion.sweep_damping
 
@@ -374,18 +448,18 @@ def plot_sweep(ax,
         range of spatial damping parameters
     temporal_range
         range of temporal damping parameters
-    plot_spatial
-        if True, plot spatial damping while temporal damping is static
-        if False, plot temporal damping while spatial damping is static
     basedir
         path to coefficients and residuals after each iteration as produced by
         field_inversion.sweep_damping
-    cmap
-        matplotlib colormap used for plotting
+    reverse
+        swap spatial and temporal damping
 
     """
     basedir = Path(basedir)
     basedir.mkdir(exist_ok=True)
+    marker = ['o', 'v', '^', 's', '+', '*', 'x', 'd']
+    lstyle = ['solid', 'dashed', 'dotted', 'dashdot',
+              (0, (3, 5, 1, 5, 1, 5))]
 
     modelsize = np.zeros((len(spatial_range), len(temporal_range)))
     res = np.zeros((len(spatial_range), len(temporal_range)))
@@ -408,18 +482,37 @@ def plot_sweep(ax,
                                               f'{temporal_df:.2e}t_'
                                               'residual.csv', delimiter=';'
                                     ).to_numpy()[-1, -1]
-    if plot_spatial:
-        colors = cm.get_cmap(cmap, len(temporal_range))
+    if reverse:
         for j in range(len(temporal_range)):
-            ax.plot(modelsize[:, j], res[:, j], marker='o',
-                    color=colors(j / len(temporal_range)))
-    else:
-        colors = cm.get_cmap(cmap, len(spatial_range))
-        for i in range(len(spatial_range)):
-            ax.plot(modelsize[i, :], res[i, :], marker='o',
-                    color=colors(i / len(spatial_range)))
+            ax.plot(res[:, j], modelsize[:, j], color='black',
+                    linestyle=lstyle[j % len(lstyle)],
+                    label=f't={temporal_range[j]:.2e}')
+        for j in range(len(temporal_range)):
+            for i in range(len(spatial_range)):
+                if j == 0:
+                    ax.scatter(res[i, j], modelsize[i, j], color='black',
+                               marker=marker[i % len(marker)],
+                               label=f's={spatial_range[i]:.2e}')
+                else:
+                    ax.scatter(res[i, j], modelsize[i, j], color='black',
+                               marker=marker[i % len(marker)])
 
-    return ax
+    else:
+        for i in range(len(spatial_range)):
+            ax.plot(res[i, :], modelsize[i, :], color='black',
+                    linestyle=lstyle[i % len(lstyle)],
+                    label=f's={spatial_range[i]:.2e}')
+        for i in range(len(spatial_range)):
+            for j in range(len(temporal_range)):
+                if i == 0:
+                    ax.scatter(res[i, j], modelsize[i, j], color='black',
+                               marker=marker[j % len(marker)],
+                               label=f't={temporal_range[j]:.2e}')
+                else:
+                    ax.scatter(res[i, j], modelsize[i, j], color='black',
+                               marker=marker[j % len(marker)])
+    ax.set_xlabel('residual')
+    ax.set_ylabel('model size')
 
 
 def create_forward(invmodel,
