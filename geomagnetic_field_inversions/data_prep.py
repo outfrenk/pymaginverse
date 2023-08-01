@@ -106,13 +106,13 @@ class StationData:
     def __init__(self,
                  lat: float,
                  lon: float,
-                 name: Optional[str] = 'unknown'):
+                 name: Optional[str] = None):
         """
         Set latitude, longitude, and optionally name of station
         """
         self.lat = lat
         self.lon = lon
-        if name is not 'unknown':
+        if name is not None:
             self.__name__ = name
 
         # initiate empty lists
@@ -147,7 +147,7 @@ class StationData:
             should be 1.000.000.
         error
             error of the data, which should be list or numpy array with length
-            equal length of time vector.
+            equal to length of time vector.
 
         self.data contains time, data, and error
         """
@@ -202,7 +202,7 @@ class StationData:
                     ax[i].set_ylabel('%s' % self.types[i])
                 ax[i].set_xlabel('Time')
                 ax[i].plot(time_arr, self.fit_data[i](time_arr),
-                        label='fit', color='orange')
+                           label='fit', color='orange')
                 ax[i].scatter(self.data[i][0], self.data[i][1], label='data')
                 ax[i].legend()
 
