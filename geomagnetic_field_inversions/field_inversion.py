@@ -84,7 +84,6 @@ class FieldInversion:
     def __init__(self,
                  time_array: Union[list, np.ndarray],
                  maxdegree: int = 3,
-                 spl_order: int = 3,
                  r_model: float = 6371.2,
                  r_earth: float = 6371.2,
                  cmb_earth: float = 3485.0,
@@ -99,8 +98,6 @@ class FieldInversion:
             Sets timearray for the inversion in yr. Should be ascending
         maxdegree
             maximum order for spherical harmonics model, default 3
-        spl_order
-            order of splines used for relating timesteps together, default 3
         r_model
             where the magnetic field is modeled (km distance from core)
         r_earth
@@ -115,9 +112,12 @@ class FieldInversion:
         verbose
             Verbosity flag, defaults to False
         """
+        self._spl_degree = 3
+        self._bspline = BSpline.basis_element(np.arange(3 + 2),
+                                              extrapolate=False)
+
         self.t_array = np.sort(time_array)
         self.maxdegree = maxdegree
-        self.spl_order = spl_order
         self.r_model = r_model
         self.r_earth = r_earth
         self.cmb_earth = cmb_earth
@@ -169,17 +169,6 @@ class FieldInversion:
                 if self._t_array[i+1] - self._t_array[i] != self._t_step:
                     raise Exception("Time vector has different timesteps."
                                     " Redefine vector with same timestep")
-        self.matrix_ready = False
-
-    @property
-    def spl_order(self):
-        return self._spl_order
-
-    @spl_order.setter
-    def spl_order(self, spline_order: int):
-        self._spl_order = spline_order
-        self._bspline = BSpline.basis_element(np.arange(spline_order + 2),
-                                              extrapolate=False)
         self.matrix_ready = False
 
     def add_data(self,
@@ -383,16 +372,15 @@ class FieldInversion:
             print('Setting up splines and timeknots')
         # TODO: check physical meaning nr_splines
         # number of temporal splines, convolve spline-order with time array
-        self.nr_splines = len(self._t_array) + self._spl_order - 1
+        self.nr_splines = len(self._t_array) + self._spl_degree - 1
 
         # location of timeknots
         self.time_knots = np.linspace(
-            self._t_array[0] - self._spl_order * self._t_step,
-            self._t_array[-1] + self._spl_order * self._t_step,
-            num=len(self._t_array) + 2 * self._spl_order)
+            self._t_array[0] - self._spl_degree * self._t_step,
+            self._t_array[-1] + self._spl_degree * self._t_step,
+            num=len(self._t_array) + 2 * self._spl_degree)
 
         # Prepare damping matrices
-        # TODO: verify physical meaning damping
         self.spatial_damp_matrix = np.zeros(
             (self._nm_total * self.nr_splines,
              self._nm_total * self.nr_splines))
@@ -402,10 +390,10 @@ class FieldInversion:
             spatial_damp = self.damping('spatial_G', damp_dipole)
             for j in range(self.nr_splines):  # loop through splines with j
                 for k in range(self.nr_splines):  # and loop with k
-                    if abs(j - k) <= self._spl_order:
-                        low = max(j, k, self._spl_order)
-                        high = min(j + self._spl_order,
-                                   k + self._spl_order,
+                    if abs(j - k) <= self._spl_degree:
+                        low = max(j, k, self._spl_degree)
+                        high = min(j + self._spl_degree,
+                                   k + self._spl_degree,
                                    self.nr_splines - 1)
                         s_damper = self.integr_nc_spl(j, k, low, high)
                         # multiply factor with damping factors in diag matrix
@@ -424,13 +412,12 @@ class FieldInversion:
             temporal_damp = self.damping('temporal', True)
             for j in range(self.nr_splines):  # loop through splines with j
                 for k in range(self.nr_splines):  # and loop with k
-                    if abs(j - k) <= self._spl_order:
-                        low = max(j, k, self._spl_order)
-                        high = min(j + self._spl_order,
-                                   k + self._spl_order,
+                    if abs(j - k) <= self._spl_degree:
+                        low = max(j, k, self._spl_degree)
+                        high = min(j + self._spl_degree,
+                                   k + self._spl_degree,
                                    self.nr_splines - 1)
-                        t_damper = self.temp_nc_spl(j, k, low, high,
-                                                    temp_order=1)
+                        t_damper = self.temp_nc_spl(j, k, low, high)
                         t_damp_coef = t_damper * np.diag(temporal_damp)
                         self.temporal_damp_matrix[
                             j * self._nm_total:(j + 1) * self._nm_total,
@@ -492,7 +479,7 @@ class FieldInversion:
             rhs_temporal_damp = -1 * np.matmul(self.temporal_damp_matrix,
                                                self.splined_gh.flatten())
             gh_timesteps = BSpline(c=self.splined_gh, t=self.time_knots,
-                                   k=self._spl_order, axis=0,
+                                   k=self._spl_degree, axis=0,
                                    extrapolate=False)(self._t_array)
 
             for t in range(len(self._t_array)):
@@ -508,8 +495,8 @@ class FieldInversion:
                     np.matmul(frechet_matrix.T / self.error_array[:, t],
                               res_obs / self.error_array[:, t])
                 # Apply B-Splines straight away (much easier)
-                for j in range(self._spl_order):
-                    for k in range(self._spl_order):
+                for j in range(self._spl_degree):
+                    for k in range(self._spl_degree):
                         normal_eq_splined[
                             (t+j) * self._nm_total:(t+j+1) * self._nm_total,
                             (t+k) * self._nm_total:(t+k+1) * self._nm_total
@@ -526,7 +513,7 @@ class FieldInversion:
             for i in range(self._nm_total):
                 rhs_splined[i::self._nm_total] =\
                     np.convolve(rhs_matrix[:, i],
-                                self._bspline(np.arange(1, self._spl_order+1)))
+                                self._bspline(np.arange(1, self._spl_degree+1)))
             # add spatial and temporal damping to the matrix and vector
             normal_eq_splined +=\
                 self.spatial_damp_matrix + self.temporal_damp_matrix
@@ -541,8 +528,8 @@ class FieldInversion:
             for gh in range(self._nm_total):
                 self.unsplined_gh[:, gh] = np.convolve(
                     self.splined_gh[:, gh],
-                    self._bspline(np.arange(1, self._spl_order+1))
-                )[self._spl_order - 1:-(self._spl_order - 1)]
+                    self._bspline(np.arange(1, self._spl_degree+1))
+                )[self._spl_degree - 1:-(self._spl_degree - 1)]
             self.unsplined_iter[iteration, :] = self.unsplined_gh.flatten()
             if self.verbose:
                 print('Residual is %.2f' % self.res_iter[iteration, 7])
@@ -551,7 +538,7 @@ class FieldInversion:
                 if self.verbose:
                     print('Calculate residual last iteration')
                 gh_timesteps = BSpline(c=self.splined_gh, t=self.time_knots,
-                                       k=self._spl_order, axis=0,
+                                       k=self._spl_degree, axis=0,
                                        extrapolate=False)(self._t_array)
                 count_all = np.zeros(7)
                 for t in range(len(self._t_array)):
@@ -790,13 +777,13 @@ class FieldInversion:
         """
 
         newcot, error = newton_cotes(newcot_order)  # get the weigh factor
-        bspline_matrix = np.zeros((self._spl_order + 1, newcot_order + 1))
-        bspline = BSpline.basis_element(np.arange(self._spl_order + 2),
+        bspline_matrix = np.zeros((self._spl_degree + 1, newcot_order + 1))
+        bspline = BSpline.basis_element(np.arange(self._spl_degree + 2),
                                         extrapolate=False)
         # necessary to get sum = 1 for weigh factors
         dt = self._t_step / newcot_order
 
-        for i in range(self._spl_order + 1):
+        for i in range(self._spl_degree + 1):
             # create correct splines to convolve with!
             bspline_matrix[i] = bspline(
                 np.linspace(i, i + 1, newcot_order + 1))
@@ -805,16 +792,15 @@ class FieldInversion:
         for t in range(int(low), int(high + 1)):
             # 'some kind of' convolution
             int_prod += np.sum(
-                newcot * bspline_matrix[(j + self._spl_order) - t][::-1]
-                * bspline_matrix[(k + self._spl_order) - t][::-1]) * dt
+                newcot * bspline_matrix[(j + self._spl_degree) - t][::-1]
+                * bspline_matrix[(k + self._spl_degree) - t][::-1]) * dt
         return int_prod
 
     def temp_nc_spl(self,
                     j: int,
                     k: int,
                     low: int,
-                    high: int,
-                    temp_order: int = 1):
+                    high: int):
         """ Integrates the splines over time using Newton-Cotes
 
         Parameters
@@ -823,8 +809,6 @@ class FieldInversion:
             value between 0 and nr_of_splines. Indicates which spline to use
         low, high
             indices of time_knots indicating the time over which to integrate
-        temp_order
-            order of B-Spline used for temporal integration
 
         Returns
         -------
@@ -832,20 +816,22 @@ class FieldInversion:
             integration product of splines
 
         """
-        # TODO: research influence temp_order on temporal integration
-        #              v
+        # cubic B-spline is reduced to a degree 1 B-spline
+        temp_degree = 1
         newcot_order = 2
+
         newcot, error = newton_cotes(newcot_order)  # get the weigh factor
-        bspline_matrix = np.zeros((temp_order + 1, newcot_order + 1))
-        bspline = BSpline.basis_element(np.arange(temp_order + 2),
+        bspline_matrix = np.zeros((temp_degree + 1, newcot_order + 1))
+        bspline = BSpline.basis_element(np.arange(temp_degree + 2),
                                         extrapolate=False)
         dt = self._t_step / newcot_order
-        for i in range(temp_order + 1):
+        for i in range(temp_degree + 1):
             # create correct splines to convolve with!
             bspline_matrix[i] = bspline(
                 np.linspace(i, i + 1, newcot_order + 1)
             )[::-1]
         coeff = np.zeros(3)
+        # comes from derivation cubic B-spline + assuming constant timestep
         coeff[0] = 1 / self._t_step**2
         coeff[1] = -2 / self._t_step**2
         coeff[2] = 1 / self._t_step**2
@@ -858,7 +844,7 @@ class FieldInversion:
                 spl[t] = coeff[0] * bspline_matrix[1, ndel]
                 spl[t - 1] = coeff[0] * bspline_matrix[0, ndel] \
                     + coeff[1] * bspline_matrix[1, ndel]
-                spl[t - 2] = coeff[1] * bspline_matrix[0, ndel]\
+                spl[t - 2] = coeff[1] * bspline_matrix[0, ndel] \
                     + coeff[2] * bspline_matrix[1, ndel]
                 spl[t - 3] = coeff[2] * bspline_matrix[0, ndel]
                 iint_prod += newcot[ndel] * spl[j] * spl[k]
@@ -947,7 +933,7 @@ class FieldInversion:
                       x0: Union[list, np.ndarray],
                       spatial_range: Union[list, np.ndarray] = [0],
                       temporal_range: Union[list, np.ndarray] = [0],
-                      damp_dipole=False,
+                      damp_dipole: bool = False,
                       inv_kwargs={'max_iter': 5},
                       save_kwargs={'basedir': '.', 'save_residual': True}):
         """ Sweep through damping parameters to find ideal set
