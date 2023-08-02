@@ -86,7 +86,7 @@ def check_data(ttype: _DataTypes,
         pass
     else:
         raise Exception(f'error has incorrect length: {len(error)},\n'
-                        f'It should have length {len(data[0])} or no length!')
+                        f'It should be a float or have length {len(data[0])}!')
         
     data = np.array(data)
     data[0] *= time_factor
