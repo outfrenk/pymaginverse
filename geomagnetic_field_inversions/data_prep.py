@@ -106,12 +106,19 @@ class StationData:
     def __init__(self,
                  lat: float,
                  lon: float,
+                 height: float = 0,
                  name: Optional[str] = None):
         """
-        Set latitude, longitude, and optionally name of station
+        Set latitude & longitude in degrees.
+        optionally geodetic height in metres and optionally name of station
         """
+        if lat > 90 or lat < -90 or lon > 180 or lon < -180:
+            raise ValueError(f'Your latitude is {lat} and longitude is {lon};'
+                             ' latitude should be between -90 and 90 degrees,'
+                             ' longitude between -180 and 180 degrees.')
         self.lat = lat
         self.lon = lon
+        self.height = height
         if name is not None:
             self.__name__ = name
         else:
