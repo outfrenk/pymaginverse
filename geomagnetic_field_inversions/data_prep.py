@@ -49,7 +49,7 @@ def interpolate_data(t: Union[np.ndarray, list],
 def check_data(ttype: _DataTypes,
                data: Union[list, np.ndarray],
                time_factor: int,
-               error: Union[list, np.ndarray]):
+               error: Union[float, list, np.ndarray]):
     """
     Checks if the data is correctly inputted and datatypes exist.
     Raises an exception if inc/dec data does not fit expected range.
@@ -66,8 +66,8 @@ def check_data(ttype: _DataTypes,
             factor should be 1.000. If timevector is inputted in Myr, factor
             should be 1.000.000.
     error
-        error of the data, which should be list or numpy array with length
-        equal length to time vector.
+        error of the data, which should be float, list, or numpy array with
+        length equal length to time vector.
 
     Returns data and error array merged together and sorted by time.
     """
@@ -80,13 +80,13 @@ def check_data(ttype: _DataTypes,
         raise ValueError('Type %s not recognized' % ttype)
 
     # assign and check error
-    if len(error) == 1:
+    if not hasattr(error, "__len__"):
         error = np.full(len(data[0]), error)
     elif len(error) == len(data[0]):
         pass
     else:
         raise Exception(f'error has incorrect length: {len(error)},\n'
-                        f'It should have length {len(data[0])} or length 1')
+                        f'It should have length {len(data[0])} or no length!')
         
     data = np.array(data)
     data[0] *= time_factor
@@ -114,6 +114,8 @@ class StationData:
         self.lon = lon
         if name is not None:
             self.__name__ = name
+        else:
+            self.__name__ = 'station'
 
         # initiate empty lists
         self.data = []
@@ -125,7 +127,7 @@ class StationData:
                  ttype: _DataTypes,
                  data: Union[list, np.ndarray],
                  time_factor: int,
-                 error: Union[list, np.ndarray] = None):
+                 error: Union[list, np.ndarray]):
         """
         Add magnetic data and data type to the class
         Also performs a first order check on the data
