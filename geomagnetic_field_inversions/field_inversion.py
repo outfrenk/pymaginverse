@@ -453,7 +453,7 @@ class FieldInversion:
             print('Setting up starting model')
         assert len(x0) == self._nm_total, \
             f'x0 has incorrect shape: {len(x0)},'\
-            f' it should be: {self._nm_total}'
+            f' it should be length {self._nm_total}'
         self.splined_gh = np.zeros((self.nr_splines, self._nm_total))
         self.splined_gh[:] = x0
         for iteration in range(max_iter):
@@ -518,10 +518,9 @@ class FieldInversion:
             self.unsplined_gh = np.zeros((len(self._t_array), self._nm_total))
             # cut of the sides that do not have physical meaning
             for gh in range(self._nm_total):
-                self.unsplined_gh[:, gh] = np.convolve(
-                    self.splined_gh[:, gh],
-                    self._bspline(np.arange(1, self._spl_degree+1))
-                )[self._spl_degree - 1:-(self._spl_degree - 1)]
+                bspline = BSpline(t=self.time_knots, c=self.splined_gh[:, gh],
+                                  k=3, extrapolate=False)
+                self.unsplined_gh[:, gh] = bspline(self._t_array)
             self.unsplined_iter[iteration, :] = self.unsplined_gh.flatten()
             if self.verbose:
                 print('Residual is %.2f' % self.res_iter[iteration, 7])
