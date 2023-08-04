@@ -10,7 +10,8 @@ from pathlib import Path
 from tqdm import tqdm
 
 from geomagnetic_field_inversions.data_prep import StationData
-_DampingMethods = Literal['spatial_G', 'temporal']
+_DampingMethods = Literal['Uniform', 'Dissipation', 'Powerseries', 'Gubbins',
+                          'Horderiv2cmb', 'Br2cmb', 'Energydensity']
 
 
 # TODO: understand lat_geod_geoc function
@@ -273,6 +274,8 @@ class FieldInversion:
     def prepare_inversion(self,
                           spatial_df: float,
                           temporal_df: float,
+                          spatial_dt: _DampingMethods = 'Gubbins',
+                          temporal_dt: _DampingMethods = 'Br2cmb',
                           damp_dipole: bool = False):
         """ 
         Function to prepare matrices for the inversion
@@ -283,6 +286,11 @@ class FieldInversion:
             spatial damping factor applied to the matrix, default 3e-10
         temporal_df
             temporal damping factor applied to the matrix, default 1e-2
+        spatial_dt
+            damping type for spatial damping. defaults to Gubbins-like damping
+        temporal_dt
+            damping type for temporal damping. defaults to minimizing
+            Br^2 flux at the cmb
         damp_dipole
             boolean indicating whether to damp dipole coefficients or not.
             Default is set to False.
@@ -375,7 +383,7 @@ class FieldInversion:
         if spatial_df != 0 and self._t_step != 0:
             if self.verbose:
                 print('Setting up spatial damping matrix')
-            spatial_damp = self.damping('spatial_G', damp_dipole)
+            spatial_damp = self.damping(spatial_dt, damp_dipole)
             for j in range(self.nr_splines):  # loop through splines with j
                 for k in range(self.nr_splines):  # and loop with k
                     if abs(j - k) <= self._spl_degree:
@@ -398,7 +406,7 @@ class FieldInversion:
         if temporal_df != 0 and self._t_step != 0:
             if self.verbose:
                 print('Setting up temporal damping matrix')
-            temporal_damp = self.damping('temporal', True)
+            temporal_damp = self.damping(temporal_dt, damp_dipole=True)
             for j in range(self.nr_splines):  # loop through splines with j
                 for k in range(self.nr_splines):  # and loop with k
                     if abs(j - k) <= self._spl_degree:
@@ -406,7 +414,7 @@ class FieldInversion:
                         high = min(j + self._spl_degree,
                                    k + self._spl_degree,
                                    self.nr_splines - 1)
-                        t_damper = self.temp_nc_spl(j, k, low, high)
+                        t_damper = self.temp_nc_spl2(j, k, low, high)
                         t_damp_coef = t_damper * np.diag(temporal_damp)
                         self.temporal_damp_matrix[
                             j * self._nm_total:(j + 1) * self._nm_total,
@@ -440,7 +448,7 @@ class FieldInversion:
         if len(self._t_array) == 1:
             raise Exception('Switch to function "run_inversion_notime" to'
                   ' execute calculations for one timestep')
-        if self.matrix_ready is False:
+        if not self.matrix_ready:
             if self.verbose:
                 print('Preparing matrices for iterative inversion')
             self.prepare_inversion(**prep_kwargs)
@@ -815,12 +823,13 @@ class FieldInversion:
                 * bspline_matrix[(k + self._spl_degree) - t]) * dt
         return int_prod
 
-    def temp_nc_spl(self,
-                    j: int,
-                    k: int,
-                    low: int,
-                    high: int):
-        """ Integrates the splines over time using Newton-Cotes
+    def temp_nc_spl2(self,
+                     j: int,
+                     k: int,
+                     low: int,
+                     high: int,
+                     newcot_order: int = 2):
+        """ Integrates 2nd derivative splines over time using Newton-Cotes
 
         Parameters
         ----------
@@ -828,6 +837,8 @@ class FieldInversion:
             value between 0 and nr_of_splines. Indicates which spline to use
         low, high
             indices of time_knots indicating the time over which to integrate
+        newcot_order
+            to which order to integrate with Newton-Cotes (at least 2!)
 
         Returns
         -------
@@ -837,7 +848,6 @@ class FieldInversion:
         """
         # cubic B-spline is reduced to a degree 1 B-spline
         temp_degree = 1
-        newcot_order = 2
 
         newcot, error = newton_cotes(newcot_order)  # get the weigh factor
         bspline_matrix = np.zeros((temp_degree + 1, newcot_order + 1))
@@ -854,7 +864,7 @@ class FieldInversion:
         coeff[0] = 1 / self._t_step**2
         coeff[1] = -2 / self._t_step**2
         coeff[2] = 1 / self._t_step**2
-        spl = np.zeros((4, 3))
+        spl = np.zeros((4, newcot_order))
         spl[0, :] = coeff[0] * bspline_matrix[1, :]
         spl[1, :] = coeff[0] * bspline_matrix[0, :] \
                     + coeff[1] * bspline_matrix[1, :]
@@ -863,6 +873,62 @@ class FieldInversion:
         spl[3, :] = coeff[2] * bspline_matrix[0, :]
         int_prod = 0
         # integrate and multiply for linear B-splines
+        for t in range(low, high + 1):
+            iint_prod = 0
+            for ndel in range(newcot_order + 1):
+                iint_prod += newcot[ndel] * spl[t-j, ndel] * spl[t-k, ndel]
+            int_prod += iint_prod * dt
+        return int_prod
+
+    def temp_nc_spl1(self,
+                     j: int,
+                     k: int,
+                     low: int,
+                     high: int,
+                     newcot_order: int = 4):
+        """ Integrates 1st derivative splines over time using Newton-Cotes
+
+        Parameters
+        ----------
+        j, k
+            value between 0 and nr_of_splines. Indicates which spline to use
+        low, high
+            indices of time_knots indicating the time over which to integrate
+        newcot_order
+            to which order to integrate with Newton-Cotes (at least 4!)
+
+        Returns
+        -------
+        int_prod
+            integration product of splines
+
+        """
+        # cubic B-spline is reduced to a degree 2 B-spline
+        temp_degree = 2
+
+        newcot, error = newton_cotes(newcot_order)  # get the weigh factor
+        bspline_matrix = np.zeros((temp_degree + 1, newcot_order + 1))
+        bspline = BSpline.basis_element(np.arange(temp_degree + 2),
+                                        extrapolate=False)
+        dt = self._t_step / newcot_order
+        for i in range(temp_degree + 1):
+            # create correct splines to convolve with!
+            bspline_matrix[i] = bspline(
+                np.linspace(i, i + 1, newcot_order + 1)
+            )[::-1]
+        coeff = np.zeros(2)
+        # comes from derivation cubic B-spline + assuming constant timestep
+        coeff[0] = 1 / self._t_step
+        coeff[1] = -1 / self._t_step
+        spl = np.zeros((4, newcot_order))
+        spl[0, :] = coeff[0] * bspline_matrix[2, :]
+        spl[1, :] = coeff[0] * bspline_matrix[1, :] \
+                    + coeff[1] * bspline_matrix[2, :]
+        spl[2, :] = coeff[0] * bspline_matrix[0, :] \
+                    + coeff[1] * bspline_matrix[1, :]
+        spl[3, :] = coeff[1] * bspline_matrix[0, :]
+        int_prod = 0
+        # integrate and multiply for 2nd B-splines
         for t in range(low, high + 1):
             iint_prod = 0
             for ndel in range(newcot_order + 1):
