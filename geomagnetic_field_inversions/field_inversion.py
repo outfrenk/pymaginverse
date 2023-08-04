@@ -826,19 +826,19 @@ class FieldInversion:
         coeff[0] = 1 / self._t_step**2
         coeff[1] = -2 / self._t_step**2
         coeff[2] = 1 / self._t_step**2
+        spl = np.zeros((4, 3))
+        spl[0, :] = coeff[0] * bspline_matrix[1, :]
+        spl[1, :] = coeff[0] * bspline_matrix[0, :] \
+                    + coeff[1] * bspline_matrix[1, :]
+        spl[2, :] = coeff[1] * bspline_matrix[0, :] \
+                    + coeff[2] * bspline_matrix[1, :]
+        spl[3, :] = coeff[2] * bspline_matrix[0, :]
         int_prod = 0
-        # integrate for time 'spend' with the spline combination
+        # integrate and multiply for linear B-splines
         for t in range(low, high + 1):
             iint_prod = 0
             for ndel in range(newcot_order + 1):
-                spl = np.zeros(len(self.time_knots))
-                spl[t] = coeff[0] * bspline_matrix[1, ndel]
-                spl[t - 1] = coeff[0] * bspline_matrix[0, ndel] \
-                    + coeff[1] * bspline_matrix[1, ndel]
-                spl[t - 2] = coeff[1] * bspline_matrix[0, ndel] \
-                    + coeff[2] * bspline_matrix[1, ndel]
-                spl[t - 3] = coeff[2] * bspline_matrix[0, ndel]
-                iint_prod += newcot[ndel] * spl[j] * spl[k]
+                iint_prod += newcot[ndel] * spl[t-j, ndel] * spl[t-k, ndel]
             int_prod += iint_prod * dt
         return int_prod
 
