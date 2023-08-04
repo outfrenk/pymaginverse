@@ -2,6 +2,7 @@ import numpy as np
 from scipy.integrate import newton_cotes
 from scipy.interpolate import BSpline, interp1d
 from scipy.linalg import pinv
+import scipy.sparse as scs
 import pandas as pd
 import pyshtools as pysh
 from typing import Union, Literal
@@ -13,18 +14,18 @@ _DampingMethods = Literal['spatial_G', 'temporal']
 
 
 # TODO: understand lat_geod_geoc function
-def lat_geod_geoc(lat: Union[float, np.ndarray, list],
-                  h: Union[float, np.ndarray, list] = 0):
+def geod_to_geoc(lat: Union[float, np.ndarray, list],
+                 h: Union[float, np.ndarray, list] = 0):
     """ Transforms the geodetic latitude to spherical coordinates
     Additionally, calculates the new radius and conversion factors
-    Note: copied from old Fortran code
+    source: Stevens et al. Aircraft control and simulation (2015)
 
     Parameters
     ----------
     lat
-        to be converted latitude in radians
+        geodetic latitude
     h
-        height above geoid
+        height above geoid (m)
 
     Returns
     -------
@@ -39,40 +40,27 @@ def lat_geod_geoc(lat: Union[float, np.ndarray, list],
         conversion factor for calculating geodetic magnetic x,z components.
         If geocentric, sd is 0
     """
-    b1 = 40680925.0
-    b2 = 40408585.0
+    # major axis earth (m)
+    maj_axis = 6378137.0
+    # minor axis earth (m)
+    min_axis = 6356752
+    # flattening
+    flatt = (maj_axis - min_axis) / min_axis
+    # eccentricity squared
+    ecc2 = flatt * (2 - flatt)
+    # prime vertical radius of curvature
+    Rn = maj_axis / np.sqrt(1 - ecc2 * np.sin(lat)**2)
+    # helpful parametrization
+    n = ecc2 * Rn / (Rn + h)
 
-    one = b1 * np.cos(lat) ** 2
-    two = b2 * np.sin(lat) ** 2
-    three = one + two
-    four = np.sqrt(three)
-    new_rad = np.sqrt(h * (h + 2 * four) + (b1 * one + b2 * two) / three)
-    cd = (h + four) / new_rad
-    sd = (b1 - b2) / four * np.sin(lat) * np.cos(lat) / new_rad
-    sinth = np.sin(lat) * cd - np.cos(lat) * sd
-    costh = np.cos(lat) * cd + np.sin(lat) * sd
-    new_lat = np.arctan2(sinth, costh)
+    # calculate new geocentric latitude
+    new_lat = np.arctan((1 - n) * np.tan(lat))
+    # calculate new geocentric radius in km!
+    new_rad = (Rn + h) * np.sqrt(1 - n * (2-n) * np.sin(lat)**2) * 1e-3
+    # calculate changes in vector
+    cd = np.cos(lat - new_lat)
+    sd = np.sin(lat - new_lat)
     return new_lat, new_rad, cd, sd
-
-
-def mag_geoc_geod(mx: Union[list, np.ndarray, float],
-                  mz: Union[list, np.ndarray, float],
-                  cd: Union[list, np.ndarray, float],
-                  sd: Union[list, np.ndarray, float]):
-    """ Transforms magnetic components from geocentric
-    to correct geodetic value
-
-    Parameters
-    ----------
-    mx, mz
-        to be converted magnetic vectors
-    cd, sd
-        conversion factors for calculating magnetic x, z components.
-        cd = 1 indicates perfect spherical earth
-    """
-    mx_new = mx * cd + mz * sd
-    mz_new = mz * cd - mx * sd
-    return mx_new, mz_new
 
 
 class FieldInversion:
@@ -256,7 +244,7 @@ class FieldInversion:
                     print(f'Coordinates are geodetic,'
                           ' translating to geocentric coordinates.')
                 lat_geoc, r_geoc, cd, sd = \
-                    lat_geod_geoc(np.radians(data_class.lat))
+                    geod_to_geoc(np.radians(data_class.lat), data_class.height)
                 station_entry = np.array([0.5 * np.pi - lat_geoc,
                                           np.radians(data_class.lon),
                                           r_geoc])
@@ -402,6 +390,7 @@ class FieldInversion:
                             j * self._nm_total:(j + 1) * self._nm_total,
                             k * self._nm_total:(k + 1) * self._nm_total
                         ] = s_damp_coef * spatial_df
+        self.spatial_damp_matrix = scs.csr_matrix(self.spatial_damp_matrix)
 
         self.temporal_damp_matrix = np.zeros(
             (self._nm_total * self.nr_splines,
@@ -423,6 +412,7 @@ class FieldInversion:
                             j * self._nm_total:(j + 1) * self._nm_total,
                             k * self._nm_total:(k + 1) * self._nm_total
                         ] = t_damp_coef * temporal_df
+        self.temporal_damp_matrix = scs.csr_matrix(self.temporal_damp_matrix)
 
         self.matrix_ready = True
 
@@ -463,7 +453,7 @@ class FieldInversion:
             print('Setting up starting model')
         assert len(x0) == self._nm_total, \
             f'x0 has incorrect shape: {len(x0)},'\
-            f' it should be: {self._nm_total}'
+            f' it should be length {self._nm_total}'
         self.splined_gh = np.zeros((self.nr_splines, self._nm_total))
         self.splined_gh[:] = x0
         for iteration in range(max_iter):
@@ -474,10 +464,10 @@ class FieldInversion:
             normal_eq_splined = np.zeros((self._nm_total * self.nr_splines,
                                           self._nm_total * self.nr_splines))
 
-            rhs_spatial_damp = -1 * np.matmul(self.spatial_damp_matrix,
-                                              self.splined_gh.flatten())
-            rhs_temporal_damp = -1 * np.matmul(self.temporal_damp_matrix,
-                                               self.splined_gh.flatten())
+            rhs_spatial_damp = -1 * self.spatial_damp_matrix *\
+                                self.splined_gh.flatten()
+            rhs_temporal_damp = -1 * self.temporal_damp_matrix *\
+                                self.splined_gh.flatten()
             gh_timesteps = BSpline(c=self.splined_gh, t=self.time_knots,
                                    k=self._spl_degree, axis=0,
                                    extrapolate=False)(self._t_array)
@@ -503,6 +493,8 @@ class FieldInversion:
                         ] += np.matmul(frechet_matrix.T * self._bspline(j + 1)
                                        / self.error_array[:, t]**2,
                                        frechet_matrix * self._bspline(k + 1))
+            normal_eq_splined = scs.csr_matrix(normal_eq_splined)
+
             for i in range(7):
                 if count_all[i] != 0:
                     self.res_iter[iteration, i] = np.sqrt(
@@ -520,16 +512,15 @@ class FieldInversion:
             rhs_splined += rhs_spatial_damp + rhs_temporal_damp
 
             # solve the equations
-            update = np.matmul(pinv(normal_eq_splined), rhs_splined)
+            update = scs.linalg.spsolve(normal_eq_splined, rhs_splined)
             self.splined_gh = (self.splined_gh.flatten() + update).reshape(
                 self.nr_splines, self._nm_total)
             self.unsplined_gh = np.zeros((len(self._t_array), self._nm_total))
             # cut of the sides that do not have physical meaning
             for gh in range(self._nm_total):
-                self.unsplined_gh[:, gh] = np.convolve(
-                    self.splined_gh[:, gh],
-                    self._bspline(np.arange(1, self._spl_degree+1))
-                )[self._spl_degree - 1:-(self._spl_degree - 1)]
+                bspline = BSpline(t=self.time_knots, c=self.splined_gh[:, gh],
+                                  k=3, extrapolate=False)
+                self.unsplined_gh[:, gh] = bspline(self._t_array)
             self.unsplined_iter[iteration, :] = self.unsplined_gh.flatten()
             if self.verbose:
                 print('Residual is %.2f' % self.res_iter[iteration, 7])
@@ -786,14 +777,14 @@ class FieldInversion:
         for i in range(self._spl_degree + 1):
             # create correct splines to convolve with!
             bspline_matrix[i] = bspline(
-                np.linspace(i, i + 1, newcot_order + 1))
+                np.linspace(i, i + 1, newcot_order + 1))[::-1]
         int_prod = 0
         # integrate for time 'spend' with the spline combination
         for t in range(int(low), int(high + 1)):
             # 'some kind of' convolution
             int_prod += np.sum(
-                newcot * bspline_matrix[(j + self._spl_degree) - t][::-1]
-                * bspline_matrix[(k + self._spl_degree) - t][::-1]) * dt
+                newcot * bspline_matrix[(j + self._spl_degree) - t]
+                * bspline_matrix[(k + self._spl_degree) - t]) * dt
         return int_prod
 
     def temp_nc_spl(self,
@@ -835,19 +826,19 @@ class FieldInversion:
         coeff[0] = 1 / self._t_step**2
         coeff[1] = -2 / self._t_step**2
         coeff[2] = 1 / self._t_step**2
+        spl = np.zeros((4, 3))
+        spl[0, :] = coeff[0] * bspline_matrix[1, :]
+        spl[1, :] = coeff[0] * bspline_matrix[0, :] \
+                    + coeff[1] * bspline_matrix[1, :]
+        spl[2, :] = coeff[1] * bspline_matrix[0, :] \
+                    + coeff[2] * bspline_matrix[1, :]
+        spl[3, :] = coeff[2] * bspline_matrix[0, :]
         int_prod = 0
-        # integrate for time 'spend' with the spline combination
+        # integrate and multiply for linear B-splines
         for t in range(low, high + 1):
             iint_prod = 0
             for ndel in range(newcot_order + 1):
-                spl = np.zeros(len(self.time_knots))
-                spl[t] = coeff[0] * bspline_matrix[1, ndel]
-                spl[t - 1] = coeff[0] * bspline_matrix[0, ndel] \
-                    + coeff[1] * bspline_matrix[1, ndel]
-                spl[t - 2] = coeff[1] * bspline_matrix[0, ndel] \
-                    + coeff[2] * bspline_matrix[1, ndel]
-                spl[t - 3] = coeff[2] * bspline_matrix[0, ndel]
-                iint_prod += newcot[ndel] * spl[j] * spl[k]
+                iint_prod += newcot[ndel] * spl[t-j, ndel] * spl[t-k, ndel]
             int_prod += iint_prod * dt
         return int_prod
 
