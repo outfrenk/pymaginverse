@@ -674,10 +674,18 @@ class FieldInversion:
         ----------
         damp_type
             style of damping according. Options are:
-            spatial_G -> spatial damping of heat flow at
-                         the core mantle boundary (Gubbins et al.)
-            temporal -> minimize integral of magnetic field
-                        squared over surface at core mantle boundary
+            Uniform         -> Set all damping to one
+            Dissipation     -> Minimize dissipation by minimizing
+                               the 2nd norm of Br at the cmb
+            Powerseries     -> Minimization condition on power of series used
+                               by Löwes
+            Gubbins         -> Spatial damping of heat flow at
+                               the core mantle boundary (Gubbins et al., 1975)
+            Horderiv2cmb    -> Minimization of the integral of the horizontal
+                               derivative of B squared
+            Br2cmb          -> Minimize integral of Br squared over surface
+                               at core mantle boundary
+            Energydensity   -> External energy density
         damp_dipole
             if False, damping is not applied to dipole coefficients (first 3).
             If True, dipole coefficients are damped.
@@ -692,21 +700,41 @@ class FieldInversion:
         damp_array = np.zeros((self._maxdegree + 1) ** 2 - 1)
         damp = np.zeros(self._maxdegree)
         counter = 0
+        if damp_type == 'Uniform':
+            damp[:] = 1
+        elif damp_type == 'Dissipation':
+            for degree in range(1, self._maxdegree + 1):
+                damp[degree - 1] = (degree + 1)**2 * degree**4 / \
+                                   (2 * degree + 1) * 4 * np.pi / \
+                                   ((self.r_earth / self.cmb_earth) **
+                                    (2 * degree))
+        elif damp_type == 'Powerseries':
+            for degree in range(1, self._maxdegree + 1):
+                damp[degree - 1] = (degree + 1) * \
+                                   ((self.r_earth / self.cmb_earth) **
+                                    (2 * degree + 4))
         # Spatial damping according to Gubbins with 2l+3
-        if damp_type == 'spatial_G':
-            for degree in range(1, self._maxdegree + 1):  # starts at one!
+        elif damp_type == 'Gubbins':
+            for degree in range(1, self._maxdegree + 1):
                 damp[degree - 1] = (degree + 1) * (2 * degree + 1) *\
-                                   (2 * degree + 3) / degree *\
-                                   (self.r_earth / self.cmb_earth) **\
-                                   (2 * degree + 3)
-                damp[degree - 1] = damp[degree - 1] * 4 * np.pi
-
-        elif damp_type == 'temporal':  # weird function
+                                   (2 * degree + 3) / degree * \
+                                   ((self.r_earth / self.cmb_earth) **
+                                    (2 * degree + 3)) * 4 * np.pi
+        elif damp_type == 'Horderiv2cmb':
+            for degree in range(1, self._maxdegree + 1):
+                damp[degree - 1] = degree * (degree + 1)**3 / (2 * degree + 1)\
+                                   * ((self.r_earth / self.cmb_earth) **
+                                      (2 * degree + 6))
+        elif damp_type == 'Br2cmb':
             for degree in range(1, self._maxdegree + 1):
                 damp[degree - 1] = (degree + 1) ** 2 / (2 * degree + 1) * \
                                    ((self.r_earth / self.cmb_earth) **
                                     (2 * degree + 4))
-
+        elif damp_type == 'Energydensity':
+            for degree in range(1, self._maxdegree + 1):
+                damp[degree - 1] = (degree + 1) / (2 * degree + 1) *\
+                                   ((self.r_earth / self.cmb_earth) **
+                                    (2 * degree + 1))
         else:
             raise Exception(f'Damping type {damp_type} not found. Exiting...')
 
