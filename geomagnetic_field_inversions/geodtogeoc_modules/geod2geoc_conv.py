@@ -69,6 +69,6 @@ def frechet_in_geoc(dx: np.ndarray,
     sd
         sine of latitude difference
     """
-    dxnew = dx * cd + dz * sd
-    dznew = dz * cd - dx * sd
+    dxnew = dx * cd[:, np.newaxis] + dz * sd[:, np.newaxis]
+    dznew = dz * cd[:, np.newaxis] - dx * sd[:, np.newaxis]
     return dxnew, dznew

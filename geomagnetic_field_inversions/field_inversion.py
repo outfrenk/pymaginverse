@@ -11,7 +11,7 @@ from pathlib import Path
 from tqdm import tqdm
 
 from .data_prep import StationData
-from .geodtogeoc_modules import geod2geoc_conv
+from .geodtogeoc_modules import geod2geoc_conv as g2g
 _DampingMethods = Literal['Uniform', 'Dissipation', 'Powerseries', 'Gubbins',
                           'Horderiv2cmb', 'Br2cmb', 'Energydensity']
 
@@ -114,7 +114,7 @@ class FieldInversion:
                     raise Exception("Time vector has different timesteps."
                                     " Redefine vector with same timestep")
         self.matrix_ready = False
-############################# tot hier #######################################
+
     def add_data(self,
                  data_class: StationData,
                  error_interp: str = 'linear'
@@ -134,8 +134,8 @@ class FieldInversion:
         typedict = {"x": 0, "y": 1, "z": 2, "hor": 3,
                     "int": 4, "inc": 5, "dec": 6}
         if isinstance(data_class, StationData):
+            # set up matrices
             data_entry = np.zeros((len(data_class.types), len(self._t_array)))
-            # set unknown errors to one to avoid divide by zero error frechet
             error_entry = np.ones((len(data_class.types), len(self._t_array)))
             # time_cover indicates timerange of data (used in Fréchet)
             time_cover = np.zeros((len(data_class.types), len(self._t_array)))
@@ -145,10 +145,12 @@ class FieldInversion:
                 arg_min, arg_max = 0, len(self._t_array)
                 if data_class.data[c][0][0] > self._t_array[0]:
                     if self.verbose:
-                        print(f'{types} of {data_class.__name__} not covering start time')
+                        print(f'{types} of {data_class.__name__} not covering'
+                              ' start time')
                     if data_class.data[c][0][0] > self._t_array[-1]:
-                        raise Exception(f'{types} of {data_class.__name__} does not cover'
-                                        ' any timestep of timevector')
+                        raise Exception(
+                            f'{types} of {data_class.__name__} does not cover'
+                            ' any timestep of timevector')
                     args = np.argsort(np.abs(data_class.data[c][0][0]
                                              - self._t_array))
                     if args[0] > args[1]:
@@ -201,8 +203,8 @@ class FieldInversion:
                     print(f'Coordinates are geodetic,'
                           ' translating to geocentric coordinates.')
                 lat_geoc, r_geoc, cd, sd = \
-                    geod2geoc_conv.latrad_in_geoc(math.radians(data_class.lat),
-                                                  data_class.height)
+                    g2g.latrad_in_geoc(math.radians(data_class.lat),
+                                       data_class.height)
                 station_entry = np.array([0.5 * np.pi - lat_geoc,
                                           np.radians(data_class.lon),
                                           r_geoc])
@@ -317,12 +319,13 @@ class FieldInversion:
                 counter += 1
         # TODO: apply geocentric correction to specific stations only
         # geocentric correction
-        self.station_frechet[:, :self._nm_total],\
-            self.station_frechet[:, 2*self._nm_total:] = \
-            geod2geoc_conv.frechet_in_geoc(
-                self.station_frechet[:, :self._nm_total],
-                self.station_frechet[:, 2*self._nm_total:],
-                self.gcgd_conv[:, 0], self.gcgd_conv[:, 1])
+        dx, dz = g2g.frechet_in_geoc(
+            self.station_frechet[:, :self._nm_total],
+            self.station_frechet[:, 2*self._nm_total:],
+            self.gcgd_conv[:, 0], self.gcgd_conv[:, 1]
+        )
+        self.station_frechet[:, :self._nm_total] = dx
+        self.station_frechet[:, 2 * self._nm_total:] = dz
 
         if self.verbose:
             print('Setting up splines and timeknots')
@@ -828,7 +831,7 @@ class FieldInversion:
         coeff[0] = 1 / self._t_step**2
         coeff[1] = -2 / self._t_step**2
         coeff[2] = 1 / self._t_step**2
-        spl = np.zeros((4, newcot_order))
+        spl = np.zeros((4, newcot_order + 1))
         spl[0, :] = coeff[0] * bspline_matrix[1, :]
         spl[1, :] = coeff[0] * bspline_matrix[0, :] \
                     + coeff[1] * bspline_matrix[1, :]
@@ -884,7 +887,7 @@ class FieldInversion:
         # comes from derivation cubic B-spline + assuming constant timestep
         coeff[0] = 1 / self._t_step
         coeff[1] = -1 / self._t_step
-        spl = np.zeros((4, newcot_order))
+        spl = np.zeros((4, newcot_order + 1))
         spl[0, :] = coeff[0] * bspline_matrix[2, :]
         spl[1, :] = coeff[0] * bspline_matrix[1, :] \
                     + coeff[1] * bspline_matrix[2, :]
