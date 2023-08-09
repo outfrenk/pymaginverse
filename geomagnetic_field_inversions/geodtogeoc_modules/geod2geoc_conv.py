@@ -33,21 +33,21 @@ def latrad_in_geoc(lat: float,
     # minor axis earth (m)
     min_axis = 6356752
     # flattening
-    flatt = (maj_axis - min_axis) / min_axis
+    flatt = (maj_axis-min_axis) / min_axis
     # eccentricity squared
-    ecc2 = flatt * (2 - flatt)
+    ecc2 = flatt * (2-flatt)
     # prime vertical radius of curvature
     Rn = maj_axis / np.sqrt(1 - ecc2 * np.sin(lat)**2)
     # helpful parametrization
-    n = ecc2 * Rn / (Rn + h)
+    n = ecc2 * Rn / (Rn+h)
 
     # calculate new geocentric latitude
-    new_lat = np.arctan((1 - n) * np.tan(lat))
+    new_lat = np.arctan((1-n) * np.tan(lat))
     # calculate new geocentric radius in km!
-    new_rad = (Rn + h) * np.sqrt(1 - n * (2-n) * np.sin(lat)**2) * 1e-3
+    new_rad = (Rn+h) * np.sqrt(1 - n * (2-n) * np.sin(lat)**2) * 1e-3
     # calculate changes in vector
-    cd = np.cos(lat - new_lat)
-    sd = np.sin(lat - new_lat)
+    cd = np.cos(lat-new_lat)
+    sd = np.sin(lat-new_lat)
     return new_lat, new_rad, cd, sd
 
 

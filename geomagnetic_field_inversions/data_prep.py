@@ -31,6 +31,11 @@ def interpolate_data(t: Union[np.ndarray, list],
     method
         method of fitting data. either NumPy's polyfit,
         SciPy's UnivariateSpline or interp1d (linear)
+
+    Returns
+    -------
+    linefit, unispline, linear
+        fitting function
     """
     if method == 'polyfit':
         polyn = np.polyfit(t, y, order)  # order of polynome
@@ -49,7 +54,8 @@ def interpolate_data(t: Union[np.ndarray, list],
 def check_data(ttype: _DataTypes,
                data: Union[list, np.ndarray],
                time_factor: int,
-               error: Union[float, list, np.ndarray]):
+               error: Union[list, np.ndarray]
+               ) -> list:
     """
     Checks if the data is correctly inputted and datatypes exist.
     Raises an exception if inc/dec data does not fit expected range.
@@ -69,7 +75,9 @@ def check_data(ttype: _DataTypes,
         error of the data, which should be float, list, or numpy array with
         length equal length to time vector.
 
-    Returns data and error array merged together and sorted by time.
+    Returns
+    -------
+        data and error array merged together and sorted by time.
     """
     datatypes = ['x', 'y', 'z', 'hor', 'inc', 'dec', 'int']
     # Initiate arrays for storing starting and ending time data
@@ -80,13 +88,17 @@ def check_data(ttype: _DataTypes,
         raise ValueError('Type %s not recognized' % ttype)
 
     # assign and check error
-    if not hasattr(error, "__len__"):
-        error = np.full(len(data[0]), error)
-    elif len(error) == len(data[0]):
-        pass
-    else:
-        raise Exception(f'error has incorrect length: {len(error)},\n'
-                        f'It should be a float or have length {len(data[0])}!')
+    try:
+        if len(error) == 1:
+            error = np.full(len(data[0]), error[0])
+        elif len(error) == len(data[0]):
+            pass
+        else:
+            raise Exception(f'error has incorrect length: {len(error)},\n'
+                            f'It should have length 1 or {len(data[0])}!')
+    except TypeError:
+        raise TypeError(f'error is of incorrect type: {type(error)},\n'
+                        f'It should be of type: list of np.ndarray')
         
     data = np.array(data)
     data[0] *= time_factor
@@ -134,7 +146,8 @@ class StationData:
                  ttype: _DataTypes,
                  data: Union[list, np.ndarray],
                  time_factor: int,
-                 error: Union[list, np.ndarray]):
+                 error: Union[list, np.ndarray]
+                 ) -> None:
         """
         Add magnetic data and data type to the class
         Also performs a first order check on the data
@@ -158,16 +171,22 @@ class StationData:
             error of the data, which should be list or numpy array with length
             equal to length of time vector.
 
-        self.data contains time, data, and error
+        Creates or modifies
+        -------------------
+        self.data (creates)
+            contains time, data, and error
+        self.types (creates)
+            corresponding datatype (see _DataTypes)
         """
         self.data.append(check_data(ttype, data, time_factor, error))
         self.types.append(ttype)
 
     def fitting(self,
-                order: Union[int, list, np.ndarray] = None,
-                smoothing: Union[int, float, list, np.ndarray] = None,
+                order: Union[list, np.ndarray] = None,
+                smoothing: Union[list, np.ndarray] = None,
                 method: _IpMethods = None,
-                ax: plt.axis = None):
+                ax: plt.axis = None
+                ) -> Optional[plt.axis]:
         """
         Fits a function to the data, required for running the inverse at
         values between datapoints as well.
@@ -183,9 +202,15 @@ class StationData:
         ax
             Optional matplotlib axes to show result of plotting
 
+        Creates or modifies
+        -------------------
+        self.fit_data
+            function that fits and interpolates the data
+
         Returns
         -------
-        Optionally returns a figure of the fitted data
+        ax
+            Optionally returns a figure of the fitted data
         """
         if order is None:
             order = np.full(len(self.types), 10)
