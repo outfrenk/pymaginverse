@@ -5,15 +5,14 @@ from scipy.interpolate import BSpline, interp1d
 from scipy.linalg import pinv
 import scipy.sparse as scs
 import pandas as pd
-import pyshtools as pysh
-from typing import Union, Literal
+from typing import Union, Final
 from pathlib import Path
 from tqdm import tqdm
 
 from .data_prep import StationData
+from .forward_modules import frechet
+from .damping_modules import damping
 from .geodtogeoc_modules import geod2geoc_conv as g2g
-_DampingMethods = Literal['Uniform', 'Dissipation', 'Powerseries', 'Gubbins',
-                          'Horderiv2cmb', 'Br2cmb', 'Energydensity']
 
 
 class FieldInversion:
@@ -40,10 +39,6 @@ class FieldInversion:
             maximum order for spherical harmonics model, default 3
         r_model
             where the magnetic field is modeled (km distance from core)
-        r_earth
-            radius of the earth (in km)
-        cmb_earth
-            radius core mantle boundary (in km)
         geodetic
             boolean specifying whether to use a geodetic coordinate frame. If
             True, geodetic coordinate frame is used and recalculated into a
@@ -53,9 +48,7 @@ class FieldInversion:
             Verbosity flag, defaults to False
         """
         # basic parameters
-        self._spl_degree = 3
-        self.r_earth = 6371.2
-        self.cmb_earth = 3485.0
+        self._SPL_DEGREE: Final[int] = 3
 
         # input parameters
         self.t_array = np.sort(time_array)
@@ -65,22 +58,18 @@ class FieldInversion:
         self.verbose = verbose
 
         # derived properties
-        self._bspline = BSpline.basis_element(np.arange(self._spl_degree + 2),
+        self._bspline = BSpline.basis_element(np.arange(self._SPL_DEGREE+2),
                                               extrapolate=False)
-        self.schmidt_P = np.empty(0)
-        self.schmidt_dP = np.empty(0)
         self.data_array = np.zeros((0, len(time_array)))
         self.error_array = np.zeros((0, len(time_array)))
         self.time_cover = np.zeros((0, len(time_array)))
         self.types = []
         self.station_coord = np.zeros((0, 3))
         self.gcgd_conv = np.zeros((0, 2))
-        self.spatial_damp_matrix = np.empty(0)
-        self.temporal_damp_matrix = np.empty(0)
+        self.spat_damp_matrix = np.empty(0)
+        self.temp_damp_matrix = np.empty(0)
         self.splined_gh = np.empty(0)
         self.unsplined_gh = np.empty(0)
-        self.time_knots = np.empty(0)
-        self.nr_splines = np.empty(0)
         self.station_frechet = np.empty(0)
         self.res_iter = np.empty(0)
         self.unsplined_iter = np.empty(0)
@@ -92,7 +81,7 @@ class FieldInversion:
     @maxdegree.setter
     def maxdegree(self, degree: int):
         # determines the maximum number of spherical coefficients
-        self._nm_total = int((degree + 1)**2 - 1)
+        self._nm_total = int((degree+1)**2 - 1)
         self._maxdegree = int(degree)
         self.matrix_ready = False
 
@@ -109,7 +98,15 @@ class FieldInversion:
         else:
             self._t_step = array[1] - array[0]
             self._t_array = array
-            for i in range(len(self._t_array) - 1):
+            # number of temporal splines
+            self.nr_splines = len(array) + self._SPL_DEGREE - 1
+            # location of timeknots
+            self.time_knots = np.linspace(
+                array[0] - self._SPL_DEGREE * self._t_step,
+                array[-1] + self._SPL_DEGREE * self._t_step,
+                num=len(array) + 2*self._SPL_DEGREE)
+            # check for equally spaced time array
+            for i in range(len(self._t_array)-1):
                 if self._t_array[i+1] - self._t_array[i] != self._t_step:
                     raise Exception("Time vector has different timesteps."
                                     " Redefine vector with same timestep")
@@ -129,6 +126,23 @@ class FieldInversion:
             time_array set in __init__
         error_interp
             string specifying interpolation of inputted error to time_array
+            according to documentation of scipy.interpolate.interp1d
+
+        Creates or modifies
+        -------------------
+        self.data_array
+            contains the measurements per site
+        self.error_array
+            contains the error in measurements per site
+        self.time_cover
+            contains whether the measurements per site cover the time array
+        self.types
+            contains the type of data
+        self.station_coord
+            contains the colatitude, longitude, and radius of station
+        self.gcgd_conv
+            contains conversion factors for geodetic to geocentric conversion
+            of magnetic components mx/dx and mz/dz
         """
         # translation datatypes
         typedict = {"x": 0, "y": 1, "z": 2, "hor": 3,
@@ -141,8 +155,8 @@ class FieldInversion:
             time_cover = np.zeros((len(data_class.types), len(self._t_array)))
             types_entry = []
             for c, types in enumerate(data_class.types):
-                # check coverage data timevector begin
                 arg_min, arg_max = 0, len(self._t_array)
+                # check coverage data timevector begin
                 if data_class.data[c][0][0] > self._t_array[0]:
                     if self.verbose:
                         print(f'{types} of {data_class.__name__} not covering'
@@ -151,40 +165,40 @@ class FieldInversion:
                         raise Exception(
                             f'{types} of {data_class.__name__} does not cover'
                             ' any timestep of timevector')
-                    args = np.argsort(np.abs(data_class.data[c][0][0]
-                                             - self._t_array))
-                    if args[0] > args[1]:
-                        arg_min = args[0]
                     else:
-                        arg_min = args[1]
-
+                        # execute if not complete coverage
+                        # _t_array elements should fall within min time
+                        arg_min = np.min(np.argwhere((data_class.data[c][0][0]
+                                                      - self._t_array) < 0))
                 # check coverage data timevector end
                 if data_class.data[c][0][-1] < self._t_array[-1]:
                     if self.verbose:
-                        print(f'{types} of {data_class.__name__} not covering end time')
+                        print(f'{types} of {data_class.__name__} not covering'
+                              ' end time')
                     if data_class.data[c][0][-1] < self._t_array[0]:
-                        raise Exception(f'{types} of {data_class.__name__} does not cover'
-                                        ' any timestep of timevector')
-                    args = np.argsort(np.abs(data_class.data[c][0][-1]
-                                             - self._t_array))
-                    if args[0] < args[1]:
-                        arg_max = args[0] + 1
+                        raise Exception(
+                            f'{types} of {data_class.__name__} does not cover'
+                            ' any timestep of timevector')
                     else:
-                        arg_max = args[1] + 1
+                        # execute if not complete coverage
+                        # _t_array elements should fall within max time
+                        arg_max = np.max(np.argwhere(data_class.data[c][0][-1]
+                                                     - self._t_array) > 0)
                 time_cover[c, arg_min:arg_max] = 1
-                # TODO: change data entry into geocentric frame (small)
+
+                # Extract data from StationData-class
                 if self.verbose:
                     print(f'Adding {types}-type')
                 if types == 'inc':
-                    temp = data_class.fit_data[c](self._t_array[arg_min:
-                                                                arg_max])
-                    data_entry[c, arg_min:
-                                  arg_max] = np.radians(temp)
+                    # get inclination data at specified points in time
+                    temp = data_class.fit_data[c](
+                        self._t_array[arg_min:arg_max])
+                    data_entry[c, arg_min:arg_max] = np.radians(temp)
                 elif types == 'dec':
-                    temp = data_class.fit_data[c](self._t_array[arg_min:
-                                                                arg_max])
-                    data_entry[c, arg_min:
-                                  arg_max] = np.radians(temp)
+                    # get declination data at specified points in time
+                    temp = data_class.fit_data[c](
+                        self._t_array[arg_min:arg_max])
+                    data_entry[c, arg_min:arg_max] = np.radians(temp)
                 else:
                     data_entry[c, arg_min:arg_max] = data_class.fit_data[c](
                         self._t_array[arg_min:arg_max])
@@ -192,31 +206,30 @@ class FieldInversion:
                 f = interp1d(data_class.data[c][0],
                              data_class.data[c][2],
                              kind=error_interp)
-                error_entry[c, arg_min:arg_max] = f(self._t_array[arg_min:
-                                                                  arg_max])
-
+                error_entry[c, arg_min:arg_max] = f(
+                    self._t_array[arg_min:arg_max])
+                # add datatype to list
                 types_entry.append(typedict[types])
 
-            # change coordinates to geocentric if required
+            # change coordinates from geodetic to geocentric if required
             if self.geodetic:
                 if self.verbose:
                     print(f'Coordinates are geodetic,'
                           ' translating to geocentric coordinates.')
-                lat_geoc, r_geoc, cd, sd = \
-                    g2g.latrad_in_geoc(math.radians(data_class.lat),
-                                       data_class.height)
-                station_entry = np.array([0.5 * np.pi - lat_geoc,
+                lat_geoc, r_geoc, cd, sd = g2g.latrad_in_geoc(
+                    math.radians(data_class.lat), data_class.height)
+                station_entry = np.array([0.5*np.pi - lat_geoc,
                                           np.radians(data_class.lon),
                                           r_geoc])
             else:
                 if self.verbose:
                     print(f'Coordinates are geocentric,'
                           ' no translation required.')
-                cd = 1.
+                cd = 1.  # this will not change dx and dz when forming frechet
                 sd = 0.
-                station_entry = np.array([np.radians(90 - data_class.lat), 
+                station_entry = np.array([np.radians(90-data_class.lat),
                                           np.radians(data_class.lon),
-                                          self.r_earth])
+                                          6371.2])
 
             # add data to attributes of the class if all is fine
             if self.verbose:
@@ -231,170 +244,89 @@ class FieldInversion:
             raise Exception('data_class is not an instance of Station_Data')
 
     def prepare_inversion(self,
-                          spatial_df: float,
-                          temporal_df: float,
-                          spatial_dt: _DampingMethods = 'Gubbins',
-                          temporal_dt: _DampingMethods = 'Br2cmb',
-                          temp_2nd_der: bool = True,
-                          damp_dipole: bool = False):
+                          spat_dict: dict = None,
+                          temp_dict: dict = None,
+                          ) -> None:
         """ 
         Function to prepare matrices for the inversion
         
         Parameters
         ----------
-        spatial_df
-            spatial damping factor applied to the matrix, default 3e-10
-        temporal_df
-            temporal damping factor applied to the matrix, default 1e-2
-        spatial_dt
-            damping type for spatial damping. defaults to Gubbins-like damping
-        temporal_dt
-            damping type for temporal damping. defaults to minimizing
-            Br^2 flux at the cmb
-        temp_2nd_der
-            if true, temporal damping is calculated by a second order
-            derivative of the spline (minimize acceleration).
-            if false, temporal damping is calculated by a first order
-            derivative of the spline is used (minimize velocity).
-        damp_dipole
-            boolean indicating whether to damp dipole coefficients or not.
-            Default is set to False.
+        spat_dict
+            dictionary for spatial damping containing the following keywords:
+                df
+                    damping factor to be applied to the total damping matrix
+                damp_type
+                    damping type to be applied
+                ddt
+                    derivative of B-Splines to be applied
+                damp_dipole
+                    boolean indicating whether to damp dipole coefficients.
+        temp_dict
+            dictionary for temporal damping containing the same keywords as
+            spat_dict
 
+        creates or modifies
+        -------------------
+        self.station_frechet
+            contains frechet matrix per location
+        self.spat_damp_matrix
+            contains spatial damping matrix
+        self.temp_damp_matrix
+            contains spatial damping matrix
+        self.matrix_ready
+            indicates whether all matrices have been formed
         """
         # check data and model space
+        if spat_dict is None:
+            spat_dict = {"df": 0, "damp_type": 'Gubbins',
+                         "ddt": 0, "damp_dipole": False}
+        if temp_dict is None:
+            temp_dict = {"df": 0, "damp_type": 'Br2cmb',
+                         "ddt": 2, "damp_dipole": True}
         assert self._nm_total <= len(self.data_array), \
             'The spherical order of the model is too high,' \
             f' decrease maxdegree from {self._maxdegree} to a lower value.'
 
-        # calculate schmidt polynomials and frechet x,y,z for all stations
+        # calculate frechet dx, dy, dz for all stations
         if self.verbose:
             print('Calculating Schmidt polynomials and Fréchet coefficients')
-        self.schmidt_P = np.zeros((len(self.station_coord),
-                                   int((self.maxdegree + 1)
-                                       * (self.maxdegree + 2) / 2)))
-        self.schmidt_dP = np.zeros((len(self.station_coord),
-                                    int((self.maxdegree + 1)
-                                        * (self.maxdegree + 2) / 2)))
-        for i, coord in enumerate(self.station_coord):
-            self.schmidt_P[i], self.schmidt_dP[i] = \
-                pysh.legendre.PlmSchmidt_d1(self.maxdegree, np.cos(coord[0]))
-            self.schmidt_dP[i] *= -np.sin(coord[0])
-        self.station_frechet = np.zeros((len(self.station_coord),
-                                         3 * self._nm_total))
-        counter = 0
-        for n in range(1, self._maxdegree + 1):
-            index = int(n * (n + 1) / 2)
-            mult_factor = (self.r_earth / self.station_coord[:, 2]) ** (n + 1)
-            # dx, dy, dz in one row separated by self._nm_total
-            self.station_frechet[:, counter] =\
-                mult_factor * self.schmidt_dP[:, index]
-            self.station_frechet[:, counter+self._nm_total] = 0
-            self.station_frechet[:, counter+2*self._nm_total] =\
-                -mult_factor * (n + 1) * self.schmidt_P[:, index]
-            counter += 1
-            for m in range(1, n + 1):
-                # First the g-elements
-                self.station_frechet[:, counter] =\
-                    mult_factor * self.schmidt_dP[:, index+m]\
-                    * np.cos(m * self.station_coord[:, 1])
-                self.station_frechet[:, counter+self._nm_total] = \
-                    m / np.sin(self.station_coord[:, 0]) * mult_factor\
-                    * np.sin(m * self.station_coord[:, 1])\
-                    * self.schmidt_P[:, index+m]
-                self.station_frechet[:, counter+2*self._nm_total] =\
-                    -mult_factor * (n + 1) * self.schmidt_P[:, index+m]\
-                    * np.cos(m * self.station_coord[:, 1])
-                counter += 1
-                # Now the h-elements
-                self.station_frechet[:, counter] =\
-                    mult_factor * self.schmidt_dP[:, index+m]\
-                    * np.sin(m * self.station_coord[:, 1])
-                self.station_frechet[:, counter+self._nm_total] =\
-                    -m / np.sin(self.station_coord[:, 0]) * mult_factor\
-                    * np.cos(m * self.station_coord[:, 1])\
-                    * self.schmidt_P[:, index+m]
-                self.station_frechet[:, counter+2*self._nm_total] =\
-                    -mult_factor * (n + 1) * self.schmidt_P[:, index+m]\
-                    * np.sin(m * self.station_coord[:, 1])
-                counter += 1
-        # TODO: apply geocentric correction to specific stations only
+        self.station_frechet = frechet.frechet_formation(
+            self.station_coord, self._maxdegree)
         # geocentric correction
         dx, dz = g2g.frechet_in_geoc(
             self.station_frechet[:, :self._nm_total],
             self.station_frechet[:, 2*self._nm_total:],
-            self.gcgd_conv[:, 0], self.gcgd_conv[:, 1]
-        )
+            self.gcgd_conv[:, 0], self.gcgd_conv[:, 1])
         self.station_frechet[:, :self._nm_total] = dx
-        self.station_frechet[:, 2 * self._nm_total:] = dz
-
-        if self.verbose:
-            print('Setting up splines and timeknots')
-        # TODO: check physical meaning nr_splines
-        # number of temporal splines, convolve spline-order with time array
-        self.nr_splines = len(self._t_array) + self._spl_degree - 1
-
-        # location of timeknots
-        self.time_knots = np.linspace(
-            self._t_array[0] - self._spl_degree * self._t_step,
-            self._t_array[-1] + self._spl_degree * self._t_step,
-            num=len(self._t_array) + 2 * self._spl_degree)
+        self.station_frechet[:, 2*self._nm_total:] = dz
 
         # Prepare damping matrices
-        self.spatial_damp_matrix = np.zeros(
-            (self._nm_total * self.nr_splines,
-             self._nm_total * self.nr_splines))
-        if spatial_df != 0 and self._t_step != 0:
-            if self.verbose:
-                print('Setting up spatial damping matrix')
-            spatial_damp = self.damping(spatial_dt, damp_dipole)
-            for j in range(self.nr_splines):  # loop through splines with j
-                for k in range(self.nr_splines):  # and loop with k
-                    if abs(j - k) <= self._spl_degree:
-                        low = max(j, k, self._spl_degree)
-                        high = min(j + self._spl_degree,
-                                   k + self._spl_degree,
-                                   self.nr_splines - 1)
-                        s_damper = self.integr_nc_spl(j, k, low, high)
-                        # multiply factor with damping factors in diag matrix
-                        s_damp_coef = s_damper * np.diag(spatial_damp)
-                        self.spatial_damp_matrix[
-                            j * self._nm_total:(j + 1) * self._nm_total,
-                            k * self._nm_total:(k + 1) * self._nm_total
-                        ] = s_damp_coef * spatial_df
-        self.spatial_damp_matrix = scs.csr_matrix(self.spatial_damp_matrix)
-
-        self.temporal_damp_matrix = np.zeros(
-            (self._nm_total * self.nr_splines,
-             self._nm_total * self.nr_splines))
-        if temporal_df != 0 and self._t_step != 0:
-            if self.verbose:
-                print('Setting up temporal damping matrix')
-            temporal_damp = self.damping(temporal_dt, damp_dipole=True)
-            for j in range(self.nr_splines):  # loop through splines with j
-                for k in range(self.nr_splines):  # and loop with k
-                    if abs(j - k) <= self._spl_degree:
-                        low = max(j, k, self._spl_degree)
-                        high = min(j + self._spl_degree,
-                                   k + self._spl_degree,
-                                   self.nr_splines - 1)
-                        # whether to differentiate twice or once
-                        if temp_2nd_der:
-                            t_damper = self.temp_nc_spl2(j, k, low, high)
-                        else:
-                            t_damper = self.temp_nc_spl1(j, k, low, high)
-                        t_damp_coef = t_damper * np.diag(temporal_damp)
-                        self.temporal_damp_matrix[
-                            j * self._nm_total:(j + 1) * self._nm_total,
-                            k * self._nm_total:(k + 1) * self._nm_total
-                        ] = t_damp_coef * temporal_df
-        self.temporal_damp_matrix = scs.csr_matrix(self.temporal_damp_matrix)
-
+        if self.verbose:
+            print('Calculating spatial damping matrix')
+        if spat_dict['df'] != 0 and self._t_step != 0:
+            self.spat_damp_matrix = damping.damp_matrix(
+                self._maxdegree, self.nr_splines, self._t_step,
+                spat_dict['df'], spat_dict['damp_type'], spat_dict['ddt'],
+                damp_dipole=spat_dict['damp_dipole'])
+            self.spat_damp_matrix = scs.csr_matrix(self.spat_damp_matrix)
+        if self.verbose:
+            print('Calculating temporal damping matrix')
+        if temp_dict['df'] != 0 and self._t_step != 0:
+            self.temp_damp_matrix = damping.damp_matrix(
+                self._maxdegree, self.nr_splines, self._t_step,
+                temp_dict['df'], temp_dict['damp_type'], temp_dict['ddt'],
+                damp_dipole=temp_dict['damp_dipole'])
+            self.temp_damp_matrix = scs.csr_matrix(self.temp_damp_matrix)
         self.matrix_ready = True
+        if self.verbose:
+            print('Calculations finished')
 
     def run_inversion(self,
                       x0: Union[np.ndarray, list],
                       max_iter: int = 5,
-                      **prep_kwargs):
+                      **prep_kwargs
+                      ) -> None:
         """
         Run the iterative inversion
 
@@ -407,12 +339,11 @@ class FieldInversion:
             maximum amount of iterations
         **prep_kwargs
             optional keyword arguments in case the prepare_inversion function
-            has not been run yet. Requires at least spatial_df and
-            temporal_df. See self.prepare_inversion for more information.
+            has not been run yet. See prepare_inversion for more information.
 
         """
         # TODO: add uncertainty
-        if len(self._t_array) == 1:
+        if self._t_step == 0:
             raise Exception('Switch to function "run_inversion_notime" to'
                   ' execute calculations for one timestep')
         if not self.matrix_ready:
@@ -421,14 +352,14 @@ class FieldInversion:
             self.prepare_inversion(**prep_kwargs)
 
         self.res_iter = np.zeros((max_iter+1, 8))
-        self.unsplined_iter = np.zeros((max_iter,
-                                        self._nm_total * len(self._t_array)))
+        self.unsplined_iter = np.zeros(
+            (max_iter, self._nm_total * len(self._t_array)))
         # initiate splined values with starting model
         if self.verbose:
             print('Setting up starting model')
         assert len(x0) == self._nm_total, \
             f'x0 has incorrect shape: {len(x0)},'\
-            f' it should be length {self._nm_total}'
+            f' it should have length {self._nm_total}'
         self.splined_gh = np.zeros((self.nr_splines, self._nm_total))
         self.splined_gh[:] = x0
         for iteration in range(max_iter):
@@ -439,12 +370,10 @@ class FieldInversion:
             normal_eq_splined = np.zeros((self._nm_total * self.nr_splines,
                                           self._nm_total * self.nr_splines))
 
-            rhs_spatial_damp = -1 * self.spatial_damp_matrix *\
-                                self.splined_gh.flatten()
-            rhs_temporal_damp = -1 * self.temporal_damp_matrix *\
-                                self.splined_gh.flatten()
+            rhs_spat_damp = -1*self.spat_damp_matrix*self.splined_gh.flatten()
+            rhs_temp_damp = -1*self.temp_damp_matrix*self.splined_gh.flatten()
             gh_timesteps = BSpline(c=self.splined_gh, t=self.time_knots,
-                                   k=self._spl_degree, axis=0,
+                                   k=self._SPL_DEGREE , axis=0,
                                    extrapolate=False)(self._t_array)
 
             for t in range(len(self._t_array)):
@@ -460,8 +389,8 @@ class FieldInversion:
                     np.matmul(frechet_matrix.T / self.error_array[:, t],
                               res_obs / self.error_array[:, t])
                 # Apply B-Splines straight away (much easier)
-                for j in range(self._spl_degree):
-                    for k in range(self._spl_degree):
+                for j in range(self._SPL_DEGREE):
+                    for k in range(self._SPL_DEGREE):
                         normal_eq_splined[
                             (t+j) * self._nm_total:(t+j+1) * self._nm_total,
                             (t+k) * self._nm_total:(t+k+1) * self._nm_total
@@ -480,11 +409,11 @@ class FieldInversion:
             for i in range(self._nm_total):
                 rhs_splined[i::self._nm_total] =\
                     np.convolve(rhs_matrix[:, i],
-                                self._bspline(np.arange(1, self._spl_degree+1)))
+                                self._bspline(np.arange(1, self._SPL_DEGREE +1)))
             # add spatial and temporal damping to the matrix and vector
             normal_eq_splined +=\
-                self.spatial_damp_matrix + self.temporal_damp_matrix
-            rhs_splined += rhs_spatial_damp + rhs_temporal_damp
+                self.spat_damp_matrix + self.temp_damp_matrix
+            rhs_splined += rhs_spat_damp + rhs_temp_damp
 
             # solve the equations
             update = scs.linalg.spsolve(normal_eq_splined, rhs_splined)
@@ -504,7 +433,7 @@ class FieldInversion:
                 if self.verbose:
                     print('Calculate residual last iteration')
                 gh_timesteps = BSpline(c=self.splined_gh, t=self.time_knots,
-                                       k=self._spl_degree, axis=0,
+                                       k=self._SPL_DEGREE , axis=0,
                                        extrapolate=False)(self._t_array)
                 count_all = np.zeros(7)
                 for t in range(len(self._t_array)):
@@ -639,269 +568,6 @@ class FieldInversion:
             np.save(basedir / f'{file_name}_all_coeff', self.unsplined_iter)
         else:
             np.save(basedir / f'{file_name}_final_coeff', self.unsplined_gh)
-
-    def damping(self,
-                damp_type: _DampingMethods,
-                damp_dipole: bool = False):
-        """ Creates spatial or temporal damping factors
-
-        Parameters
-        ----------
-        damp_type
-            style of damping according. Options are:
-            Uniform         -> Set all damping to one
-            Dissipation     -> Minimize dissipation by minimizing
-                               the 2nd norm of Br at the cmb
-            Powerseries     -> Minimization condition on power of series used
-                               by Löwes
-            Gubbins         -> Spatial damping of heat flow at
-                               the core mantle boundary (Gubbins et al., 1975)
-            Horderiv2cmb    -> Minimization of the integral of the horizontal
-                               derivative of B squared
-            Br2cmb          -> Minimize integral of Br squared over surface
-                               at core mantle boundary
-            Energydensity   -> External energy density
-        damp_dipole
-            if False, damping is not applied to dipole coefficients (first 3).
-            If True, dipole coefficients are damped.
-
-        Returns
-        -------
-        damp_array
-            contains damping value for gaussian coefficients. Essentially
-            diagonal values of the damping matrix
-
-        """
-        damp_array = np.zeros((self._maxdegree + 1) ** 2 - 1)
-        damp = np.zeros(self._maxdegree)
-        counter = 0
-        if damp_type == 'Uniform':
-            damp[:] = 1
-        elif damp_type == 'Dissipation':
-            for degree in range(1, self._maxdegree + 1):
-                damp[degree - 1] = (degree + 1)**2 * degree**4 / \
-                                   (2 * degree + 1) * 4 * np.pi / \
-                                   ((self.r_earth / self.cmb_earth) **
-                                    (2 * degree))
-        elif damp_type == 'Powerseries':
-            for degree in range(1, self._maxdegree + 1):
-                damp[degree - 1] = (degree + 1) * \
-                                   ((self.r_earth / self.cmb_earth) **
-                                    (2 * degree + 4))
-        # Spatial damping according to Gubbins with 2l+3
-        elif damp_type == 'Gubbins':
-            for degree in range(1, self._maxdegree + 1):
-                damp[degree - 1] = (degree + 1) * (2 * degree + 1) *\
-                                   (2 * degree + 3) / degree * \
-                                   ((self.r_earth / self.cmb_earth) **
-                                    (2 * degree + 3)) * 4 * np.pi
-        elif damp_type == 'Horderiv2cmb':
-            for degree in range(1, self._maxdegree + 1):
-                damp[degree - 1] = degree * (degree + 1)**3 / (2 * degree + 1)\
-                                   * ((self.r_earth / self.cmb_earth) **
-                                      (2 * degree + 6))
-        elif damp_type == 'Br2cmb':
-            for degree in range(1, self._maxdegree + 1):
-                damp[degree - 1] = (degree + 1) ** 2 / (2 * degree + 1) * \
-                                   ((self.r_earth / self.cmb_earth) **
-                                    (2 * degree + 4))
-        elif damp_type == 'Energydensity':
-            for degree in range(1, self._maxdegree + 1):
-                damp[degree - 1] = (degree + 1) / (2 * degree + 1) *\
-                                   ((self.r_earth / self.cmb_earth) **
-                                    (2 * degree + 1))
-        else:
-            raise Exception(f'Damping type {damp_type} not found. Exiting...')
-
-        for degree in range(1, self._maxdegree + 1):
-            for order in range(degree + 1):  # order should start at zero
-                if damp_dipole is False and degree == 1:
-                    if order == 0:
-                        damp_array[counter] = 0
-                        counter += 1
-                    if order == 1:
-                        damp_array[counter] = 0
-                        counter += 1
-                        damp_array[counter] = 0
-                        counter += 1
-
-                elif order == 0:
-                    damp_array[counter] = damp[degree - 1]
-                    counter += 1
-                else:
-                    damp_array[counter] = damp[degree - 1]
-                    counter += 1
-                    damp_array[counter] = damp[degree - 1]
-                    counter += 1
-        return damp_array
-
-    # TODO: understand integration functions
-    def integr_nc_spl(self,
-                      j: int,
-                      k: int,
-                      low: int,
-                      high: int,
-                      newcot_order: int = 6):
-        """ Integrates the splines over time using Newton-Cotes
-
-        Parameters
-        ----------
-        j, k
-            value between 0 and nr_splines. Indicates
-            which spline to use. if j_order = 3 and
-            5 splines then
-            spl | j times data at timestep t
-            ____|_______________________________
-            0   | 0 at t=0
-            1   | 1 at t=0 + 0 at t=1
-            2   | 2 at t=0 + 1 at t=1 + 0 at t=2
-            3   | 2 at t=1 + 1 at t=2 + 0 at t=3
-            4   | 2 at t=2 + 1 at t=3 + 0 at t=4
-
-        low, high
-            indices of time_knots indicating the time over which to integrate
-        newcot_order
-            order+1 steps used in the Newton-Cotes integral
-
-        Returns
-        -------
-        int_prod
-            integration product of splines
-
-        """
-
-        newcot, error = newton_cotes(newcot_order)  # get the weigh factor
-        bspline_matrix = np.zeros((self._spl_degree + 1, newcot_order + 1))
-        bspline = BSpline.basis_element(np.arange(self._spl_degree + 2),
-                                        extrapolate=False)
-        # necessary to get sum = 1 for weigh factors
-        dt = self._t_step / newcot_order
-
-        for i in range(self._spl_degree + 1):
-            # create correct splines to convolve with!
-            bspline_matrix[i] = bspline(
-                np.linspace(i, i + 1, newcot_order + 1))[::-1]
-        int_prod = 0
-        # integrate for time 'spend' with the spline combination
-        for t in range(int(low), int(high + 1)):
-            # 'some kind of' convolution
-            int_prod += np.sum(
-                newcot * bspline_matrix[(j + self._spl_degree) - t]
-                * bspline_matrix[(k + self._spl_degree) - t]) * dt
-        return int_prod
-
-    def temp_nc_spl2(self,
-                     j: int,
-                     k: int,
-                     low: int,
-                     high: int,
-                     newcot_order: int = 2):
-        """ Integrates 2nd derivative splines over time using Newton-Cotes
-
-        Parameters
-        ----------
-        j, k
-            value between 0 and nr_of_splines. Indicates which spline to use
-        low, high
-            indices of time_knots indicating the time over which to integrate
-        newcot_order
-            to which order to integrate with Newton-Cotes (at least 2!)
-
-        Returns
-        -------
-        int_prod
-            integration product of splines
-
-        """
-        # cubic B-spline is reduced to a degree 1 B-spline
-        temp_degree = 1
-
-        newcot, error = newton_cotes(newcot_order)  # get the weigh factor
-        bspline_matrix = np.zeros((temp_degree + 1, newcot_order + 1))
-        bspline = BSpline.basis_element(np.arange(temp_degree + 2),
-                                        extrapolate=False)
-        dt = self._t_step / newcot_order
-        for i in range(temp_degree + 1):
-            # create correct splines to convolve with!
-            bspline_matrix[i] = bspline(
-                np.linspace(i, i + 1, newcot_order + 1)
-            )[::-1]
-        coeff = np.zeros(3)
-        # comes from derivation cubic B-spline + assuming constant timestep
-        coeff[0] = 1 / self._t_step**2
-        coeff[1] = -2 / self._t_step**2
-        coeff[2] = 1 / self._t_step**2
-        spl = np.zeros((4, newcot_order + 1))
-        spl[0, :] = coeff[0] * bspline_matrix[1, :]
-        spl[1, :] = coeff[0] * bspline_matrix[0, :] \
-                    + coeff[1] * bspline_matrix[1, :]
-        spl[2, :] = coeff[1] * bspline_matrix[0, :] \
-                    + coeff[2] * bspline_matrix[1, :]
-        spl[3, :] = coeff[2] * bspline_matrix[0, :]
-        int_prod = 0
-        # integrate and multiply for linear B-splines
-        for t in range(low, high + 1):
-            iint_prod = 0
-            for ndel in range(newcot_order + 1):
-                iint_prod += newcot[ndel] * spl[t-j, ndel] * spl[t-k, ndel]
-            int_prod += iint_prod * dt
-        return int_prod
-
-    def temp_nc_spl1(self,
-                     j: int,
-                     k: int,
-                     low: int,
-                     high: int,
-                     newcot_order: int = 4):
-        """ Integrates 1st derivative splines over time using Newton-Cotes
-
-        Parameters
-        ----------
-        j, k
-            value between 0 and nr_of_splines. Indicates which spline to use
-        low, high
-            indices of time_knots indicating the time over which to integrate
-        newcot_order
-            to which order to integrate with Newton-Cotes (at least 4!)
-
-        Returns
-        -------
-        int_prod
-            integration product of splines
-
-        """
-        # cubic B-spline is reduced to a degree 2 B-spline
-        temp_degree = 2
-
-        newcot, error = newton_cotes(newcot_order)  # get the weigh factor
-        bspline_matrix = np.zeros((temp_degree + 1, newcot_order + 1))
-        bspline = BSpline.basis_element(np.arange(temp_degree + 2),
-                                        extrapolate=False)
-        dt = self._t_step / newcot_order
-        for i in range(temp_degree + 1):
-            # create correct splines to convolve with!
-            bspline_matrix[i] = bspline(
-                np.linspace(i, i + 1, newcot_order + 1)
-            )[::-1]
-        coeff = np.zeros(2)
-        # comes from derivation cubic B-spline + assuming constant timestep
-        coeff[0] = 1 / self._t_step
-        coeff[1] = -1 / self._t_step
-        spl = np.zeros((4, newcot_order + 1))
-        spl[0, :] = coeff[0] * bspline_matrix[2, :]
-        spl[1, :] = coeff[0] * bspline_matrix[1, :] \
-                    + coeff[1] * bspline_matrix[2, :]
-        spl[2, :] = coeff[0] * bspline_matrix[0, :] \
-                    + coeff[1] * bspline_matrix[1, :]
-        spl[3, :] = coeff[1] * bspline_matrix[0, :]
-        int_prod = 0
-        # integrate and multiply for 2nd B-splines
-        for t in range(low, high + 1):
-            iint_prod = 0
-            for ndel in range(newcot_order + 1):
-                iint_prod += newcot[ndel] * spl[t-j, ndel] * spl[t-k, ndel]
-            int_prod += iint_prod * dt
-        return int_prod
 
     def forward_frechet(self,
                         coeff: Union[list, np.ndarray],
