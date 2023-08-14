@@ -108,8 +108,10 @@ def forward_obs(data_matrix: np.ndarray,
     # now select useful rows by data_type
     # first reshape forwobs_matrix and frech_mat to correspond to datatypes
     # meaning: one row is one datatype of station at every time
-    forwobs_matrix = forwobs_matrix.reshape(7, locs, times).swapaxes(0, 1).reshape(7*locs, times)
-    frech_matrix = frech_matrix.reshape(7, locs, nm_total*times).swapaxes(0, 1).reshape(7*locs, nm_total*times)
+    forwobs_matrix = forwobs_matrix.reshape(
+        7, locs, times).swapaxes(0, 1).reshape(7*locs, times)
+    frech_matrix = frech_matrix.reshape(
+        7, locs, nm_total*times).swapaxes(0, 1).reshape(7*locs, nm_total*times)
     forwobs_matrix = forwobs_matrix[types_sort]
     resid_matrix_t = (data_matrix - forwobs_matrix).T
     type06 = types_sort % 7

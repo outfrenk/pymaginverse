@@ -64,9 +64,9 @@ class FieldInversion:
         self.error_array = np.zeros((0, len(time_array)))
         self.time_cover = np.zeros((0, len(time_array)))
         self.types = []
+        self.count_type = np.zeros(7)  # counts occurrence datatypes all times
         self.types_ready = False
         self.types_sorted = np.empty(0)
-        self.count_type = np.zeros(7)  # counts occurrence datatypes
         self.station_coord = np.zeros((0, 3))
         self.gcgd_conv = np.zeros((0, 2))
         self.spat_damp_matrix = np.empty(0)
@@ -224,7 +224,7 @@ class FieldInversion:
                     self._t_array[arg_min:arg_max])
                 # count occurrence datatype and add to list
                 types_entry.append(typedict[types])
-                self.count_type[typedict[types]] += 1
+                self.count_type[typedict[types]] += np.sum(time_cover[c])
 
             # change coordinates from geodetic to geocentric if required
             if self.geodetic:
@@ -402,10 +402,14 @@ class FieldInversion:
             gh_timesteps = BSpline(c=self.splined_gh, t=self.time_knots,
                                    k=self._SPL_DEGREE, axis=0,
                                    extrapolate=False)(self._t_array)
+            print(gh_timesteps)
             # Calculate frechet and residual matrix for all times
             frech_matrix, res_matrix = frechet.forward_obs(
                 self.data_array, gh_timesteps, self.station_frechet,
                 self.types_sorted)
+            # apply time constraint
+            frech_matrix *= np.repeat(self.time_cover, self._nm_total, axis=1)
+            res_matrix *= self.time_cover
             res_weight = res_matrix / self.error_array
             print('residual_weighted', res_matrix)
             # sum residuals
@@ -442,6 +446,7 @@ class FieldInversion:
 
             # solve the equations
             update = scs.linalg.spsolve(normal_eq_splined, rhs_splined)
+            print('update:', update)
             self.splined_gh = (self.splined_gh.flatten() + update).reshape(
                 self.nr_splines, self._nm_total)
             self.unsplined_gh = []
@@ -463,6 +468,8 @@ class FieldInversion:
                 frech_matrix, res_matrix = frechet.forward_obs(
                     self.data_array, gh_timesteps, self.station_frechet,
                     self.types_sorted)
+                # apply time constraint
+                res_matrix *= self.time_cover
                 res_weight = res_matrix / self.error_array
                 # sum residuals
                 for i in range(7):
