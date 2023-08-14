@@ -78,9 +78,7 @@ def forward_obs(data_matrix: np.ndarray,
     nm_total = len(coeff[0])
     # TODO: pay attention for alternating length data_type
     # has 3 rows (xyz). per row first all times per loc
-    # print(frechxyz, coeff)
     xyz = np.matmul(frechxyz, coeff.T).reshape(3, times*locs)
-    # print(xyz)
     hor = np.linalg.norm(xyz[:2], axis=0)
     b_int = np.linalg.norm(xyz, axis=0)
     # creates a matrix with shape (7, times * locations)
@@ -91,7 +89,6 @@ def forward_obs(data_matrix: np.ndarray,
     forwobs_matrix[4] = b_int
     forwobs_matrix[5] = np.arcsin(xyz[2] / b_int)
     forwobs_matrix[6] = np.arctan2(xyz[1], xyz[0])
-    # print(forwobs_matrix)  # seems fine until here
 
     # per row first all gh then new time then locs
     width = nm_total*times*locs  # row width
@@ -108,21 +105,13 @@ def forward_obs(data_matrix: np.ndarray,
     frech_matrix[4] = (thor*dhor + txyz[2]*dxyz[2]) / tb_int
     frech_matrix[5] = (thor*dxyz[2] - txyz[2]*dhor) / tb_int**2
     frech_matrix[6] = (txyz[0]*dxyz[1] - txyz[1]*dxyz[0]) / thor**2
-    # print(frech_matrix)
     # now select useful rows by data_type
     # first reshape forwobs_matrix and frech_mat to correspond to datatypes
     # meaning: one row is one datatype of station at every time
-    forwobs_matrix = forwobs_matrix.T.reshape(times, 7*locs).T
-    frech_matrix = frech_matrix.T.reshape(nm_total*times, 7*locs).T
-    # print(frech_matrix)
-    # print(types_sort)
-    # print(frech_matrix[types_sort])
+    forwobs_matrix = forwobs_matrix.reshape(7, locs, times).swapaxes(0, 1).reshape(7*locs, times)
+    frech_matrix = frech_matrix.reshape(7, locs, nm_total*times).swapaxes(0, 1).reshape(7*locs, nm_total*times)
     forwobs_matrix = forwobs_matrix[types_sort]
-    # print(forwobs_matrix)
-    # print(data_matrix)
     resid_matrix_t = (data_matrix - forwobs_matrix).T
-    # print(resid_matrix_t)
-    # print(data_matrix - forwobs_matrix)
     type06 = types_sort % 7
     # inc and dec check
     resid_matrix_t = np.where((type06 == 5) | (type06 == 6), np.arctan2(

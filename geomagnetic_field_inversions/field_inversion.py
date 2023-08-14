@@ -407,7 +407,7 @@ class FieldInversion:
                 self.data_array, gh_timesteps, self.station_frechet,
                 self.types_sorted)
             res_weight = res_matrix / self.error_array
-            # print(res_matrix)
+            print('residual_weighted', res_matrix)
             # sum residuals
             type06 = self.types_sorted % 7
             for i in range(7):
