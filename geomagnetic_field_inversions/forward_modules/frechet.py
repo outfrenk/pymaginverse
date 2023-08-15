@@ -90,11 +90,12 @@ def forward_obs(data_matrix: np.ndarray,
     forwobs_matrix[5] = np.arcsin(xyz[2] / b_int)
     forwobs_matrix[6] = np.arctan2(xyz[1], xyz[0])
 
+    # expand arrays to cover all time
     # per row first all gh then new time then locs
     width = nm_total*times*locs  # row width
-    txyz = np.tile(xyz.reshape(3*locs, times), nm_total).reshape(3, width)
-    thor = np.tile(hor.reshape(locs, times), nm_total).flatten()
-    tb_int = np.tile(b_int.reshape(locs, times), nm_total).flatten()
+    txyz = np.repeat(xyz, nm_total).reshape(3, width)
+    thor = np.repeat(hor, nm_total)
+    tb_int = np.repeat(b_int, nm_total)
     dxyz = np.tile(frechxyz, times).reshape(3, width)
     dhor = (txyz[0]*dxyz[0] + txyz[1]*dxyz[1]) / thor
     # creates frechet for all coefficients, timesteps, and locations

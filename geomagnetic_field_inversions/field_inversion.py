@@ -402,7 +402,7 @@ class FieldInversion:
             gh_timesteps = BSpline(c=self.splined_gh, t=self.time_knots,
                                    k=self._SPL_DEGREE, axis=0,
                                    extrapolate=False)(self._t_array)
-            print(gh_timesteps)
+
             # Calculate frechet and residual matrix for all times
             frech_matrix, res_matrix = frechet.forward_obs(
                 self.data_array, gh_timesteps, self.station_frechet,
@@ -411,7 +411,7 @@ class FieldInversion:
             frech_matrix *= np.repeat(self.time_cover, self._nm_total, axis=1)
             res_matrix *= self.time_cover
             res_weight = res_matrix / self.error_array
-            print('residual_weighted', res_matrix)
+
             # sum residuals
             type06 = self.types_sorted % 7
             for i in range(7):
@@ -446,7 +446,6 @@ class FieldInversion:
 
             # solve the equations
             update = scs.linalg.spsolve(normal_eq_splined, rhs_splined)
-            print('update:', update)
             self.splined_gh = (self.splined_gh.flatten() + update).reshape(
                 self.nr_splines, self._nm_total)
             self.unsplined_gh = []
