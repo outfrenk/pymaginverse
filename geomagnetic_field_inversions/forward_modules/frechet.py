@@ -1,10 +1,11 @@
 import numpy as np
 import pyshtools as pysh
+from .fwtools import forward_obs
 
 
-def frechet_formation(loc: np.ndarray,
-                      maxdegree: int,
-                      ) -> np.ndarray:
+def frechet_basis(loc: np.ndarray,
+                  maxdegree: int
+                  ) -> np.ndarray:
     """
     Calculates the frechet matrix for the given stations and maximum degree
     Parameters
@@ -20,10 +21,10 @@ def frechet_formation(loc: np.ndarray,
     Returns
     -------
     frechxyz.transpose()
-        # stations X 3 * nm_total - matrix: contains the frechet coefficients
-            first nm_total columns contain dx
-            nm_total to 2*nm_total columns contain dy
-            2*nm_total to 3*nm_total columns contain dz
+        size= 3 * stations X nm_total matrix: contains the frechet coefficients
+            first len(loc) rows contain dx
+            len(loc) to 2*len(loc) rows contain dy
+            2*len(loc) to 3*len(loc) rows contain dz
     """
     schmidt_total = int((maxdegree+1) * (maxdegree+2) / 2)
     ll = len(loc)
@@ -65,37 +66,50 @@ def frechet_formation(loc: np.ndarray,
     return frechxyz.transpose()
 
 
-def forward_obs(data_matrix: np.ndarray,
-                coeff: np.ndarray,
-                frechxyz: np.ndarray,
-                types_sort: np.ndarray
-                ) -> (np.ndarray, np.ndarray):
-    # TODO: change function to be compatible with no data
-    assert len(frechxyz) % 3 == 0, 'frechet matrix incorrect shape'
-    # nr of locations
-    locs = len(frechxyz) // 3
-    times = len(coeff)
-    nm_total = len(coeff[0])
-    # TODO: pay attention for alternating length data_type
-    # has 3 rows (xyz). per row first all times per loc
-    xyz = np.matmul(frechxyz, coeff.T).reshape(3, times*locs)
-    hor = np.linalg.norm(xyz[:2], axis=0)
-    b_int = np.linalg.norm(xyz, axis=0)
-    # creates a matrix with shape (7, times * locations)
-    # rows mx, my, mz, hor, int, inc, dec. per row first all times per loc
-    forwobs_matrix = np.zeros((7, times*locs))
-    forwobs_matrix[:3] = xyz
-    forwobs_matrix[3] = hor
-    forwobs_matrix[4] = b_int
-    forwobs_matrix[5] = np.arcsin(xyz[2] / b_int)
-    forwobs_matrix[6] = np.arctan2(xyz[1], xyz[0])
+def frechet_types(frechxyz: np.ndarray,
+                  types_sort: np.ndarray,
+                  forwobs_matrix: np.ndarray = None,
+                  coeff:np.ndarray = None
+                  ) -> np.ndarray:
+    """
+    Calculates the frechet matrix for a specific datatype and all timesteps
 
+    Parameters
+    ----------
+    frechxyz
+        frechet matrix for dx, dy, and dz components produced by frechet_basis
+    types_sort
+        Tells the type of data by providing an index to every row in either
+        forwobs_matrix or data_matrix
+    forwobs_matrix
+        Contains the modeled observations. If not provided is calculated with
+        forward_obs function
+    coeff
+        Gauss coefficients. Each row contains the coefficients of one timestep.
+        Has to be provided if forwobs_matrix is not inputted.
+
+    Returns
+    -------
+    frech_matrix
+        7*len(stations) X nm_total*len(time array) matrix containing frechet
+        coefficients for the specific datatypes. Should probably be used in
+        an iterative inversion scheme
+    """
+    if forwobs_matrix is None:
+        if coeff is None:
+            raise Exception('Since forward observations are unknown, '
+                            'please provide Gauss coefficients')
+        else:
+            forwobs_matrix = forward_obs(coeff, frechxyz, False)
+    locs = len(frechxyz) // 3
+    nm_total = len(frechxyz[0])
+    times = len(forwobs_matrix[0]) // locs
     # expand arrays to cover all time
     # per row first all gh then new time then locs
     width = nm_total*times*locs  # row width
-    txyz = np.repeat(xyz, nm_total).reshape(3, width)
-    thor = np.repeat(hor, nm_total)
-    tb_int = np.repeat(b_int, nm_total)
+    txyz = np.repeat(forwobs_matrix[:3], nm_total).reshape(3, width)
+    thor = np.repeat(forwobs_matrix[3], nm_total)
+    tb_int = np.repeat(forwobs_matrix[4], nm_total)
     dxyz = np.tile(frechxyz, times).reshape(3, width)
     dhor = (txyz[0]*dxyz[0] + txyz[1]*dxyz[1]) / thor
     # creates frechet for all coefficients, timesteps, and locations
@@ -109,15 +123,7 @@ def forward_obs(data_matrix: np.ndarray,
     # now select useful rows by data_type
     # first reshape forwobs_matrix and frech_mat to correspond to datatypes
     # meaning: one row is one datatype of station at every time
-    forwobs_matrix = forwobs_matrix.reshape(
-        7, locs, times).swapaxes(0, 1).reshape(7*locs, times)
     frech_matrix = frech_matrix.reshape(
         7, locs, nm_total*times).swapaxes(0, 1).reshape(7*locs, nm_total*times)
-    forwobs_matrix = forwobs_matrix[types_sort]
-    resid_matrix_t = (data_matrix - forwobs_matrix).T
-    type06 = types_sort % 7
-    # inc and dec check
-    resid_matrix_t = np.where((type06 == 5) | (type06 == 6), np.arctan2(
-        np.sin(resid_matrix_t), np.cos(resid_matrix_t)), resid_matrix_t)
 
-    return frech_matrix[types_sort], resid_matrix_t.T
+    return frech_matrix[types_sort]
