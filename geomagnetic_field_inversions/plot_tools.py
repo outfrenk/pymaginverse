@@ -1,15 +1,21 @@
-from matplotlib import cm
+import matplotlib as mpl
+import matplotlib.pyplot as plt
 import numpy as np
 from pathlib import Path
 from typing import Union, Literal
 import pandas as pd
-import pyshtools as pysh
+import cartopy.crs as ccrs
+
+from .field_inversion import FieldInversion
+from .forward_modules import frechet, fwtools
 
 _DataTypes = Literal['x', 'y', 'z', 'hor', 'inc', 'dec', 'int']
 
 
-def plot_residuals(ax,
-                   invmodel):
+def plot_residuals(ax: plt.Axes,
+                   invmodel: FieldInversion,
+                   **plt_kwargs
+                   ) -> plt.Axes:
     """ Plots the residuals of the geomagnetic field inversion per iteration
 
     Parameters
@@ -19,58 +25,31 @@ def plot_residuals(ax,
     invmodel
         An instance of the `geomagnetic_field_inversion` class. This function
         only uses the res_iter attribute.
+    **plt_kwargs
+        optional plotting keyword arguments
     """
+    lines = ['dotted', 'solid', 'dashdot']
+    dt = ['x', 'y', 'z', 'hor', 'inc', 'dec', 'int', 'all']
+
     im = invmodel
     for i in range(8):
         if im.res_iter[0, i] > 0:
-            if i == 0:
+            if not plt_kwargs:
                 ax.plot(np.arange(len(im.res_iter)),
                         im.res_iter[:, i] / im.res_iter[0, i],
-                        color='black', label='rms_X',
-                        linestyle='dotted')
-            if i == 1:
+                        label=f'rms {dt[i]}', linestyle=lines[i % 3])
+            else:
                 ax.plot(np.arange(len(im.res_iter)),
-                        im.res_iter[:, i] / im.res_iter[0, i],
-                        color='black', label='rms_Y',
-                        linestyle='dashdot')
-            if i == 2:
-                ax.plot(np.arange(len(im.res_iter)),
-                        im.res_iter[:, i] / im.res_iter[0, i],
-                        color='black', label='rms_Z',
-                        linestyle='dashed')
-            if i == 3:
-                ax.plot(np.arange(len(im.res_iter)),
-                        im.res_iter[:, i] / im.res_iter[0, i],
-                        color='black', label='rms_H')
-            if i == 4:
-                ax.plot(np.arange(len(im.res_iter)),
-                        im.res_iter[:, i] / im.res_iter[0, i],
-                        color='black', label='rms_int',
-                        linestyle='dotted')
-            if i == 5:
-                ax.plot(np.arange(len(im.res_iter)),
-                        im.res_iter[:, i] / im.res_iter[0, i],
-                        color='black', label='rms_incl',
-                        linestyle='dashdot')
-            if i == 6:
-                ax.plot(np.arange(len(im.res_iter)),
-                        im.res_iter[:, i] / im.res_iter[0, i],
-                        color='black', label='rms_decl',
-                        linestyle='dashed')
-            if i == 7:
-                ax.plot(np.arange(len(im.res_iter)),
-                        im.res_iter[:, i] / im.res_iter[0, i],
-                        color='red', label='rms_all')
+                        im.res_iter[:, i] / im.res_iter[0, i], **plt_kwargs)
     return ax
 
 
-def plot_gaussian(ax,
-                  invmodel,
-                  plot_degree: int = None,
-                  degree: Union[list, np.ndarray] = None,
-                  order: Union[list, np.ndarray] = None,
-                  h_bool: Union[list, np.ndarray] = None,
-                  plot_iter: int = -1):
+def plot_coeff(ax: plt.Axes,
+               invmodel: FieldInversion,
+               degree: int = None,
+               index: list = None,
+               it: int = -1
+               ) -> plt.Axes:
     """ Plots Gaussian coefficients through time
 
     Parameters
@@ -80,66 +59,52 @@ def plot_gaussian(ax,
     invmodel
         An instance of the `geomagnetic_field_inversion` class. This function
         uses the unsplined_iter, t_array, and _nm_total attributes.
-    plot_degree
-        integer of degree of all g's and h's to print.
-        If given you do not have to use degree, order, and h_bool keywords.
     degree
-        List containing the degrees of the gaussian coefficients to plot.
-        should only include integers
-    order
-        List containing the order of the gaussian coefficients to plot.
-        should only include integers
-    h_bool
-        Boolean list containing if gaussian coefficients is h (True)
-        or g (False).
-    plot_iter
-        Determines which iteration is used to plot powerspectrum. Defaults to
+        integer of degree of all g's and h's to print.
+        If given you do not have to use index.
+    index
+        List containing the index of the gaussian coefficients to plot,
+        assuming ordering like: g^0_1, g^1_1, h^1_1, g^0_2, etc..
+    it
+        Determines which iteration is used to plot coefficients. Defaults to
         final iteration.
     """
     # TODO: add uncertainty bars
-    if plot_degree is None:
-        assert len(degree) == len(order) == len(h_bool),\
-            'degree, order, and g_bool should have same length'
-    else:
-        degree = np.ones(2*plot_degree+1, dtype=int) * plot_degree
-        order = np.zeros(len(degree), dtype=int)
-        h_bool = np.zeros(len(degree), dtype=int)
-        for i in range(1, plot_degree+1):
-            order[2*i-1:2*i+1] = i
-            h_bool[2*i] = True
     linestyles = ['solid', 'dotted', 'dashed', 'dashdot',
                   (0, (3, 5, 1, 5, 1, 5)), (0, (3, 10, 1, 10)), (0, (1, 10)),
                   (0, (3, 10, 1, 10, 1, 10))]
     markerstyles = ['o', 's', '*', 'D', 'x']
     colorstyles = ['black', 'grey', 'lightgrey']
-    im = invmodel
-    ordermap = np.arange(-1, 2*max(order), step=2, dtype=int)
-    ordermap[0] = 0
-    for i in range(len(degree)):
-        coeff = degree[i] ** 2 - 1 + ordermap[order[i]] + h_bool[i]
-        if h_bool[i]:
-            ax.plot(im.t_array,
-                    im.unsplined_iter[plot_iter, coeff::im._nm_total],
-                    linestyle=linestyles[i % len(linestyles)],
-                    marker=markerstyles[i % len(markerstyles)],
-                    color=colorstyles[i % len(colorstyles)],
-                    label=f'h$_{int(degree[i])}^{order[i]}$')
+
+    if degree is None:
+        if index is None:
+            raise ValueError('Either degree or index has to be inputted')
         else:
-            ax.plot(im.t_array,
-                    im.unsplined_iter[plot_iter, coeff::im._nm_total],
-                    linestyle=linestyles[i % len(linestyles)],
-                    marker=markerstyles[i % len(markerstyles)],
-                    color=colorstyles[i % len(colorstyles)],
-                    label=f'g$_{int(degree[i])}^{order[i]}$')
+            degree = int(np.sqrt(max(index) + 1))
+    else:
+        index = (np.arange(degree**2, (degree+1)**2) - 1).astype(int)
+    labels = []
+    for deg in np.arange(1, degree+1):
+        labels.append(f'$g^0_{deg}$')
+        for m in np.arange(1, deg + 1):
+            labels.extend([f'$g^{m}_{deg}$', f'$h^{m}_{deg}$'])
+
+    labels = [labels[i] for i in index]
+    im = invmodel
+    for i, item in enumerate(index):
+        ax.plot(im.t_array, im.unsplined_iter[it, item, :],
+                linestyle=linestyles[i % len(linestyles)],
+                marker=markerstyles[i % len(markerstyles)],
+                color=colorstyles[i % len(colorstyles)], label=labels[i])
     return ax
 
 
-def plot_powerspectrum(ax,
-                       invmodel,
-                       power: bool = True,
-                       variance: bool = False,
-                       plot_time: Union[list, np.ndarray] = [-1],
-                       plot_iter: int = -1):
+def plot_spectrum(ax: plt.Axes,
+                  invmodel: plt.Axes,
+                  power: bool = True,
+                  time: Union[list, np.ndarray] = None,
+                  it: int = -1
+                  ) -> plt.Axes:
     """ Plots the powerspectrum of gaussian coefficients and its variance
 
     Parameters
@@ -151,66 +116,48 @@ def plot_powerspectrum(ax,
         uses the unsplined_iter, t_array, _nm_total, and maxdegree attributes.
     power
         If True, plots powerspectrum or variance of spherical orders (default)
-        If False, plots average gaussian coefficient per order and mode.
-    variance
-        If True, plots variance
-        If False, plots powerspectrum (default)
+        If False, plots variance.
     plot_time
-        Determines which timestep is used to plot powerspectrum
+        Determines which timearray is used to plot powerspectrum
         (list of indices). Defaults to averaging over all timesteps,
         which will also plot variance or std.
-    plot_iter
-        Determines which iteration is used to plot powerspectrum. Defaults to
+    it
+        Determines which iteration is used to plot coefficients. Defaults to
         final iteration.
     """
     im = invmodel
-    coeff = im.unsplined_iter[plot_iter, :].reshape(len(im.t_array),
-                                                    im._nm_total)
-    if len(plot_time) > 1:
-        coeff_mean = np.mean(coeff[plot_time], axis=0)
-        coeff_pow = np.sum(coeff[plot_time]**2,
-                           axis=0) / len(im.t_array[plot_time])
-        coeff_var = np.std(coeff[plot_time], axis=0)**2
-    else:
-        if plot_time[0] == -1:
-            coeff_mean = np.mean(coeff, axis=0)
-            coeff_pow = np.sum(coeff**2, axis=0) / len(im.t_array)
-            coeff_var = np.std(coeff, axis=0)**2
-        else:
-            coeff_mean = coeff[plot_time]
-            coeff_pow = coeff[plot_time]**2
+
+    if time is None:
+        time = im.t_array
+    coeff = im.unsplined_iter_gh[it](time)
+    coeff_pow = np.sum(coeff**2, axis=0) / len(time)
+    coeff_var = np.std(coeff, axis=0)**2
+
+    counter = 0
+    sum_coeff_pow = np.zeros(im.maxdegree)
+    sum_coeff_var = np.zeros(im.maxdegree)
+    for l in range(im.maxdegree):
+        for m in range(l + 1):
+            sum_coeff_pow[l] += coeff_pow[counter]
+            sum_coeff_var[l] += coeff_var[counter]
+            counter += 1
     if power:
-        counter = 0
-        sum_coeff_pow = np.zeros(im.maxdegree)
-        sum_coeff_var = np.zeros(im.maxdegree)
-        for l in range(im.maxdegree):
-            for m in range(l+1):
-                sum_coeff_pow[l] += coeff_pow[counter]
-                sum_coeff_var[l] += coeff_var[counter]
-                counter += 1
-
-        if variance:
-            ax.plot(np.arange(1, im.maxdegree+1), sum_coeff_var,
-                    marker='s', label='variance')
-        else:
-            ax.plot(np.arange(1, im.maxdegree + 1), sum_coeff_pow,
-                    marker='o', label='power')
-
+        ax.plot(np.arange(1, im.maxdegree + 1), sum_coeff_pow,
+                marker='o', label='power')
     else:
-        if any(coeff_var != np.zeros(im._nm_total)):
-            ax.errorbar(np.arange(1, im._nm_total+1), coeff_mean,
-                        yerr=np.sqrt(coeff_var), capsize=4, marker='o')
-        else:
-            ax.plot(np.arange(1, im._nm_total + 1), coeff_mean, marker='o')
+        ax.plot(np.arange(1, im.maxdegree + 1), sum_coeff_var,
+                marker='s', label='variance')
+
     return ax
 
 
-def plot_world(axes,
-               invmodel,
-               projection,
-               plot_time: int,
-               plot_iter: int = -1,
-               plot_kw: dict = None):
+def plot_world(axes: list,
+               invmodel: FieldInversion,
+               proj: ccrs,
+               time: int,
+               it: int = -1,
+               plot_kwargs: dict = None
+               ) -> list:
     """ Plots the magnetic field on Earth given gaussian coefficients
 
     Parameters
@@ -221,34 +168,35 @@ def plot_world(axes,
         An instance of the `geomagnetic_field_inversion` class. This function
         uses the unsplined_iter, r_earth, t_array, _nm_total,
         and maxdegree attributes.
-    projection
-        Projection used for plotting on a world map. Should be an instance of
-        cartopy.crs
-    plot_time
+    proj
+        Projection type used for plotting on a world map. Should be an instance
+        of cartopy.crs
+    time
         Determines which timestep is used to plot.
-    plot_iter
+    it
         Determines which iteration is used to plot powerspectrum. Defaults to
         final iteration.
-    plot_kw
+    plot_kwargs
         optional plotting parameters
     """
+    im = invmodel
+    coeff = im.unsplined_iter_gh[it](time)
     default_kw = {'levelf_inc': np.arange(-90, 100, 10),
                   'level_inc': np.arange(-90, 100, 10),
                   'cmap_inc': 'RdBu_r',
                   'levelf_dec': np.arange(-180, 190, 10),
                   'level_dec': np.arange(-180, 190, 10),
                   'cmap_dec': 'RdBu_r',
-                  'levelf_int': np.arange(0, 60000, 1000),
-                  'level_int': np.arange(0, 60000, 1000),
+                  'levelf_int': np.linspace(0, 2*max(coeff[:, 0]), 10),
+                  'level_int': np.linspace(0, 2*max(coeff[:, 0]), 10),
                   'cmap_int': 'RdBu_r'}
-    if plot_kw is None:
-        plot_kw = default_kw
+    if plot_kwargs is None:
+        plot_kwargs = default_kw
     else:
-        for i in default_kw:
-            if i not in plot_kw:
-                plot_kw[i] = default_kw[i]
+        for item in default_kw:
+            if item not in plot_kwargs:
+                plot_kwargs[item] = default_kw[item]
 
-    im = invmodel
     # make a grid of coordinates and apply forward model
     forwlat = np.arange(-89, 90, 1)
     forwlon = np.arange(0, 360, 1)

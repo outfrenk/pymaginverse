@@ -70,10 +70,9 @@ class FieldInversion:
         self.spat_damp_matrix = np.empty(0)
         self.temp_damp_matrix = np.empty(0)
         self.splined_gh = np.empty(0)
-        self.unsplined_gh = np.empty(0)
         self.station_frechet = np.empty(0)
         self.res_iter = np.empty(0)
-        self.unsplined_iter = np.empty(0)
+        self.unsplined_iter_gh = []
 
     @property
     def maxdegree(self):
@@ -375,15 +374,13 @@ class FieldInversion:
         self.res_iter
              contains the RMS per datatype and the sum of all types
              size= 8 (floats)
-        self.unsplined_iter
-            contains the 'unsplined' Gauss coeffs at all times and iterations
-            size= (# iterations, len(time vector), nm_total) (floats)
+        self.unsplined_iter_gh
+            contains the BSpline function to unspline Gauss coeffs at any
+            requested time (within range) for every iteration
+            size= # iterations (BSpline functions)
         self.splined_gh
             contains the splined Gauss coeffs at all times of current iteration
             size= (len(nr_splines), nm_total) (floats)
-        self.unsplined_gh
-            contains the BSpline function to unspline Gauss coeffs at any
-            requested time (within range) for the final iteration
         """
         # TODO: add uncertainty and data rejection
         if not self.matrix_ready:
@@ -392,7 +389,6 @@ class FieldInversion:
             self.prepare_inversion(spat_dict, temp_dict)
 
         self.res_iter = np.zeros((max_iter+1, 8))
-        self.unsplined_iter = np.zeros((max_iter, self._nm_total, self.times))
         # initiate splined values with starting model
         if self.verbose:
             print('Setting up starting model')
@@ -461,12 +457,11 @@ class FieldInversion:
             update = scs.linalg.spsolve(normal_eq_splined, rhs_splined)
             self.splined_gh = (self.splined_gh.flatten() + update).reshape(
                 self.nr_splines, self._nm_total)
-            self.unsplined_gh = []
             # cut of the sides that do not have physical meaning
             spline = BSpline(t=self.time_knots, c=self.splined_gh,
                              k=3, axis=0, extrapolate=False)
-            self.unsplined_iter[it] = spline(self._t_array).T
-            self.unsplined_gh.append(spline)
+            self.unsplined_iter_gh.append(spline)
+
             if self.verbose:
                 print('Residual is %.2f' % self.res_iter[it, 7])
             # residual after last iteration
@@ -522,11 +517,13 @@ class FieldInversion:
             residual_frame.to_csv(basedir / f'{file_name}_residual.csv',
                                   sep=';')
         if save_iterations:
-            np.save(basedir / f'{file_name}_all.npy', self.unsplined_iter)
+            all_coeff = np.zeros((
+                len(self.unsplined_iter_gh), self.times, self._nm_total))
+            for i in range(len(self.unsplined_iter_gh)):
+                all_coeff[i] = self.unsplined_iter_gh[i](self._t_array)
+            np.save(basedir / f'{file_name}_all.npy', all_coeff)
         else:
-            gh_time = np.zeros((self._nm_total, self.times))
-            for gh in range(self._nm_total):
-                gh_time[gh] = self.unsplined_gh(self._t_array)
+            gh_time = self.unsplined_iter_gh[-1](self._t_array)
             np.save(basedir / f'{file_name}_final.npy', gh_time)
 
     def sweep_damping(self,
