@@ -1,8 +1,5 @@
 import numpy as np
-import math
-from scipy.integrate import newton_cotes
 from scipy.interpolate import BSpline, interp1d
-from scipy.linalg import pinv
 import scipy.sparse as scs
 import pandas as pd
 from typing import Union, Final
@@ -233,7 +230,7 @@ class FieldInversion:
                     print(f'Coordinates are geodetic,'
                           ' translating to geocentric coordinates.')
                 lat_geoc, r_geoc, cd, sd = g2g.latrad_in_geoc(
-                    math.radians(data_class.lat), data_class.height)
+                    np.radians(data_class.lat), data_class.height)
                 station_entry = np.array([0.5*np.pi - lat_geoc,
                                           np.radians(data_class.lon),
                                           r_geoc])
@@ -574,6 +571,6 @@ class FieldInversion:
             for temporal_df in temporal_range:
                 temp_dict['df'] = temporal_df
                 self.run_inversion(x0, max_iter, spat_dict, temp_dict)
-                self.save_spherical_coefficients(
+                self.save_coefficients(
                     file_name=f'{spatial_df:.2e}s+{temporal_df:.2e}t',
                     basedir=basedir, save_residual=True)
