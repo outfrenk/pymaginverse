@@ -352,11 +352,9 @@ class FieldInversion:
     def run_inversion(self,
                       x0: Union[np.ndarray, list],
                       max_iter: int = 5,
-                      spat_dict: dict = None,
-                      temp_dict: dict = None
                       ) -> None:
         """
-        Run the iterative inversion
+        Runs the iterative inversion
 
         Parameters
         ----------
@@ -365,9 +363,6 @@ class FieldInversion:
             as long as (spherical_order + 1)^2 - 1
         max_iter
             maximum amount of iterations
-        spat_dict, temp_dict
-            dictionary for spatial, temporal damping if not generated with
-            prepare_inversion yet. See prepare_inversion for more info
 
         Creates or modifies
         -------------------
@@ -384,9 +379,8 @@ class FieldInversion:
         """
         # TODO: add uncertainty and data rejection
         if not self.matrix_ready:
-            if self.verbose:
-                print('Preparing matrices for iterative inversion')
-            self.prepare_inversion(spat_dict, temp_dict)
+            raise Exception('Matrices have not been prepared. '
+                            'Please run prepare_inversion first.')
 
         self.res_iter = np.zeros((max_iter+1, 8))
         # initiate splined values with starting model
@@ -530,10 +524,11 @@ class FieldInversion:
                       x0: Union[list, np.ndarray],
                       spatial_range: Union[list, np.ndarray],
                       temporal_range: Union[list, np.ndarray],
-                      max_iter: int = 5,
                       spat_dict: dict = None,
                       temp_dict: dict = None,
+                      max_iter: int = 5,
                       basedir: Union[str, Path] = '.',
+                      overwrite: bool = False
                       ) -> None:
         """ Sweep through damping parameters to find ideal set
 
@@ -548,14 +543,17 @@ class FieldInversion:
         temporal_range
             array or list to vary temporal damping parameters.  Can be None if
             spatial_range is inputted
-        max_iter
-            maximum number of iterations. defaults to 5 iterations
         spat_dict, temp_dict
             dictionary for spatial, temporal damping
             see prepare_inversion for more info
+        max_iter
+            maximum number of iterations. defaults to 5 iterations
         basedir
             path where files will be saved
-
+        overwrite
+            boolean indicating whether to overwrite existing files with
+            exactly the same damping parameters. otherwise set of damping
+            parameters is skipped over in the calculations.
         """
         if spat_dict is None:
             spat_dict = {"damp_type": 'Gubbins', "ddt": 0,
@@ -567,7 +565,12 @@ class FieldInversion:
             spat_dict['df'] = spatial_df
             for temporal_df in temporal_range:
                 temp_dict['df'] = temporal_df
-                self.run_inversion(x0, max_iter, spat_dict, temp_dict)
-                self.save_coefficients(
-                    file_name=f'{spatial_df:.2e}s+{temporal_df:.2e}t',
-                    basedir=basedir, save_residual=True)
+                if overwrite or not (basedir / f'{spatial_df:.2e}s+'
+                                               f'{temporal_df:.2e}t_final.npy'
+                                     ).is_file():
+                    self.prepare_inversion(spat_dict, temp_dict)
+                    self.run_inversion(x0, max_iter)
+                    self.save_coefficients(
+                        file_name=f'{spatial_df:.2e}s+{temporal_df:.2e}t',
+                        basedir=basedir, save_iterations=False,
+                        save_residual=True)
