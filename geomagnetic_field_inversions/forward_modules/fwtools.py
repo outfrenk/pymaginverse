@@ -30,6 +30,7 @@ def forward_obs(coeff: np.ndarray,
         Forward observations; see reshape parameter for discussion on shape
     """
     assert len(frechxyz) % 3 == 0, 'frechet matrix incorrect shape'
+    assert coeff.ndim == 2, 'Gauss coefficients have incorrect dimensions'
     # nr of locations
     locs = len(frechxyz) // 3
     times = len(coeff)
