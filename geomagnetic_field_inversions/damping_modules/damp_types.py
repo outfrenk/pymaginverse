@@ -3,7 +3,8 @@ import numpy as np
 
 def dampingtype(maxdegree: int,
                 damp_type: str,
-                damp_dipole: bool = False
+                damp_dipole: bool = False,
+                damp_depth: float = 3495 / 6371.2
                 ) -> np.ndarray:
     """ Creates spatial or temporal damping array according to type
 
@@ -28,6 +29,8 @@ def dampingtype(maxdegree: int,
     damp_dipole
         If False, damping is not applied to dipole coefficients (first 3).
         If True, dipole coefficients are also damped.
+    damp_depth
+        scaled depth at which to apply damping. Defaults to CMB/R_earth
 
     Returns
     -------
@@ -48,7 +51,7 @@ def dampingtype(maxdegree: int,
     # allocate the appropriate damping function
     damp_func = func_mapping[damp_type]
     # radius earth divided by radius cmb
-    rbycmb = 6371.2 / 3485.0
+    rbycmb = 1. / damp_depth
     # fill the damping array per degree according to damping type
     for degree in range(1, maxdegree+1):
         damp_degree[degree-1] = damp_func(degree, rbycmb)
