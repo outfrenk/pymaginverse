@@ -8,12 +8,13 @@ import cartopy.crs as ccrs
 
 from .field_inversion import FieldInversion
 from .forward_modules import frechet, fwtools
+from .data_prep import StationData
 
 _DataTypes = Literal['x', 'y', 'z', 'hor', 'inc', 'dec', 'int']
 
 
 def plot_residuals(ax: plt.Axes,
-                   invmodel: FieldInversion,
+                   im: FieldInversion,
                    **plt_kwargs
                    ) -> plt.Axes:
     """ Plots the residuals of the geomagnetic field inversion per iteration
@@ -22,7 +23,7 @@ def plot_residuals(ax: plt.Axes,
     ----------
     ax
         Matplotlib axis object
-    invmodel
+    im
         An instance of the `geomagnetic_field_inversion` class. This function
         only uses the res_iter attribute.
     **plt_kwargs
@@ -31,7 +32,6 @@ def plot_residuals(ax: plt.Axes,
     lines = ['dotted', 'solid', 'dashdot']
     dt = ['x', 'y', 'z', 'hor', 'inc', 'dec', 'int', 'all']
 
-    im = invmodel
     for i in range(8):
         if im.res_iter[0, i] > 0:
             if not plt_kwargs:
@@ -45,7 +45,7 @@ def plot_residuals(ax: plt.Axes,
 
 
 def plot_coeff(ax: plt.Axes,
-               invmodel: FieldInversion,
+               im: FieldInversion,
                degree: int = None,
                index: list = None,
                it: int = -1
@@ -56,7 +56,7 @@ def plot_coeff(ax: plt.Axes,
     ----------
     ax
         Matplotlib axis object
-    invmodel
+    im
         An instance of the `geomagnetic_field_inversion` class. This function
         uses the unsplined_iter, t_array, and _nm_total attributes.
     degree
@@ -82,7 +82,7 @@ def plot_coeff(ax: plt.Axes,
         else:
             degree = int(np.sqrt(max(index) + 1))
     else:
-        index = (np.arange(degree**2, (degree+1)**2) - 1).astype(int)
+        index = np.arange(degree**2, (degree+1)**2) - 1
     labels = []
     for deg in np.arange(1, degree+1):
         labels.append(f'$g^0_{deg}$')
@@ -90,73 +90,80 @@ def plot_coeff(ax: plt.Axes,
             labels.extend([f'$g^{m}_{deg}$', f'$h^{m}_{deg}$'])
 
     labels = [labels[i] for i in index]
-    im = invmodel
     for i, item in enumerate(index):
-        ax.plot(im.t_array, im.unsplined_iter[it, item, :],
+        ax.plot(im.t_array, im.unsplined_iter_gh[it](im.t_array)[:, item],
                 linestyle=linestyles[i % len(linestyles)],
                 marker=markerstyles[i % len(markerstyles)],
                 color=colorstyles[i % len(colorstyles)], label=labels[i])
     return ax
 
 
-def plot_spectrum(ax: plt.Axes,
-                  invmodel: plt.Axes,
-                  power: bool = True,
+def plot_spectrum(axes: list,
+                  im: plt.Axes,
                   time: Union[list, np.ndarray] = None,
                   it: int = -1
-                  ) -> plt.Axes:
-    """ Plots the powerspectrum of gaussian coefficients and its variance
+                  ) -> list:
+    """ Plots the powerspectrum of gaussian coefficients and its variance at
+    the Earth's surface.
 
     Parameters
     ----------
-    ax
-        Matplotlib axis object
-    invmodel
+    axes
+        List of matplotlib axis objects
+    im
         An instance of the `geomagnetic_field_inversion` class. This function
         uses the unsplined_iter, t_array, _nm_total, and maxdegree attributes.
     power
         If True, plots powerspectrum or variance of spherical orders (default)
         If False, plots variance.
-    plot_time
-        Determines which timearray is used to plot powerspectrum
-        (list of indices). Defaults to averaging over all timesteps,
-        which will also plot variance or std.
+    time
+        Determines which timearray is used to plot powerspectrum.
+        Defaults to using all timesteps
     it
         Determines which iteration is used to plot coefficients. Defaults to
         final iteration.
     """
-    im = invmodel
-
     if time is None:
         time = im.t_array
     coeff = im.unsplined_iter_gh[it](time)
-    coeff_pow = np.sum(coeff**2, axis=0) / len(time)
-    coeff_var = np.std(coeff, axis=0)**2
+    coeff_cmb = np.zeros_like(coeff)
+    counter = 0
+    for l in range(im.maxdegree):
+        mult_factor = (6371.2 / 3485.0) ** (l + 1)
+        for m in range(l + 1):
+            coeff_cmb[:, counter] = coeff[:, counter] * mult_factor
+            counter += 1
+    coeff_pow = np.sum(coeff_cmb**2, axis=0) / len(time)**2
+    coeff_sv = np.sum((coeff_cmb[1:]-coeff[:-1])**2, axis=0) / (len(time)-1)**2
 
     counter = 0
     sum_coeff_pow = np.zeros(im.maxdegree)
-    sum_coeff_var = np.zeros(im.maxdegree)
+    sum_coeff_sv = np.zeros(im.maxdegree)
     for l in range(im.maxdegree):
         for m in range(l + 1):
             sum_coeff_pow[l] += coeff_pow[counter]
-            sum_coeff_var[l] += coeff_var[counter]
+            sum_coeff_sv[l] += coeff_sv[counter]
             counter += 1
-    if power:
-        ax.plot(np.arange(1, im.maxdegree + 1), sum_coeff_pow,
-                marker='o', label='power')
-    else:
-        ax.plot(np.arange(1, im.maxdegree + 1), sum_coeff_var,
-                marker='s', label='variance')
 
-    return ax
+    axes[0].plot(np.arange(1, im.maxdegree + 1), sum_coeff_pow,
+                 marker='o', label='power')
+    axes[0].set_xlabel('degree')
+    axes[0].set_ylabel('power')
+    axes[1].plot(np.arange(1, im.maxdegree + 1), sum_coeff_sv,
+                 marker='s', label='variance')
+    axes[1].set_xlabel('degree')
+    axes[1].set_ylabel('secular variation')
+
+    return axes
 
 
 def plot_world(axes: list,
-               invmodel: FieldInversion,
+               im: FieldInversion,
                proj: ccrs,
-               time: int,
+               time: float,
+               cmb: bool = False,
                it: int = -1,
-               plot_kwargs: dict = None
+               contour_kw: dict = None
                ) -> list:
     """ Plots the magnetic field on Earth given gaussian coefficients
 
@@ -164,7 +171,7 @@ def plot_world(axes: list,
     ----------
     axes
         3 Matplotlib axes objects with appropriate projection
-    invmodel
+    im
         An instance of the `geomagnetic_field_inversion` class. This function
         uses the unsplined_iter, r_earth, t_array, _nm_total,
         and maxdegree attributes.
@@ -172,31 +179,16 @@ def plot_world(axes: list,
         Projection type used for plotting on a world map. Should be an instance
         of cartopy.crs
     time
-        Determines which timestep is used to plot.
+        Plotting time
+    cmb
+        Boolean that determines whether to plot the field at the cmb
     it
         Determines which iteration is used to plot powerspectrum. Defaults to
         final iteration.
-    plot_kwargs
+    contour_kw
         optional plotting parameters
     """
-    im = invmodel
-    coeff = im.unsplined_iter_gh[it](time)
-    default_kw = {'levelf_inc': np.arange(-90, 100, 10),
-                  'level_inc': np.arange(-90, 100, 10),
-                  'cmap_inc': 'RdBu_r',
-                  'levelf_dec': np.arange(-180, 190, 10),
-                  'level_dec': np.arange(-180, 190, 10),
-                  'cmap_dec': 'RdBu_r',
-                  'levelf_int': np.linspace(0, 2*max(coeff[:, 0]), 10),
-                  'level_int': np.linspace(0, 2*max(coeff[:, 0]), 10),
-                  'cmap_int': 'RdBu_r'}
-    if plot_kwargs is None:
-        plot_kwargs = default_kw
-    else:
-        for item in default_kw:
-            if item not in plot_kwargs:
-                plot_kwargs[item] = default_kw[item]
-
+    coeff = im.unsplined_iter_gh[it](time)[np.newaxis, :]
     # make a grid of coordinates and apply forward model
     forwlat = np.arange(-89, 90, 1)
     forwlon = np.arange(0, 360, 1)
@@ -204,136 +196,133 @@ def plot_world(axes: list,
     latgrid = latgrid.flatten()
     longrid = longrid.flatten()
     world_coord = np.zeros((len(latgrid), 3))
-    world_coord[:, 0] = (90 - latgrid) * np.pi/180
-    world_coord[:, 1] = longrid * np.pi/180
-    world_coord[:, 2] = im.r_earth
-    X, Y, Z = create_forward(im, world_coord,
-                             im.unsplined_iter[plot_iter, :].reshape(
-                             len(im.t_array), im._nm_total)[plot_time])
-    H = np.sqrt(X ** 2 + Y ** 2)
-    forward_int = (np.sqrt(X ** 2 + Y ** 2 + Z ** 2)).reshape(179, 360)
-    forward_inc = (np.arctan2(Z, H) * 180 / np.pi).reshape(179, 360)
-    forward_dec = (np.arctan2(Y, X) * 180 / np.pi).reshape(179, 360)
+    world_coord[:, 0] = np.radians(90 - latgrid)
+    world_coord[:, 1] = np.radians(longrid)
+    if cmb:
+        world_coord[:, 2] = 3485.0
+    else:
+        world_coord[:, 2] = 6371.2
+    frechxyz = frechet.frechet_basis(world_coord, im.maxdegree)
+    forw_obs = fwtools.forward_obs(coeff, frechxyz, reshape=False)
 
+    default_kw = {'f_inc': np.linspace(min(forw_obs[5]), max(forw_obs[5]), 10),
+                  'inc': np.linspace(min(forw_obs[5]), max(forw_obs[5]), 10),
+                  'cmap_inc': 'RdBu_r',
+                  'f_dec': np.linspace(min(forw_obs[6]), max(forw_obs[6]), 10),
+                  'dec': np.linspace(min(forw_obs[6]), max(forw_obs[6]), 10),
+                  'cmap_dec': 'RdBu_r',
+                  'f_int': np.linspace(min(forw_obs[4]), max(forw_obs[4]), 10),
+                  'int': np.linspace(min(forw_obs[4]), max(forw_obs[4]), 10),
+                  'cmap_int': 'RdBu_r'}
+    if contour_kw is None:
+        contour_kw = default_kw
+    else:
+        for item in default_kw:
+            if item not in contour_kw:
+                contour_kw[item] = default_kw[item]
+
+    forw_obs = forw_obs.reshape(7, 179, 360)
     axes[0].set_global()
-    axes[0].contourf(forwlon, forwlat, forward_inc,
-                     levels=plot_kw['levelf_inc'], cmap=plot_kw['cmap_inc'],
-                     transform=projection)
-    c = axes[0].contour(forwlon, forwlat, forward_inc,
-                        levels=plot_kw['level_inc'], colors='k',
-                        transform=projection)
+    axes[0].contourf(forwlon, forwlat, forw_obs[5],
+                     cmap=contour_kw['cmap_inc'],
+                     levels=contour_kw['f_inc'], transform=proj)
+    c = axes[0].contour(forwlon, forwlat, forw_obs[5],
+                        levels=contour_kw['inc'], colors='k',
+                        transform=proj)
     axes[0].coastlines()
     axes[0].gridlines()
-    axes[0].clabel(c, fontsize=12, inline=True, fmt='%i')
+    axes[0].clabel(c, fontsize=12, inline=True, fmt='%.1f')
     axes[0].set_title('Inclination')
 
     axes[1].set_global()
-    axes[1].contourf(forwlon, forwlat, forward_dec,
-                     levels=plot_kw['levelf_dec'], cmap=plot_kw['cmap_dec'],
-                     transform=projection)
-    c = axes[1].contour(forwlon, forwlat, forward_dec,
-                        levels=plot_kw['level_dec'], colors='k',
-                        transform=projection)
+    axes[1].contourf(forwlon, forwlat, forw_obs[6],
+                     levels=contour_kw['f_dec'],
+                     cmap=contour_kw['cmap_dec'], transform=proj)
+    c = axes[1].contour(forwlon, forwlat, forw_obs[6],
+                        levels=contour_kw['dec'], colors='k',
+                        transform=proj)
     axes[1].coastlines()
     axes[1].gridlines()
-    axes[1].clabel(c, fontsize=12, inline=True, fmt='%i')
+    axes[1].clabel(c, fontsize=12, inline=True, fmt='%.1f')
     axes[1].set_title('Declination')
 
     axes[2].set_global()
-    axes[2].contourf(forwlon, forwlat, forward_int,
-                     levels=plot_kw['levelf_int'], cmap=plot_kw['cmap_int'],
-                     transform=projection)
-    c = axes[2].contour(forwlon, forwlat, forward_int,
-                        levels=plot_kw['level_int'], colors='k',
-                        transform=projection)
+    axes[2].contourf(forwlon, forwlat, forw_obs[4],
+                     levels=contour_kw['f_int'],
+                     cmap=contour_kw['cmap_int'], transform=proj)
+    c = axes[2].contour(forwlon, forwlat, forw_obs[4],
+                        levels=contour_kw['int'], colors='k',
+                        transform=proj)
     axes[2].coastlines()
     axes[2].gridlines()
-    axes[2].clabel(c, fontsize=12, inline=True, fmt='%i')
+    axes[2].clabel(c, fontsize=12, inline=True, fmt='%.1f')
     axes[2].set_title('Intensity')
     return axes
 
 
-def plot_place(ax,
-               invmodel,
+def plot_place(ax: plt.Axes,
+               im: FieldInversion,
                input_coord: Union[list, np.ndarray],
-               type: _DataTypes,
-               plot_iter: int = -1,
-               plot_kwargs={'color': 'black', 'linestyle': 'dashed',
-                            'marker': 'o'}
-               ):
-    """ Plots the magnetic field on Earth given gaussian coefficients
+               datatype: _DataTypes,
+               it: int = -1,
+               plot_kwargs: dict = None
+               ) -> plt.Axes:
+    """ Plots the magnetic field on Earth given Gauss coefficients
 
     Parameters
     ----------
     ax
         Matplotlib axis objects
-    invmodel
+    im
         An instance of the `geomagnetic_field_inversion` class. This function
         uses the unsplined_iter, t_array, _nm_total, and maxdegree attributes.
     input_coord
-        Array of coordinates containing latitude, longitude, and radius.
-    type
+        3-long array of coordinates containing latitude, longitude, and radius.
+    datatype
         type of data to be plotted; should be either: 'x', 'y', 'z', 'hor',
         'inc' (degrees), 'dec' (degrees), or 'int'
-    plot_iter
+    it
         Determines which iteration is used to plot powerspectrum. Defaults to
         final iteration.
     plot_kwargs
         optional plotting keyword arguments
     """
-    im = invmodel
-    X = np.zeros(len(im.t_array))
-    Y = np.zeros(len(im.t_array))
-    Z = np.zeros(len(im.t_array))
+    if plot_kwargs is None:
+        plot_kwargs = {'color': 'black', 'linestyle': 'dashed', 'marker': 'o'}
+    # translation datatypes
+    typedict = {"x": 0, "y": 1, "z": 2, "hor": 3,
+                "int": 4, "inc": 5, "dec": 6}
+    coeff = im.unsplined_iter_gh[it](im.t_array)
     coord = np.zeros((1, 3))
     coord[0, 0] = 0.5 * np.pi - np.radians(input_coord[0])
     coord[0, 1] = np.radians(input_coord[1])
     if len(input_coord) == 2:
-        coord[0, 2] = im.r_earth
+        coord[0, 2] = 6371.2
     else:
         coord[0, 2] = input_coord[2]
-    for time in range(len(im.t_array)):
-        X[time], Y[time], Z[time] = create_forward(
-            im, coord, im.unsplined_iter[plot_iter, :].reshape(
-                len(im.t_array), im._nm_total)[time])
-
-    H = np.sqrt(X ** 2 + Y ** 2)
-    inty = (np.sqrt(X ** 2 + Y ** 2 + Z ** 2))
-    inc = (np.arctan2(Z, H) * 180 / np.pi)
-    dec = (np.arctan2(Y, X) * 180 / np.pi)
-    if type == 'inc':
-        ax.plot(im.t_array, inc, label='inc', **plot_kwargs)
-    elif type == 'dec':
-        ax.plot(im.t_array, dec, label='dec', **plot_kwargs)
-    elif type == 'int':
-        ax.plot(im.t_array, inty, label='int', **plot_kwargs)
-    elif type == 'x':
-        ax.plot(im.t_array, X, label='X', **plot_kwargs)
-    elif type == 'y':
-        ax.plot(im.t_array, Y, label='Y', **plot_kwargs)
-    elif type == 'z':
-        ax.plot(im.t_array, Z, label='Z', **plot_kwargs)
-    else:
-        raise Exception(f'datatype {type} not recognized')
+    frechxyz = frechet.frechet_basis(coord, im.maxdegree)
+    forw_obs = fwtools.forward_obs(coeff, frechxyz)
+    forw_obs[5:7] = np.degrees(forw_obs[5:7])
+    ax.plot(im.t_array, forw_obs[typedict[datatype]],
+            label=datatype, **plot_kwargs)
     return ax
 
 
-def compare_loc(axes,
-                invmodel,
-                data_class,
-                plot_kwargs={'color': 'black', 'linestyle': 'dashed',
-                            'marker': 'o'}
-                ):
+def compare_loc(axes: list,
+                im: FieldInversion,
+                dc: StationData,
+                plot_kwargs: dict = None
+                ) -> list:
     """Plots the modeled magnetic field at the location of a data input class
 
     Parameters
     ----------
     axes
         Matplotlib axes objects
-    invmodel
+    im
         An instance of the `geomagnetic_field_inversion` class. This function
         uses the unsplined_iter, t_array, _nm_total, and maxdegree attributes.
-    data_class
+    dc
         An instance of the "StationData" class. This function uses the
         location, types, and data attributes of this class
     plot_kwargs
@@ -341,217 +330,90 @@ def compare_loc(axes,
 
     This function calls plot_place for plotting of the modeled field
     """
-    dc = data_class
     # circumvent no length errors
     if len(dc.types) == 1:
         axes = [axes]
     if len(axes) != len(dc.types):
         raise Exception('Not enough axes defined'
                         f', you need {len(dc.types)} axes.')
-    for i in range(len(dc.types)):
-        # time_arr = np.linspace(dc.data[i][0][0],
-        #                        dc.data[i][0][-1], 1000)
-        if dc.types[i] == 'inc':
-            temp = np.array(dc.data[i][1])
-            temp = temp % 180
+    for i, item in enumerate(dc.types):
+        if item == 'inc':
+            temp = np.array(dc.data[i][1]) % 180
             temp = np.where(temp > 90, temp - 180, temp)
-            axes[i].set_ylabel('%s (degrees)' % dc.types[i])
+            axes[i].set_ylabel('%s (degrees)' % item)
             axes[i].scatter(dc.data[i][0], temp, label='data')
-        elif dc.types[i] == 'dec':
-            temp = np.array(dc.data[i][1])
-            temp = temp % 360
+        elif item == 'dec':
+            temp = np.array(dc.data[i][1]) % 360
             temp = np.where(temp > 180, temp - 360, temp)
-            axes[i].set_ylabel('%s (degrees)' % dc.types[i])
+            axes[i].set_ylabel('%s (degrees)' % item)
             axes[i].scatter(dc.data[i][0], temp, label='data')
         else:
-            axes[i].set_ylabel('%s' % dc.types[i])
+            axes[i].set_ylabel('%s' % item)
             axes[i].scatter(dc.data[i][0], dc.data[i][1], label='data')
         mindata, maxdata = min(dc.data[i][0]), max(dc.data[i][0])
-        minmodel, maxmodel = min(invmodel.t_array), max(invmodel.t_array)
+        minmodel, maxmodel = min(im.t_array), max(im.t_array)
         axes[i].set_xlabel('Time')
-        # axes[i].plot(time_arr, bc.fit_data[i](time_arr),
-        #              label='fit', color='orange')
-        axes[i] = plot_place(axes[i], invmodel, [dc.lat, dc.lon],
-                             dc.types[i], plot_kwargs=plot_kwargs)
+        axes[i] = plot_place(axes[i], im, [dc.lat, dc.lon], item,
+                             plot_kwargs=plot_kwargs)
         axes[i].set_xlim(max(mindata, minmodel)*0.9,
                          min(maxdata, maxmodel)*1.1)
         axes[i].legend()
     return axes
 
 
-# TODO: update plots
-def plot_sweep(ax,
+def plot_sweep(axes: list,
                spatial_range: Union[list, np.ndarray],
                temporal_range: Union[list, np.ndarray],
                basedir: Union[str, Path] = '.',
-               reverse: bool = False):
+               ) -> list:
     """ Produces a residual-modelsize plot to determine optimal damp parameters
     This function only works after running field_inversion.sweep_damping
 
     Parameters
     ----------
-    ax
-        Matplotlib axis object
+    axes
+        List of two matplotlib axis objects
     spatial_range
         range of spatial damping parameters
     temporal_range
         range of temporal damping parameters
     basedir
-        path to coefficients and residuals after each iteration as produced by
-        field_inversion.sweep_damping
-    reverse
-        swap spatial and temporal damping
-
+        path to file containing coefficients and residuals after each iteration
+        as produced by field_inversion.sweep_damping
     """
-    basedir = Path(basedir)
-    basedir.mkdir(exist_ok=True)
     marker = ['o', 'v', '^', 's', '+', '*', 'x', 'd']
-    lstyle = ['solid', 'dashed', 'dotted', 'dashdot',
-              (0, (3, 5, 1, 5, 1, 5))]
+    lstyle = ['solid', 'dashed', 'dotted', 'dashdot', (0, (3, 5, 1, 5, 1, 5))]
 
     modelsize = np.zeros((len(spatial_range), len(temporal_range)))
     res = np.zeros((len(spatial_range), len(temporal_range)))
     for j, temporal_df in enumerate(temporal_range):
         for i, spatial_df in enumerate(spatial_range):
-            if (basedir / f'{spatial_df:.2e}s+{temporal_df:.2e}t_all_coeff.npy'
-            ).is_file():
-                coef = np.load(basedir / f'{spatial_df:.2e}s+{temporal_df:.2e}'
-                                         't_all_coeff.npy')[-1]
-            elif (basedir / f'{spatial_df:.2e}s+{temporal_df:.2e}t_final_'
-                            'coeff.npy').is_file():
-                coef = np.load(basedir / f'{spatial_df:.2e}s+'
-                                         '{temporal_df:.2e}t_final_coeff.npy')
-            else:
-                raise Exception('Could not find file for spatial_df='
-                                f'{spatial_df:.2e} and temporal_df='
-                                f'{temporal_df:.2e} in {basedir}')
-            modelsize[i, j] = np.linalg.norm(coef)
-            res[i, j] = pd.read_csv(basedir / f'{spatial_df:.2e}s+'
-                                              f'{temporal_df:.2e}t_'
-                                              'residual.csv', delimiter=';'
-                                    ).to_numpy()[-1, -1]
-    if reverse:
-        for j in range(len(temporal_range)):
-            ax.plot(res[:, j], modelsize[:, j], color='black',
-                    linestyle=lstyle[j % len(lstyle)],
-                    label=f't={temporal_range[j]:.2e}')
-        for j in range(len(temporal_range)):
-            for i in range(len(spatial_range)):
-                if j == 0:
-                    ax.scatter(res[i, j], modelsize[i, j], color='black',
-                               marker=marker[i % len(marker)],
-                               label=f's={spatial_range[i]:.2e}')
-                else:
-                    ax.scatter(res[i, j], modelsize[i, j], color='black',
-                               marker=marker[i % len(marker)])
+            coeff = np.load(
+                basedir / f'{spatial_df:.2e}s+{temporal_df:.2e}t_final.npy')
+            modelsize[i, j] = np.linalg.norm(coeff)
+            res[i, j] = pd.read_csv(
+                basedir / f'{spatial_df:.2e}s+{temporal_df:.2e}t_residual.csv',
+                delimiter=';').to_numpy()[-1, -1]
 
-    else:
-        for i in range(len(spatial_range)):
-            ax.plot(res[i, :], modelsize[i, :], color='black',
-                    linestyle=lstyle[i % len(lstyle)],
-                    label=f's={spatial_range[i]:.2e}')
-        for i in range(len(spatial_range)):
-            for j in range(len(temporal_range)):
+    tp_ranges = [temporal_range, spatial_range]
+    ts = ['t', 's']
+    for p in range(2):
+        axes[p].set_xlabel('residual')
+        axes[p].set_ylabel('model size')
+        if p == 1:
+            res = res.T
+            modelsize = modelsize.T
+        for i in range(len(tp_ranges[p])):
+            axes[p].plot(res[:, i], modelsize[:, i], color='black',
+                         linestyle=lstyle[i % len(lstyle)],
+                         label=f'{ts[p]}={tp_ranges[p][i]:.1e}')
+        for i in range(len(tp_ranges[p])):
+            for j in range(len(tp_ranges[~p])):
                 if i == 0:
-                    ax.scatter(res[i, j], modelsize[i, j], color='black',
-                               marker=marker[j % len(marker)],
-                               label=f't={temporal_range[j]:.2e}')
+                    axes[p].scatter(res[j, i], modelsize[j, i], color='black',
+                                    marker=marker[j % len(marker)],
+                                    label=f'{ts[~p]}={tp_ranges[~p][j]:.1e}')
                 else:
-                    ax.scatter(res[i, j], modelsize[i, j], color='black',
-                               marker=marker[j % len(marker)])
-    ax.set_xlabel('residual')
-    ax.set_ylabel('model size')
-
-
-def create_forward(invmodel,
-                   coord: Union[np.ndarray, list],
-                   coeff: Union[np.ndarray, list]):
-    """
-
-    Parameters
-    ----------
-    invmodel
-        An instance of the `geomagnetic_field_inversion` class. This function
-        uses the maxdegree, r_earth, _nm_total, and  attributes.
-    coord
-        An array of length N x 3 with colatitude (radians!),
-        longitude (radians!), and radius.
-    coeff
-        gaussian coefficients used to calculate forward field.
-    Returns
-    -------
-    X, Y, Z
-        Geomagnetic field components
-    """
-    im = invmodel
-    frechet_matrix = forward_operator(im, coord)
-    forward_result = np.matmul(frechet_matrix, coeff)
-    X = forward_result[:len(coord)]
-    Y = forward_result[len(coord):2*len(coord)]
-    Z = forward_result[2*len(coord):]
-    return X, Y, Z
-
-
-def forward_operator(invmodel,
-                     station_coord: Union[np.ndarray, list]):
-    """Calculates the field at a given point
-
-    Parameters
-    ----------
-    invmodel
-        An instance of the `geomagnetic_field_inversion` class. This function
-        uses the maxdegree, r_earth, _nm_total, and unsplined_iter attributes.
-    station_coord
-        List of coordinates (phi, theta) of stations
-
-    Returns
-    -------
-    frechet_matrix
-        frechet matrix (G)
-    """
-    im = invmodel
-    schmidt_P = np.zeros((len(station_coord), int((im.maxdegree + 1)
-                                                  * (im.maxdegree + 2) / 2)))
-    schmidt_dP = np.zeros((len(station_coord), int((im.maxdegree + 1)
-                                                   * (im.maxdegree + 2) / 2)))
-    for i, coord in enumerate(station_coord):
-        schmidt_P[i], schmidt_dP[i] = pysh.legendre.PlmSchmidt_d1(
-            im.maxdegree, np.cos(coord[0]))
-        schmidt_dP[i] *= -np.sin(coord[0])
-    frechet_matrix = np.zeros((len(station_coord) * 3, im._nm_total))
-    counter = 0
-    for n in range(1, im.maxdegree + 1):
-        index = int(n * (n + 1) / 2)
-        mult_factor = (im.r_earth / station_coord[:, 2]) ** (n + 1)
-        frechet_matrix[:len(station_coord), counter] =\
-            mult_factor * schmidt_dP[:, index]
-        frechet_matrix[len(station_coord):2*len(station_coord), counter] = 0
-        frechet_matrix[2*len(station_coord):, counter] = \
-            -mult_factor * (n + 1) * schmidt_P[:, index]
-        counter += 1
-        for m in range(1, n + 1):
-            # First the g-elements
-            frechet_matrix[:len(station_coord), counter] = \
-                mult_factor * schmidt_dP[:, index + m] \
-                * np.cos(m * station_coord[:, 1])
-            frechet_matrix[len(station_coord):2*len(station_coord), counter] =\
-                m / np.sin(station_coord[:, 0]) * mult_factor \
-                * np.sin(m * station_coord[:, 1]) \
-                * schmidt_P[:, index + m]
-            frechet_matrix[2*len(station_coord):, counter] = \
-                -mult_factor * (n + 1) * schmidt_P[:, index + m] \
-                * np.cos(m * station_coord[:, 1])
-            counter += 1
-            # Now the h-elements
-            frechet_matrix[:len(station_coord), counter] = \
-                mult_factor * schmidt_dP[:, index + m] \
-                * np.sin(m * station_coord[:, 1])
-            frechet_matrix[len(station_coord):2*len(station_coord), counter] =\
-                -m / np.sin(station_coord[:, 0]) * mult_factor \
-                * np.cos(m * station_coord[:, 1]) \
-                * schmidt_P[:, index + m]
-            frechet_matrix[2*len(station_coord):, counter] = \
-                -mult_factor * (n + 1) * schmidt_P[:, index + m] \
-                * np.sin(m * station_coord[:, 1])
-            counter += 1
-    return frechet_matrix
+                    axes[p].scatter(res[j, i], modelsize[j, i], color='black',
+                                    marker=marker[j % len(marker)])
+    return axes
