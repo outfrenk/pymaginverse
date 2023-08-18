@@ -9,7 +9,7 @@ from tqdm import tqdm
 from .data_prep import StationData
 from .forward_modules import frechet, fwtools
 from .damping_modules import damping
-from .geodtogeoc_modules import geod2geoc_conv as g2g
+from .tools import geod2geoc as g2g
 
 
 class FieldInversion:
@@ -69,6 +69,12 @@ class FieldInversion:
         self.gcgd_conv = np.zeros((0, 2))
         self.spat_damp_matrix = np.empty(0)
         self.temp_damp_matrix = np.empty(0)
+        self.spat_fac = np.empty(0)  # contains damping factors
+        self.temp_fac = np.empty(0)
+        self.spat_norm = np.empty(0)
+        self.temp_norm = np.empty(0)
+        self.spat_ddt = 0
+        self.temp_ddt = 0
         self.splined_gh = np.empty(0)
         self.station_frechet = np.empty(0)
         self.res_iter = np.empty(0)
@@ -281,9 +287,15 @@ class FieldInversion:
 
         Creates or modifies
         -------------------
+        self.spatddt, self.tempddt
+            indicates requested derivative of the cubic B-Spline for damping
+            (integer)
         self.station_frechet
             contains frechet matrix per location
             size= ((# stations x 3), nm_total) (floats)
+        self.spat_fac, self.temp_fac
+            contains the damping elements dependent on degree
+             size= nm_total (floats) (see damp_types.py)
         self.spat_damp_matrix
             contains symmetric spatial damping matrix
             size= (nm_total x nr_splines, nm_total x nr_splines) (floats)
@@ -302,6 +314,7 @@ class FieldInversion:
         if temp_dict is None:
             temp_dict = {"df": 0, "damp_type": 'Br2cmb',
                          "ddt": 2, "damp_dipole": True}
+        self.spat_ddt, self.temp_ddt = spat_dict['ddt'], temp_dict['ddt']
         assert self._nm_total <= len(self.data_array), \
             'The spherical order of the model is too high,' \
             f' decrease maxdegree from {self._maxdegree} to a lower value.'
@@ -332,7 +345,7 @@ class FieldInversion:
         if self.verbose:
             print('Calculating spatial damping matrix')
         if spat_dict['df'] != 0 and self._t_step != 0:
-            self.spat_damp_matrix = damping.damp_matrix(
+            self.spat_damp_matrix, self.spat_fac = damping.damp_matrix(
                 self._maxdegree, self.nr_splines, self._t_step,
                 spat_dict['df'], spat_dict['damp_type'], spat_dict['ddt'],
                 damp_dipole=spat_dict['damp_dipole'])
@@ -340,7 +353,7 @@ class FieldInversion:
         if self.verbose:
             print('Calculating temporal damping matrix')
         if temp_dict['df'] != 0 and self._t_step != 0:
-            self.temp_damp_matrix = damping.damp_matrix(
+            self.temp_damp_matrix, self.temp_fac = damping.damp_matrix(
                 self._maxdegree, self.nr_splines, self._t_step,
                 temp_dict['df'], temp_dict['damp_type'], temp_dict['ddt'],
                 damp_dipole=temp_dict['damp_dipole'])
@@ -477,6 +490,15 @@ class FieldInversion:
                     res_weight, self.types_sorted, self.count_type)
                 if self.verbose:
                     print('Residual is %.2f' % self.res_iter[it+1, 7])
+                    print('Calculating spatial and temporal norms')
+                self.spat_norm = damping.damp_norm(
+                    self.spat_fac, self.splined_gh, self.spat_ddt, self._t_step
+                )
+                self.temp_norm = damping.damp_norm(
+                    self.temp_fac, self.splined_gh, self.temp_ddt, self._t_step
+                )
+                if self.verbose:
+                    print('Finished inversion')
 
     def save_coefficients(self,
                           basedir: Union[Path, str] = '.',
@@ -500,8 +522,6 @@ class FieldInversion:
         save_residual
             boolean indicating whether to save the residuals of each timestep
         """
-        basedir = Path(basedir)
-        basedir.mkdir(exist_ok=True)
         # save residual
         if save_residual:
             residual_frame = pd.DataFrame(

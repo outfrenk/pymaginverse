@@ -47,37 +47,22 @@ def dampingtype(maxdegree: int,
         raise Exception(f'Damping type {damp_type} not found. Exiting...')
 
     damp_array = np.zeros((maxdegree+1)**2 - 1)
-    damp_degree = np.zeros(maxdegree)
     # allocate the appropriate damping function
     damp_func = func_mapping[damp_type]
     # radius earth divided by radius cmb
     rbycmb = 1. / damp_depth
     # fill the damping array per degree according to damping type
-    for degree in range(1, maxdegree+1):
-        damp_degree[degree-1] = damp_func(degree, rbycmb)
-
-    # now fill the complete array per g/h component
+    # and fill the complete array per g/h component
     counter = 0
     for degree in range(1, maxdegree+1):
-        for order in range(degree+1):  # order should start at zero
+        damp_degree = damp_func(degree, rbycmb)
+        for count in range(2*degree + 1):  # should start at zero
             if damp_dipole is False and degree == 1:
-                if order == 0:
-                    damp_array[counter] = 0
-                    counter += 1
-                if order == 1:
-                    damp_array[counter] = 0
-                    counter += 1
-                    damp_array[counter] = 0
-                    counter += 1
-
-            elif order == 0:
-                damp_array[counter] = damp_degree[degree-1]
-                counter += 1
+                damp_array[counter] = 0
             else:
-                damp_array[counter] = damp_degree[degree-1]
-                counter += 1
-                damp_array[counter] = damp_degree[degree-1]
-                counter += 1
+                damp_array[counter] = damp_degree
+            counter += 1
+
     return damp_array
 
 

@@ -2,7 +2,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 from pathlib import Path
-from typing import Union, Literal
+from typing import Union, Literal, Tuple
 import pandas as pd
 import cartopy.crs as ccrs
 
@@ -58,7 +58,7 @@ def plot_coeff(ax: plt.Axes,
         Matplotlib axis object
     im
         An instance of the `geomagnetic_field_inversion` class. This function
-        uses the unsplined_iter, t_array, and _nm_total attributes.
+        uses the unsplined_iter_gh, and t_array attributes.
     degree
         integer of degree of all g's and h's to print.
         If given you do not have to use index.
@@ -98,11 +98,11 @@ def plot_coeff(ax: plt.Axes,
     return ax
 
 
-def plot_spectrum(axes: list,
+def plot_spectrum(axes: Tuple[plt.Axes, plt.Axes],
                   im: plt.Axes,
                   time: Union[list, np.ndarray] = None,
                   it: int = -1
-                  ) -> list:
+                  ) -> Tuple[plt.Axes, plt.Axes]:
     """ Plots the powerspectrum of gaussian coefficients and its variance at
     the Earth's surface.
 
@@ -112,13 +112,9 @@ def plot_spectrum(axes: list,
         List of matplotlib axis objects
     im
         An instance of the `geomagnetic_field_inversion` class. This function
-        uses the unsplined_iter, t_array, _nm_total, and maxdegree attributes.
-    power
-        If True, plots powerspectrum or variance of spherical orders (default)
-        If False, plots variance.
+        uses the unsplined_iter_gh, t_array, and maxdegree attributes.
     time
-        Determines which timearray is used to plot powerspectrum.
-        Defaults to using all timesteps
+        Timearray used to plot powerspectrum. Defaults to using all timesteps
     it
         Determines which iteration is used to plot coefficients. Defaults to
         final iteration.
@@ -157,14 +153,46 @@ def plot_spectrum(axes: list,
     return axes
 
 
-def plot_world(axes: list,
+def plot_dampnorm(ax: plt.Axes,
+                  im: FieldInversion,
+                  spatial: bool = True,
+                  **plt_kwargs
+                  ) -> plt.Axes:
+    """
+    Plot the Spatial and temporal norm in one figure
+
+    Parameters
+    ----------
+    ax
+        Matplotlib axis object
+    im
+        An instance of the `geomagnetic_field_inversion` class. This function
+        uses the t_array, spat_norm, and temp_norm attribute.
+    spatial
+        if True plots spatial norm, otherwise temporal norm
+    **plt_kwargs
+        optional plotting keyword arguments
+    """
+    t_half = (im.t_array[1:] - im.t_array[:-1]) / 2 + im.t_array[:-1]
+    ax.set_xlabel('Centre of time interval')
+    if spatial:
+        ax.plot(t_half, im.spat_norm, label='spatial', **plt_kwargs)
+        ax.set_ylabel('spatial damping')
+    else:
+        ax.plot(t_half, im.temp_norm, label='temporal', **plt_kwargs)
+        ax.set_ylabel('temporal damping')
+
+    return ax
+
+
+def plot_world(axes: Tuple[plt.Axes, plt.Axes, plt.Axes],
                im: FieldInversion,
                proj: ccrs,
                time: float,
                cmb: bool = False,
                it: int = -1,
                contour_kw: dict = None
-               ) -> list:
+               ) -> Tuple[plt.Axes, plt.Axes, plt.Axes]:
     """ Plots the magnetic field on Earth given gaussian coefficients
 
     Parameters
@@ -173,8 +201,7 @@ def plot_world(axes: list,
         3 Matplotlib axes objects with appropriate projection
     im
         An instance of the `geomagnetic_field_inversion` class. This function
-        uses the unsplined_iter, r_earth, t_array, _nm_total,
-        and maxdegree attributes.
+        uses the unsplined_iter_gh and maxdegree attributes.
     proj
         Projection type used for plotting on a world map. Should be an instance
         of cartopy.crs
@@ -275,7 +302,7 @@ def plot_place(ax: plt.Axes,
         Matplotlib axis objects
     im
         An instance of the `geomagnetic_field_inversion` class. This function
-        uses the unsplined_iter, t_array, _nm_total, and maxdegree attributes.
+        uses the unsplined_iter_gh, t_array, and maxdegree attributes.
     input_coord
         3-long array of coordinates containing latitude, longitude, and radius.
     datatype
@@ -311,6 +338,7 @@ def plot_place(ax: plt.Axes,
 def compare_loc(axes: list,
                 im: FieldInversion,
                 dc: StationData,
+                plot_fit: bool = False,
                 plot_kwargs: dict = None
                 ) -> list:
     """Plots the modeled magnetic field at the location of a data input class
@@ -321,36 +349,44 @@ def compare_loc(axes: list,
         Matplotlib axes objects
     im
         An instance of the `geomagnetic_field_inversion` class. This function
-        uses the unsplined_iter, t_array, _nm_total, and maxdegree attributes.
+        uses the unsplined_iter_gh, t_array, and maxdegree attributes.
     dc
         An instance of the "StationData" class. This function uses the
-        location, types, and data attributes of this class
+        lat, loc, types, fit_data, and data attributes of this class
+    plot_fit
+        If True plots dc.fit_data instead of the original data
     plot_kwargs
         optional plotting keyword arguments
 
     This function calls plot_place for plotting of the modeled field
     """
-    # circumvent no length errors
+    # circumvent length errors
     if len(dc.types) == 1:
         axes = [axes]
     if len(axes) != len(dc.types):
         raise Exception('Not enough axes defined'
                         f', you need {len(dc.types)} axes.')
     for i, item in enumerate(dc.types):
+        xdata = np.array(dc.data[i][0])
+        if plot_fit:
+            ydata = np.array(dc.fit_data[i](xdata))
+        else:
+            ydata = np.array(dc.data[i][1])
+
         if item == 'inc':
-            temp = np.array(dc.data[i][1]) % 180
-            temp = np.where(temp > 90, temp - 180, temp)
+            ydata = ydata % 180
+            ydata = np.where(ydata > 90, ydata - 180, ydata)
             axes[i].set_ylabel('%s (degrees)' % item)
-            axes[i].scatter(dc.data[i][0], temp, label='data')
+            axes[i].scatter(xdata, ydata, label='data')
         elif item == 'dec':
-            temp = np.array(dc.data[i][1]) % 360
-            temp = np.where(temp > 180, temp - 360, temp)
+            ydata = np.array(ydata) % 360
+            ydata = np.where(ydata > 180, ydata - 360, ydata)
             axes[i].set_ylabel('%s (degrees)' % item)
-            axes[i].scatter(dc.data[i][0], temp, label='data')
+            axes[i].scatter(xdata, ydata, label='data')
         else:
             axes[i].set_ylabel('%s' % item)
-            axes[i].scatter(dc.data[i][0], dc.data[i][1], label='data')
-        mindata, maxdata = min(dc.data[i][0]), max(dc.data[i][0])
+            axes[i].scatter(xdata, ydata, label='data')
+        mindata, maxdata = min(xdata), max(xdata)
         minmodel, maxmodel = min(im.t_array), max(im.t_array)
         axes[i].set_xlabel('Time')
         axes[i] = plot_place(axes[i], im, [dc.lat, dc.lon], item,
@@ -361,11 +397,11 @@ def compare_loc(axes: list,
     return axes
 
 
-def plot_sweep(axes: list,
+def plot_sweep(axes: Tuple[plt.Axes, plt.Axes],
                spatial_range: Union[list, np.ndarray],
                temporal_range: Union[list, np.ndarray],
                basedir: Union[str, Path] = '.',
-               ) -> list:
+               ) -> Tuple[plt.Axes, plt.Axes]:
     """ Produces a residual-modelsize plot to determine optimal damp parameters
     This function only works after running field_inversion.sweep_damping
 

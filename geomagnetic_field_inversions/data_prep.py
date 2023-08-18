@@ -1,8 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.interpolate import UnivariateSpline, interp1d
-from typing import Union, Literal, Optional
-import warnings
+from typing import Union, Literal, Optional, Callable
 
 _IpMethods = Literal['polyfit', 'USpline', 'linear']
 _DataTypes = Literal['x', 'y', 'z', 'hor', 'inc', 'dec', 'int']
@@ -12,7 +11,8 @@ def interpolate_data(t: Union[np.ndarray, list],
                      y: Union[np.ndarray, list],
                      order: int,
                      smoothing: Optional[float] = None,
-                     method: _IpMethods = 'linear'):
+                     method: _IpMethods = 'linear'
+                     ) -> Callable[[np.ndarray], np.ndarray]:
     """
     Interpolates data over its total timerange.
     Required for sampling purposes in the inversion
@@ -186,7 +186,7 @@ class StationData:
                 smoothing: Union[list, np.ndarray] = None,
                 method: _IpMethods = None,
                 ax: plt.axis = None
-                ) -> Optional[plt.axis]:
+                ) -> Optional[plt.Axes]:
         """
         Fits a function to the data, required for running the inverse at
         values between datapoints as well.
