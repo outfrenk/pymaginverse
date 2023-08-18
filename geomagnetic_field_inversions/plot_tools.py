@@ -9,6 +9,7 @@ import cartopy.crs as ccrs
 from .field_inversion import FieldInversion
 from .forward_modules import frechet, fwtools
 from .data_prep import StationData
+from .tools import bsplines
 
 _DataTypes = Literal['x', 'y', 'z', 'hor', 'inc', 'dec', 'int']
 
@@ -101,10 +102,10 @@ def plot_coeff(ax: plt.Axes,
 def plot_spectrum(axes: Tuple[plt.Axes, plt.Axes],
                   im: plt.Axes,
                   time: Union[list, np.ndarray] = None,
-                  it: int = -1
+                  cmb: bool = False
                   ) -> Tuple[plt.Axes, plt.Axes]:
     """ Plots the powerspectrum of gaussian coefficients and its variance at
-    the Earth's surface.
+    the core mantle boundary (cmb) or earth's surface.
 
     Parameters
     ----------
@@ -112,31 +113,40 @@ def plot_spectrum(axes: Tuple[plt.Axes, plt.Axes],
         List of matplotlib axis objects
     im
         An instance of the `geomagnetic_field_inversion` class. This function
-        uses the unsplined_iter_gh, t_array, and maxdegree attributes.
+        uses the splined_gh, t_array, and maxdegree attributes.
+    cmb
+        If true presents results at cmb, else (default) at earth's surface
     time
-        Timearray used to plot powerspectrum. Defaults to using all timesteps
-    it
-        Determines which iteration is used to plot coefficients. Defaults to
-        final iteration.
+        List of indices used to plot powerspectrum. Defaults to using all
+        timesteps
     """
     if time is None:
-        time = im.t_array
-    coeff = im.unsplined_iter_gh[it](time)
-    coeff_cmb = np.zeros_like(coeff)
-    counter = 0
-    for l in range(im.maxdegree):
-        mult_factor = (6371.2 / 3485.0) ** (l + 1)
-        for m in range(l + 1):
-            coeff_cmb[:, counter] = coeff[:, counter] * mult_factor
-            counter += 1
-    coeff_pow = np.sum(coeff_cmb**2, axis=0) / len(time)**2
-    coeff_sv = np.sum((coeff_cmb[1:]-coeff[:-1])**2, axis=0) / (len(time)-1)**2
+        time = np.arange(im.times - 1)
+    coeff = im.splined_gh
+    if cmb:
+        coeff_cmb = np.zeros_like(coeff)
+        counter = 0
+        for l in range(im.maxdegree):
+            mult_factor = (6371.2 / 3485.0) ** (l + 1)
+            for m in range(l + 1):
+                coeff_cmb[:, counter] = coeff[:, counter] * mult_factor
+                counter += 1
+        coeff = coeff_cmb
 
+    coeff_pow = np.sum(im.unsplined_iter_gh[-1](
+        im._t_array[time])**2, axis=0) / len(time)
+    spl1 = bsplines.derivatives(im._t_step, 1, 1).flatten()
+    coeff_big = np.vstack((np.zeros((3, im._nm_total)), coeff))
+    coeff_sv = np.zeros((len(coeff), im._nm_total))
+    for t in range(len(coeff)):
+        # calculate Gauss coefficient according to derivative spline
+        coeff_sv[t] = np.matmul(spl1, coeff_big[t:t + 4])**2
+    coeff_sv = np.sum(coeff_sv[3:], axis=0) / (len(time) - 1)
     counter = 0
     sum_coeff_pow = np.zeros(im.maxdegree)
     sum_coeff_sv = np.zeros(im.maxdegree)
     for l in range(im.maxdegree):
-        for m in range(l + 1):
+        for m in range(2*l + 1):
             sum_coeff_pow[l] += coeff_pow[counter]
             sum_coeff_sv[l] += coeff_sv[counter]
             counter += 1
