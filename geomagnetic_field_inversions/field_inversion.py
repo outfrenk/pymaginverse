@@ -7,7 +7,7 @@ from pathlib import Path
 from tqdm import tqdm
 
 from .data_prep import StationData
-from .forward_modules import frechet, fwtools
+from .forward_modules import frechet, fwtools, rejection
 from .damping_modules import damping
 from .tools import geod2geoc as g2g
 
@@ -60,8 +60,8 @@ class FieldInversion:
         self.data_array = np.zeros((0, len(time_array)))
         self.error_array = np.zeros((0, len(time_array)))
         self.time_cover = np.zeros((0, len(time_array)))
+        self.accept_matrix = np.empty(0)
         self.types = []
-        self.count_type = np.zeros(7)  # counts occurrence datatypes all times
         self.sc = 0  # station count
         self.types_ready = False
         self.types_sorted = np.empty(0)
@@ -79,6 +79,7 @@ class FieldInversion:
         self.station_frechet = np.empty(0)
         self.res_iter = np.empty(0)
         self.unsplined_iter_gh = []
+        self.dcname = []  # contains name of stations
 
     @property
     def maxdegree(self):
@@ -147,9 +148,6 @@ class FieldInversion:
         self.types
             contains the type of all data in one long list
             size= # datatypes (integers)
-        self.count_type
-            counts the occurrence of the 7 different datatypes
-            size= 7 (integers)
         self.station_coord
             contains the colatitude, longitude, and radius of station
             size= (# datatypes, 3) (floats)
@@ -171,16 +169,16 @@ class FieldInversion:
             # time_cover indicates timerange of data (used in Fréchet)
             time_cover = np.zeros((len(data_class.types), self.times))
             types_entry = []
+            name = data_class.__name__
             for c, types in enumerate(data_class.types):
                 arg_min, arg_max = 0, self.times
                 # check coverage data timevector begin
                 if data_class.data[c][0][0] > self._t_array[0]:
                     if self.verbose:
-                        print(f'{types} of {data_class.__name__} not covering'
-                              ' start time')
+                        print(f'{types} of {name} not covering start time')
                     if data_class.data[c][0][0] > self._t_array[-1]:
                         raise Exception(
-                            f'{types} of {data_class.__name__} does not cover'
+                            f'{types} of {name} does not cover'
                             ' any timestep of timevector')
                     else:
                         # execute if not complete coverage
@@ -190,11 +188,10 @@ class FieldInversion:
                 # check coverage data timevector end
                 if data_class.data[c][0][-1] < self._t_array[-1]:
                     if self.verbose:
-                        print(f'{types} of {data_class.__name__} not covering'
-                              ' end time')
+                        print(f'{types} of {name} not covering end time')
                     if data_class.data[c][0][-1] < self._t_array[0]:
                         raise Exception(
-                            f'{types} of {data_class.__name__} does not cover'
+                            f'{types} of {name} does not cover'
                             ' any timestep of timevector')
                     else:
                         # execute if not complete coverage
@@ -227,7 +224,6 @@ class FieldInversion:
                     self._t_array[arg_min:arg_max])
                 # count occurrence datatype and add to list
                 types_entry.append(typedict[types])
-                self.count_type[typedict[types]] += np.sum(time_cover[c])
 
             # change coordinates from geodetic to geocentric if required
             if self.geodetic:
@@ -251,7 +247,8 @@ class FieldInversion:
 
             # add data to attributes of the class if all is fine
             if self.verbose:
-                print(f'Data of {data_class.__name__} is added to class')
+                print(f'Data of {name} is added to class')
+            self.dcname.append(name)
             self.data_array = np.vstack((self.data_array, data_entry))
             self.error_array = np.vstack((self.error_array, error_entry))
             self.time_cover = np.vstack((self.time_cover, time_cover))
@@ -364,7 +361,8 @@ class FieldInversion:
 
     def run_inversion(self,
                       x0: Union[np.ndarray, list],
-                      max_iter: int = 5,
+                      max_iter: int = 10,
+                      rej_crits: np.ndarray = None
                       ) -> None:
         """
         Runs the iterative inversion
@@ -376,6 +374,12 @@ class FieldInversion:
             as long as (spherical_order + 1)^2 - 1
         max_iter
             maximum amount of iterations
+        rej_crits
+            Optional rejection criteria. Should be a length 7 array containing
+            rejection criteria for x, y, z, hor, int, incl, and decl
+            components. Criteria can be made time dependent by providing
+            rejection criteria for every timestep. In that case shape should
+            be (7, len(time vector))).
 
         Creates or modifies
         -------------------
@@ -404,6 +408,7 @@ class FieldInversion:
             f' it should have length {self._nm_total}'
         self.splined_gh = np.zeros((self.nr_splines, self._nm_total))
         self.splined_gh[:] = x0
+        self.accept_matrix = np.ones((len(self.types_sorted), self.times))
         for it in range(max_iter):
             if self.verbose:
                 print(f'Start iteration {it+1}')
@@ -419,24 +424,44 @@ class FieldInversion:
 
             # Calculate frechet and residual matrix for all times
             # and apply time constraint
+            if self.verbose:
+                print('Create forward and residual observations')
             forwobs_matrix = fwtools.forward_obs(
                 gh_tstep, self.station_frechet, reshape=False)
             frech_matrix = frechet.frechet_types(
                 self.station_frechet, self.types_sorted, forwobs_matrix)
-            frech_matrix *= np.repeat(self.time_cover, self._nm_total, axis=1)
             forwobs_matrixrs = forwobs_matrix.reshape(
                 7, self.sc, self.times).swapaxes(0, 1).reshape(
                 7*self.sc, self.times)[self.types_sorted]
             res_matrix = fwtools.residual_obs(
                 forwobs_matrixrs, self.data_array, self.types_sorted)
             res_matrix *= self.time_cover
-            res_weight = res_matrix / self.error_array
 
+            # reject data
+            use_data_boolean = self.time_cover.copy()
+            if rej_crits is not None:
+                if self.verbose:
+                    print('Apply rejection criteria')
+                self.accept_matrix = rejection.reject_data(
+                    res_matrix, self.types_sorted, rej_crits)
+                use_data_boolean *= self.accept_matrix
+
+            # apply rejection and time constraint to matrices
+            frech_matrix *= np.repeat(use_data_boolean, self._nm_total, axis=1)
+            res_matrix *= use_data_boolean
+            res_weight = res_matrix / self.error_array
             # sum residuals
+            count_type = np.zeros(7)
+            type06 = self.types_sorted % 7
+            for i in range(7):
+                count_type[i] = np.sum(
+                    np.where(type06 == i, use_data_boolean.T, 0))
             self.res_iter[it] = fwtools.residual_type(
-                res_weight, self.types_sorted, self.count_type)
+                res_weight, self.types_sorted, count_type)
 
             # create time dependent matrices
+            if self.verbose:
+                print('Start formation time dependent matrices')
             for t in range(self.times):
                 frech = frech_matrix[:, self._nm_total*t:self._nm_total*(t+1)]
                 rhs_matrix[t] = np.matmul(
@@ -461,6 +486,8 @@ class FieldInversion:
             rhs_splined += rhs_spat_damp + rhs_temp_damp
 
             # solve the equations
+            if self.verbose:
+                print('Solve equations')
             update = scs.linalg.spsolve(normal_eq_splined, rhs_splined)
             self.splined_gh = (self.splined_gh.flatten() + update).reshape(
                 self.nr_splines, self._nm_total)
@@ -483,11 +510,11 @@ class FieldInversion:
                 )[self.types_sorted]
                 res_matrix = fwtools.residual_obs(
                     forwobs_matrixrs, self.data_array, self.types_sorted)
-                res_matrix *= self.time_cover
+                res_matrix *= use_data_boolean
                 res_weight = res_matrix / self.error_array
                 # sum residuals
                 self.res_iter[it+1] = fwtools.residual_type(
-                    res_weight, self.types_sorted, self.count_type)
+                    res_weight, self.types_sorted, count_type)
                 if self.verbose:
                     print('Residual is %.2f' % self.res_iter[it+1, 7])
                     print('Calculating spatial and temporal norms')
@@ -504,7 +531,8 @@ class FieldInversion:
                           basedir: Union[Path, str] = '.',
                           file_name: str = 'coeff',
                           save_iterations: bool = True,
-                          save_residual: bool = False
+                          save_residual: bool = False,
+                          rejection_report: bool = False,
                           ) -> None:
         """
         Save the Gauss coefficients at every timestep
@@ -521,7 +549,11 @@ class FieldInversion:
              (# iterations, len(time vector), nm_total)
         save_residual
             boolean indicating whether to save the residuals of each timestep
+        rejection_report
+            boolean indicating whether to store a rejection report showing
+            which data has been rejected.
         """
+        dict_types = ['x', 'y', 'z', 'hor', 'int', 'incl', 'decl']
         # save residual
         if save_residual:
             residual_frame = pd.DataFrame(
@@ -530,6 +562,19 @@ class FieldInversion:
                                         'res total'])
             residual_frame.to_csv(basedir / f'{file_name}_residual.csv',
                                   sep=';')
+        if rejection_report:
+            f = open(basedir / f'{file_name}_reject.txt', 'w')
+            row = 0
+            for n, name in enumerate(self.dcname):
+                f.write(f'Station {name} \n')
+                for types in self.types[n]:
+                    datarow = self.accept_matrix[row]
+                    if np.sum(datarow) != len(datarow):
+                        rejecttime = np.where(self.accept_matrix[row] == 0)[0]
+                        f.write(f'{dict_types[types]}:'
+                                f' {self._t_array[rejecttime]} \n')
+                    row += 1
+            f.close()
         if save_iterations:
             all_coeff = np.zeros((
                 len(self.unsplined_iter_gh), self.times, self._nm_total))
