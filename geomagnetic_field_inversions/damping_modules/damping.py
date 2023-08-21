@@ -149,7 +149,7 @@ def damp_norm(damp_fac: np.ndarray,
     norm = np.zeros(len(coeff))
     # append zero to coeff
     coeffsp = np.vstack((np.zeros((spl_degree, len(coeff[0]))), coeff))
-    for t in range(len(coeff)):
+    for t in range(len(coeff)):  # loop through time
         # calculate Gauss coefficient according to derivative spline
         g_spl = np.matmul(spl, coeffsp[t:t+(spl_degree+1)])
         norm[t] = np.dot(damp_fac, g_spl**2)

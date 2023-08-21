@@ -124,24 +124,24 @@ def plot_spectrum(axes: Tuple[plt.Axes, plt.Axes],
         time = np.arange(im.times - 1)
     coeff = im.splined_gh
     if cmb:
-        coeff_cmb = np.zeros_like(coeff)
         counter = 0
         for l in range(im.maxdegree):
             mult_factor = (6371.2 / 3485.0) ** (l + 1)
             for m in range(l + 1):
-                coeff_cmb[:, counter] = coeff[:, counter] * mult_factor
+                coeff[:, counter] *= mult_factor
                 counter += 1
-        coeff = coeff_cmb
 
-    coeff_pow = np.sum(im.unsplined_iter_gh[-1](
-        im._t_array[time])**2, axis=0) / len(time)
-    spl1 = bsplines.derivatives(im._t_step, 1, 1).flatten()
+    spl1 = bsplines.derivatives(im._t_step, 1, derivative=1).flatten()
+    spl0 = bsplines.derivatives(im._t_step, 1, derivative=0).flatten()
     coeff_big = np.vstack((np.zeros((3, im._nm_total)), coeff))
     coeff_sv = np.zeros((len(coeff), im._nm_total))
+    coeff_pow = np.zeros((len(coeff), im._nm_total))
     for t in range(len(coeff)):
         # calculate Gauss coefficient according to derivative spline
+        coeff_pow[t] = np.matmul(spl0, coeff_big[t:t + 4])**2
         coeff_sv[t] = np.matmul(spl1, coeff_big[t:t + 4])**2
-    coeff_sv = np.sum(coeff_sv[3:], axis=0) / (len(time) - 1)
+    coeff_pow = np.sum(coeff_pow[2:], axis=0) / len(time)
+    coeff_sv = np.sum(coeff_sv[2:], axis=0) / len(time)
     counter = 0
     sum_coeff_pow = np.zeros(im.maxdegree)
     sum_coeff_sv = np.zeros(im.maxdegree)
