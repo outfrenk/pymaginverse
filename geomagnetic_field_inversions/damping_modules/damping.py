@@ -154,4 +154,4 @@ def damp_norm(damp_fac: np.ndarray,
         g_spl = np.matmul(spl, coeffsp[t:t+(spl_degree+1)])
         norm[t] = np.dot(damp_fac, g_spl**2)
 
-    return norm[spl_degree:] / t_step
+    return norm[spl_degree-1:] / t_step
