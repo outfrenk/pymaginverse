@@ -81,6 +81,7 @@ class FieldInversion:
         self.res_iter = np.empty(0)
         self.unsplined_iter_gh = []
         self.dcname = []  # contains name of stations
+        self.rejected = np.empty(0)
 
     @property
     def maxdegree(self):
@@ -380,7 +381,7 @@ class FieldInversion:
             rejection criteria for x, y, z, hor, int, incl, and decl
             components. Criteria can be made time dependent by providing
             rejection criteria for every timestep. In that case shape should
-            be (7, len(time vector))).
+            be (7, len(time vector))). inc/dec in radians!
 
         Creates or modifies
         -------------------
@@ -399,6 +400,8 @@ class FieldInversion:
         if not self.matrix_ready:
             raise Exception('Matrices have not been prepared. '
                             'Please run prepare_inversion first.')
+        if rej_crits is not None:
+            self.rejected = np.zeros(max_iter)
 
         self.res_iter = np.zeros((max_iter+1, 8))
         # initiate splined values with starting model
@@ -443,9 +446,10 @@ class FieldInversion:
             if rej_crits is not None:
                 self.accept_matrix = rejection.reject_data(
                     res_matrix, self.types_sorted, rej_crits)
+                rejected = len(self.accept_matrix.flatten())\
+                           - sum(self.accept_matrix.flatten())
+                self.rejected[it] = rejected
                 if self.verbose:
-                    rejected = len(self.accept_matrix.flatten())\
-                               - sum(self.accept_matrix.flatten())
                     print(f'{rejected} datapoints rejected')
                 use_data_boolean *= self.accept_matrix
 
@@ -594,7 +598,7 @@ class FieldInversion:
                       temporal_range: Union[list, np.ndarray],
                       spat_dict: dict = None,
                       temp_dict: dict = None,
-                      max_iter: int = 5,
+                      max_iter: int = 10,
                       rej_crits: np.ndarray = None,
                       basedir: Union[str, Path] = '.',
                       overwrite: bool = False

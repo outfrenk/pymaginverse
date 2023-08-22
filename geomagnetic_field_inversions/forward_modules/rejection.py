@@ -18,6 +18,6 @@ def reject_data(residual: np.ndarray,
         rejection_matrix = np.repeat(rejection_matrix, len(residual[0])
                                      ).reshape(len(residual), -1)
     # if small enough 1, otherwise 0
-    accept_matrix = np.where(residual <= rejection_matrix, 1, 0)
+    accept_matrix = np.where(abs(residual) <= rejection_matrix, 1, 0)
 
     return accept_matrix

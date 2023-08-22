@@ -1,4 +1,3 @@
-import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 from pathlib import Path
@@ -26,22 +25,29 @@ def plot_residuals(ax: plt.Axes,
         Matplotlib axis object
     im
         An instance of the `geomagnetic_field_inversion` class. This function
-        only uses the res_iter attribute.
+        uses the res_iter attribute.
     **plt_kwargs
         optional plotting keyword arguments
     """
     lines = ['dotted', 'solid', 'dashdot']
     dt = ['x', 'y', 'z', 'hor', 'inc', 'dec', 'int', 'all']
+    ax.set_xlabel('Iteration')
+    ax.set_ylabel('Relative residual')
+    count_type = np.zeros(8)
+    count_type[:7] = im.count_type
+    count_type[7] = sum(im.count_type)
 
     for i in range(8):
-        if im.res_iter[0, i] > 0:
+        if count_type[i] > 0:
             if not plt_kwargs:
                 ax.plot(np.arange(len(im.res_iter)),
-                        im.res_iter[:, i] / im.res_iter[0, i],
+                        im.res_iter[:, i] / max(im.res_iter[:, i]),
                         label=f'rms {dt[i]}', linestyle=lines[i % 3])
             else:
                 ax.plot(np.arange(len(im.res_iter)),
-                        im.res_iter[:, i] / im.res_iter[0, i], **plt_kwargs)
+                        im.res_iter[:, i] / max(im.res_iter[:, i]),
+                        **plt_kwargs)
+
     return ax
 
 
@@ -478,10 +484,11 @@ def find_rejected(dc: StationData,
     ----------
     im
         An instance of the `geomagnetic_field_inversion` class. This function
-        uses the  attributes.
+        uses the station_coord, _t_step, times, types_sorted,
+        and accept_matrix attributes.
     dc
-        An instance of the "StationData" class. This function uses the
-        attributes of this class
+        An instance of the "StationData" class. This function uses the lon and
+        types attributes of this class
     Returns
     -------
     rej_xdata

@@ -4,15 +4,18 @@ Library for the numerical inversion of geomagnetic field data. This code is base
 - Korte, M., Donadini, F., & Constable, C. G. (2009). [Geomagnetic field for 0–3 ka: 2. A new series of time‐varying global models.](https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2008GC002297) Geochemistry, Geophysics, Geosystems, 10(6). [10.1029/2008GC002297](https://doi.org/10.1029/2008GC002297)
 
 ## Library
-The library consists of two main modules:
+The library consists of three main modules:
 - `geomagnetic_field_inversions/data_prep.py`: contains methods for correctly preparing data for the `FieldInversion`-class. This method stores all required parameters per station into one class, which can then be imported directly into `FieldInversion`. The class requires the location of the station, together with either x, y, z, h-component magnetic data or declination, inclination, or intensity data per timestep. 
 - `geomagnetic_field_inversions/field_inversion.py`: contains the `FieldInversion`-class that performs the actual inversion of geomagnetic field data. It requires, besides the time vector over which the inversion will take place, instances of `StationData` as minimum input.
-
-An additional module to plot results from the inversions is provided in `geomagnetic_field_inversions/plot_tools.py`. It allows easy plotting of:
+- `geomagnetic_field_inversions/plot_tools.py`: contains basic plot tools for visualising data produced by the `FieldInversion`-class.
+The `plot_tools.py` method allows easy plotting of:
 - residuals
-- powerspectra
+- Gauss coefficients through time
+- spatial and temporal damping norms through time
+- powerspectra and secular variation
 - residual vs model norm plots (for choosing damping parameters)
 - forward geomagnetic field maps of the world
+- forward modeled data at specific locations
 
 ## Installation
 You can install the library by cloning the repository and then `pip`-installing:
@@ -24,4 +27,4 @@ python3 -m pip install . -U
 
 ## Tutorial
 We have provided a tutorial to make the library easier to use and understand. You can find the jupyter notebook containing the tutorial under `doc/Tutorial Geomagnetic Field Inversions.ipynb`.
-This tutorial explains almost all methods of the two main modules and explains the set-up required for the `FieldInversion`-class.
+This tutorial explains almost all methods of the three main modules and explains how to run a geomagnetic model with the `FieldInversion`-class.
