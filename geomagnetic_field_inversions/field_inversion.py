@@ -65,6 +65,7 @@ class FieldInversion:
         self.sc = 0  # station count
         self.types_ready = False
         self.types_sorted = np.empty(0)
+        self.count_type = np.zeros(7)
         self.station_coord = np.zeros((0, 3))
         self.gcgd_conv = np.zeros((0, 2))
         self.spat_damp_matrix = np.empty(0)
@@ -440,10 +441,12 @@ class FieldInversion:
             # reject data
             use_data_boolean = self.time_cover.copy()
             if rej_crits is not None:
-                if self.verbose:
-                    print('Apply rejection criteria')
                 self.accept_matrix = rejection.reject_data(
                     res_matrix, self.types_sorted, rej_crits)
+                if self.verbose:
+                    rejected = len(self.accept_matrix.flatten())\
+                               - sum(self.accept_matrix.flatten())
+                    print(f'{rejected} datapoints rejected')
                 use_data_boolean *= self.accept_matrix
 
             # apply rejection and time constraint to matrices
@@ -451,13 +454,13 @@ class FieldInversion:
             res_matrix *= use_data_boolean
             res_weight = res_matrix / self.error_array
             # sum residuals
-            count_type = np.zeros(7)
+            self.count_type = np.zeros(7)
             type06 = self.types_sorted % 7
             for i in range(7):
-                count_type[i] = np.sum(
+                self.count_type[i] = np.sum(
                     np.where(type06 == i, use_data_boolean.T, 0))
             self.res_iter[it] = fwtools.residual_type(
-                res_weight, self.types_sorted, count_type)
+                res_weight, self.types_sorted, self.count_type)
 
             # create time dependent matrices
             if self.verbose:
@@ -514,7 +517,7 @@ class FieldInversion:
                 res_weight = res_matrix / self.error_array
                 # sum residuals
                 self.res_iter[it+1] = fwtools.residual_type(
-                    res_weight, self.types_sorted, count_type)
+                    res_weight, self.types_sorted, self.count_type)
                 if self.verbose:
                     print('Residual is %.2f' % self.res_iter[it+1, 7])
                     print('Calculating spatial and temporal norms')
@@ -566,7 +569,7 @@ class FieldInversion:
             f = open(basedir / f'{file_name}_reject.txt', 'w')
             row = 0
             for n, name in enumerate(self.dcname):
-                f.write(f'Station {name} \n')
+                f.write(f'Station {name}, {self.station_coord[n]} \n')
                 for types in self.types[n]:
                     datarow = self.accept_matrix[row]
                     if np.sum(datarow) != len(datarow):
@@ -592,6 +595,7 @@ class FieldInversion:
                       spat_dict: dict = None,
                       temp_dict: dict = None,
                       max_iter: int = 5,
+                      rej_crits: np.ndarray = None,
                       basedir: Union[str, Path] = '.',
                       overwrite: bool = False
                       ) -> None:
@@ -613,6 +617,12 @@ class FieldInversion:
             see prepare_inversion for more info
         max_iter
             maximum number of iterations. defaults to 5 iterations
+        rej_crits
+            Optional rejection criteria. Should be a length 7 array containing
+            rejection criteria for x, y, z, hor, int, incl, and decl
+            components. Criteria can be made time dependent by providing
+            rejection criteria for every timestep. In that case shape should
+            be (7, len(time vector))).
         basedir
             path where files will be saved
         overwrite
@@ -634,7 +644,7 @@ class FieldInversion:
                                                f'{temporal_df:.2e}t_final.npy'
                                      ).is_file():
                     self.prepare_inversion(spat_dict, temp_dict)
-                    self.run_inversion(x0, max_iter)
+                    self.run_inversion(x0, max_iter, rej_crits)
                     self.save_coefficients(
                         file_name=f'{spatial_df:.2e}s+{temporal_df:.2e}t',
                         basedir=basedir, save_iterations=False,

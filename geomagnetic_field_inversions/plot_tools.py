@@ -133,15 +133,15 @@ def plot_spectrum(axes: Tuple[plt.Axes, plt.Axes],
 
     spl1 = bsplines.derivatives(im._t_step, 1, derivative=1).flatten()
     spl0 = bsplines.derivatives(im._t_step, 1, derivative=0).flatten()
-    coeff_big = np.vstack((np.zeros((3, im._nm_total)), coeff))
+    coeff_big = np.vstack((np.zeros((im._SPL_DEGREE, im._nm_total)), coeff))
     coeff_sv = np.zeros((len(coeff), im._nm_total))
     coeff_pow = np.zeros((len(coeff), im._nm_total))
     for t in range(len(coeff)):
         # calculate Gauss coefficient according to derivative spline
-        coeff_pow[t] = np.matmul(spl0, coeff_big[t:t + 4])**2
-        coeff_sv[t] = np.matmul(spl1, coeff_big[t:t + 4])**2
-    coeff_pow = np.sum(coeff_pow[2:], axis=0) / len(time)
-    coeff_sv = np.sum(coeff_sv[2:], axis=0) / len(time)
+        coeff_pow[t] = np.matmul(spl0, coeff_big[t:t + im._SPL_DEGREE+1])**2
+        coeff_sv[t] = np.matmul(spl1, coeff_big[t:t + im._SPL_DEGREE+1])**2
+    coeff_pow = np.sum(coeff_pow[im._SPL_DEGREE-1:], axis=0) / len(time)
+    coeff_sv = np.sum(coeff_sv[im._SPL_DEGREE-1:], axis=0) / len(time)
     counter = 0
     sum_coeff_pow = np.zeros(im.maxdegree)
     sum_coeff_sv = np.zeros(im.maxdegree)
@@ -183,13 +183,12 @@ def plot_dampnorm(ax: plt.Axes,
     **plt_kwargs
         optional plotting keyword arguments
     """
-    t_half = (im.t_array[1:] - im.t_array[:-1]) / 2 + im.t_array[:-1]
     ax.set_xlabel('Centre of time interval')
     if spatial:
-        ax.plot(t_half, im.spat_norm, label='spatial', **plt_kwargs)
+        ax.plot(im._t_array, im.spat_norm, label='spatial', **plt_kwargs)
         ax.set_ylabel('spatial damping')
     else:
-        ax.plot(t_half, im.temp_norm, label='temporal', **plt_kwargs)
+        ax.plot(im._t_array, im.temp_norm, label='temporal', **plt_kwargs)
         ax.set_ylabel('temporal damping')
 
     return ax
@@ -341,7 +340,7 @@ def plot_place(ax: plt.Axes,
     forw_obs = fwtools.forward_obs(coeff, frechxyz)
     forw_obs[5:7] = np.degrees(forw_obs[5:7])
     ax.plot(im.t_array, forw_obs[typedict[datatype]],
-            label=datatype, **plot_kwargs)
+            label='model', **plot_kwargs)
     return ax
 
 
@@ -376,6 +375,8 @@ def compare_loc(axes: list,
     if len(axes) != len(dc.types):
         raise Exception('Not enough axes defined'
                         f', you need {len(dc.types)} axes.')
+    # find rejected data
+    rej_xdata = find_rejected(dc, im)
     for i, item in enumerate(dc.types):
         xdata = np.array(dc.data[i][0])
         if plot_fit:
@@ -396,6 +397,9 @@ def compare_loc(axes: list,
         else:
             axes[i].set_ylabel('%s' % item)
             axes[i].scatter(xdata, ydata, label='data')
+        # plot rejected data
+        for rej in rej_xdata[i]:
+            axes[i].axvspan(rej[0], rej[1], alpha=0.5, color='red')
         mindata, maxdata = min(xdata), max(xdata)
         minmodel, maxmodel = min(im.t_array), max(im.t_array)
         axes[i].set_xlabel('Time')
@@ -463,3 +467,59 @@ def plot_sweep(axes: Tuple[plt.Axes, plt.Axes],
                     axes[p].scatter(res[j, i], modelsize[j, i], color='black',
                                     marker=marker[j % len(marker)])
     return axes
+
+
+def find_rejected(dc: StationData,
+                  im: FieldInversion
+                  ) -> list:
+    """ Find the timespan for which the data is rejected
+
+    Parameters
+    ----------
+    im
+        An instance of the `geomagnetic_field_inversion` class. This function
+        uses the  attributes.
+    dc
+        An instance of the "StationData" class. This function uses the
+        attributes of this class
+    Returns
+    -------
+    rej_xdata
+        list of lists of lists containing time intervals, per row, at which
+        data was rejected. Shape: len(dc.types) X # rejections X 2
+    """
+    typedict = {"x": 0, "y": 1, "z": 2, "hor": 3,
+                "int": 4, "inc": 5, "dec": 6}
+
+    index = np.where(im.station_coord[:, 1] == np.radians(dc.lon))[0]
+    if len(index) == 0:
+        raise Exception('No match in longitude between classes')
+    elif len(index) > 1:
+        raise Exception('More than one match in longitude between classes')
+
+    rej_xdata = []
+    t_half1 = im._t_step * np.arange(im.times) - 0.25 * im._t_step
+    t_half2 = im._t_step * np.arange(im.times) + 0.25 * im._t_step
+    for t, types in enumerate(dc.types):
+        sorted_row = index * 7 + typedict[types]
+        row = np.where(im.types_sorted == sorted_row)[0]
+        if len(row) != 1:
+            raise Exception('incorrect length row, panic now!')
+        rej = np.where(im.accept_matrix[row] == 0)[1]
+        rej_list = []
+        if len(rej) > 0:
+            min_item = rej[0]
+            max_item = rej[0]
+            for i, item in enumerate(rej[1:]):
+                # if in order
+                if item == (rej[i] + 1):
+                    max_item = item
+                else:
+                    rej_list.append([t_half1[min_item], t_half2[max_item]])
+                    min_item = item
+                    max_item = item
+                if item == rej[-1]:
+                    rej_list.append([t_half1[min_item], t_half2[max_item]])
+        rej_xdata.append(rej_list)
+
+    return rej_xdata
