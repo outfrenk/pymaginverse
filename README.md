@@ -18,12 +18,21 @@ The `plot_tools.py` method allows easy plotting of:
 - forward modeled data at specific locations
 
 ## Installation
-You can install the library by cloning the repository and then `pip`-installing:
+You can install the library in two ways:
+1. Cloning the repository and then `pip`-installing:
 ```
 git clone https://github.com/geomagnetic_field_inversions
 cd geomagnetic_field_inversions
-python3 -m pip install . -U
+pip install . -U
 ```
+
+2. Cloning the repository and installing through poetry:
+```
+git clone https://github.com/geomagnetic_field_inversions
+cd geomagnetic_field_inversions
+poetry install
+```
+The package is *only* installed in a virtual environment created by poetry. Be sure to enter this environment by typing `poetry shell` into the terminal. In this environment you can start a jupyter notebook (type: `jupyter notebook`) and follow the tutorial: 
 
 ## Tutorial
 We have provided a tutorial to make the library easier to use and understand. You can find the jupyter notebook containing the tutorial under `doc/Tutorial Geomagnetic Field Inversions.ipynb`.
