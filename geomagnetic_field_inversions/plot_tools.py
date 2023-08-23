@@ -246,16 +246,30 @@ def plot_world(axes: Tuple[plt.Axes, plt.Axes, plt.Axes],
         world_coord[:, 2] = 6371.2
     frechxyz = frechet.frechet_basis(world_coord, im.maxdegree)
     forw_obs = fwtools.forward_obs(coeff, frechxyz, reshape=False)
+    if cmb:
+        plot0 = forw_obs[0]
+        title0 = 'North'
+        plot1 = forw_obs[1]
+        title1 = 'East'
+        plot2 = -1 * forw_obs[2]  # Br
+        title2 = 'Radial'
+    else:
+        plot0 = forw_obs[4]
+        title0 = 'Intensity'
+        plot1 = forw_obs[5]
+        title1 = 'Inclination'
+        plot2 = forw_obs[6]
+        title2 = 'Declination'
 
-    default_kw = {'f_inc': np.linspace(min(forw_obs[5]), max(forw_obs[5]), 10),
-                  'inc': np.linspace(min(forw_obs[5]), max(forw_obs[5]), 10),
-                  'cmap_inc': 'RdBu_r',
-                  'f_dec': np.linspace(min(forw_obs[6]), max(forw_obs[6]), 10),
-                  'dec': np.linspace(min(forw_obs[6]), max(forw_obs[6]), 10),
-                  'cmap_dec': 'RdBu_r',
-                  'f_int': np.linspace(min(forw_obs[4]), max(forw_obs[4]), 10),
-                  'int': np.linspace(min(forw_obs[4]), max(forw_obs[4]), 10),
-                  'cmap_int': 'RdBu_r'}
+    default_kw = {'lvf_0': np.linspace(min(plot0), max(plot0), 10),
+                  'lv_0': np.linspace(min(plot0), max(plot0), 10),
+                  'cmap_0': 'RdBu_r',
+                  'lvf_1': np.linspace(min(plot1), max(plot1), 10),
+                  'lv_1': np.linspace(min(plot1), max(plot1), 10),
+                  'cmap_1': 'RdBu_r',
+                  'lvf_2': np.linspace(min(plot2), max(plot2), 10),
+                  'lv_2': np.linspace(min(plot2), max(plot2), 10),
+                  'cmap_2': 'RdBu_r'}
     if contour_kw is None:
         contour_kw = default_kw
     else:
@@ -263,42 +277,41 @@ def plot_world(axes: Tuple[plt.Axes, plt.Axes, plt.Axes],
             if item not in contour_kw:
                 contour_kw[item] = default_kw[item]
 
-    forw_obs = forw_obs.reshape(7, 179, 360)
     axes[0].set_global()
-    axes[0].contourf(forwlon, forwlat, forw_obs[5],
-                     cmap=contour_kw['cmap_inc'],
-                     levels=contour_kw['f_inc'], transform=proj)
-    c = axes[0].contour(forwlon, forwlat, forw_obs[5],
-                        levels=contour_kw['inc'], colors='k',
+    axes[0].contourf(forwlon, forwlat, plot0.reshape(179, 360),
+                     cmap=contour_kw['cmap_0'],
+                     levels=contour_kw['lvf_0'], transform=proj)
+    c = axes[0].contour(forwlon, forwlat, plot0.reshape(179, 360),
+                        levels=contour_kw['lv_0'], colors='k',
                         transform=proj)
     axes[0].coastlines()
     axes[0].gridlines()
     axes[0].clabel(c, fontsize=12, inline=True, fmt='%.1f')
-    axes[0].set_title('Inclination')
+    axes[0].set_title(title0)
 
     axes[1].set_global()
-    axes[1].contourf(forwlon, forwlat, forw_obs[6],
-                     levels=contour_kw['f_dec'],
-                     cmap=contour_kw['cmap_dec'], transform=proj)
-    c = axes[1].contour(forwlon, forwlat, forw_obs[6],
-                        levels=contour_kw['dec'], colors='k',
+    axes[1].contourf(forwlon, forwlat, plot1.reshape(179, 360),
+                     cmap=contour_kw['cmap_1'],
+                     levels=contour_kw['lvf_1'], transform=proj)
+    c = axes[1].contour(forwlon, forwlat, plot1.reshape(179, 360),
+                        levels=contour_kw['lv_1'], colors='k',
                         transform=proj)
     axes[1].coastlines()
     axes[1].gridlines()
     axes[1].clabel(c, fontsize=12, inline=True, fmt='%.1f')
-    axes[1].set_title('Declination')
+    axes[1].set_title(title1)
 
     axes[2].set_global()
-    axes[2].contourf(forwlon, forwlat, forw_obs[4],
-                     levels=contour_kw['f_int'],
-                     cmap=contour_kw['cmap_int'], transform=proj)
-    c = axes[2].contour(forwlon, forwlat, forw_obs[4],
-                        levels=contour_kw['int'], colors='k',
+    axes[2].contourf(forwlon, forwlat, plot2.reshape(179, 360),
+                     cmap=contour_kw['cmap_2'],
+                     levels=contour_kw['lvf_2'], transform=proj)
+    c = axes[2].contour(forwlon, forwlat, plot2.reshape(179, 360),
+                        levels=contour_kw['lv_2'], colors='k',
                         transform=proj)
     axes[2].coastlines()
     axes[2].gridlines()
     axes[2].clabel(c, fontsize=12, inline=True, fmt='%.1f')
-    axes[2].set_title('Intensity')
+    axes[2].set_title(title2)
     return axes
 
 

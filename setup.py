@@ -20,8 +20,8 @@ setuptools.setup(
                       'pandas',
                       'pathlib',
                       'tqdm',
-                      'pyshtools'
-                      ],
+                      'pyshtools',
+                      'cartopy'],
     # TODO: Update license
     classifiers=['License :: BSD2 License',
                  'Programming Language :: Python :: 3 :: Only',
