@@ -7,7 +7,7 @@ with open('README.md') as f:
 
 setuptools.setup(
     name='geomagnetic_field_inversions',
-    version='1.0',
+    version='0.1.0',
     description=('Python lib to perform geomagnetic field inversions'),
     long_description=long_description,
     long_description_content_type='text/markdown',

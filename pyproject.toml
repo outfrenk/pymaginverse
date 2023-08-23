@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "geomagnetic-field-inversions"
+version = "0.1.0"
+description = "Python Library performing Geomagnetic Field inversions for (paleo)magnetic data"
+authors = ["Frenk Out <outfrenk@gmail.com>"]
+license = "MIT License"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+numpy = "^1.25.2"
+scipy = "^1.11.2"
+pandas = "^2.0.3"
+typing = "^3.10.0.0"
+pathlib = "^1.0.1"
+tqdm = "^4.66.1"
+matplotlib = "^3.7.2"
+Cartopy = "^0.22.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
