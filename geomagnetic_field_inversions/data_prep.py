@@ -9,7 +9,7 @@ _DataTypes = Literal['x', 'y', 'z', 'hor', 'inc', 'dec', 'int']
 
 def interpolate_data(t: Union[np.ndarray, list],
                      y: Union[np.ndarray, list],
-                     order: int,
+                     order: int = None,
                      smoothing: Optional[float] = None,
                      method: _IpMethods = 'linear'
                      ) -> Callable[[np.ndarray], np.ndarray]:
@@ -124,6 +124,9 @@ class StationData:
         Set latitude & longitude in degrees.
         optionally geodetic height in metres and optionally name of station
         """
+        if lon > 180:  # if longitude inputted between 0 and 360
+            lon -= 360
+            print(f'Longitude changed from {lon+360} to {lon}')
         if lat > 90 or lat < -90 or lon > 180 or lon < -180:
             raise ValueError(f'Your latitude is {lat} and longitude is {lon};'
                              ' latitude should be between -90 and 90 degrees,'
@@ -180,65 +183,45 @@ class StationData:
         """
         self.data.append(check_data(ttype, data, time_factor, error))
         self.types.append(ttype)
+        self.fit_data = [None] * len(self.types)
 
     def fitting(self,
-                order: Union[list, np.ndarray] = None,
-                smoothing: Union[list, np.ndarray] = None,
-                method: _IpMethods = None,
-                ax: plt.axis = None
+                ttype: str = None,
+                order: float = None,
+                smoothing: float = None,
+                method: _IpMethods = None
                 ) -> Optional[plt.Axes]:
         """
         Fits a function to the data, required for running the inverse at
-        values between datapoints as well.
+        values between datapoints as well. Default running this function will
+        result into a linear fit for all datatypes. Otherwise, fit per datatype
 
         Parameters
         ----------
+        ttype
+            which datatype to fit. if omitted, all datatype will be fitted
+            linearly
         order
             order of fit
         smoothing
             smoothing applied to fit
         method
-            method of fitting; either polyfit or UnivariateSpline
-        ax
-            Optional matplotlib axes to show result of plotting
+            method of fitting; either linear, polyfit, or UnivariateSpline
 
         Creates or modifies
         -------------------
         self.fit_data
             function that fits and interpolates the data
-
-        Returns
-        -------
-        ax
-            Optionally returns a figure of the fitted data
         """
-        if order is None:
-            order = np.full(len(self.types), 10)
-        if smoothing is None:
-            smoothing = np.full(len(self.types), None)
-        if method is None:
-            method = np.full(len(self.types), 'polyfit')
-
-        self.fit_data = [None] * len(self.types)
-        for i in range(len(self.types)):
-            self.fit_data[i] = interpolate_data(self.data[i][0],
-                                                self.data[i][1],
-                                                order[i],
-                                                smoothing[i],
-                                                method[i])
-            if ax is not None:
-                time_arr = np.linspace(self.data[i][0][0],
-                                       self.data[i][0][-1], 1000)
-                ax[i].set_title('Fitting %s of data' % self.types[i])
-                if self.types[i] == 'inc' or self.types[i] == 'dec':
-                    ax[i].set_ylabel('%s (degrees)' % self.types[i])
-                else:
-                    ax[i].set_ylabel('%s' % self.types[i])
-                ax[i].set_xlabel('Time')
-                ax[i].plot(time_arr, self.fit_data[i](time_arr),
-                           label='fit', color='orange')
-                ax[i].scatter(self.data[i][0], self.data[i][1], label='data')
-                ax[i].legend()
-
-        if ax is not None:
-            return ax
+        if ttype is None:
+            for i in range(len(self.types)):
+                self.fit_data[i] = interpolate_data(self.data[i][0],
+                                                    self.data[i][1],
+                                                    method='linear')
+        else:
+            row = np.where(self.types == ttype)[0]
+            if len(row) == 0:
+                raise Exception('datatype not found, try again')
+            self.fit_data[row] = interpolate_data(
+                self.data[row][0], self.data[row][1],
+                order, smoothing, method)

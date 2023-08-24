@@ -13,6 +13,40 @@ from .tools import bsplines
 _DataTypes = Literal['x', 'y', 'z', 'hor', 'inc', 'dec', 'int']
 
 
+def plot_station(axes: Union[list, plt.Axes],
+                 dc: StationData,
+                 steps: int = 1000
+                 ) -> plt.Axes:
+    """ Plots input (paleo)magnetic data based on the StationData class
+
+    Parameters
+    ----------
+    axes
+        List of matplotlib axis objects equal to dc.types, or one axes
+    dc
+        An instance of the "StationData" class. This function uses the
+        lat, loc, types, fit_data, and data attributes of this class
+    steps
+        Number of plotting steps on the time axis
+    """
+    if len(dc.types) == 1 and type(axes) != list:
+        axes = [axes]
+    assert len(axes) == len(dc.types), 'not defined enough plot axes'
+    for i in range(len(dc.types)):
+        time_arr = np.linspace(dc.data[i][0][0], dc.data[i][0][-1], steps)
+        axes[i].set_title('Fitting %s of data' % dc.types[i])
+        if dc.types[i] == 'inc' or dc.types[i] == 'dec':
+            axes[i].set_ylabel('%s (degrees)' % dc.types[i])
+        else:
+            axes[i].set_ylabel('%s' % dc.types[i])
+        axes[i].set_xlabel('Time')
+        axes[i].plot(time_arr, dc.fit_data[i](time_arr),
+                     label='fit', color='orange')
+        axes[i].scatter(dc.data[i][0], dc.data[i][1], label='data')
+        axes[i].legend()
+    return axes
+
+
 def plot_residuals(ax: plt.Axes,
                    im: FieldInversion,
                    **plt_kwargs
@@ -389,7 +423,7 @@ def compare_loc(axes: list,
     This function calls plot_place for plotting of the modeled field
     """
     # circumvent length errors
-    if len(dc.types) == 1:
+    if len(dc.types) == 1 and type(axes) != list:
         axes = [axes]
     if len(axes) != len(dc.types):
         raise Exception('Not enough axes defined'
