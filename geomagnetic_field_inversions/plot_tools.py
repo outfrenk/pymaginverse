@@ -8,7 +8,7 @@ import cartopy.crs as ccrs
 from .field_inversion import FieldInversion
 from .forward_modules import frechet, fwtools
 from .data_prep import StationData
-from .tools import bsplines
+from .tools import bsplines, geod2geoc
 
 _DataTypes = Literal['x', 'y', 'z', 'hor', 'inc', 'dec', 'int']
 
@@ -544,12 +544,17 @@ def find_rejected(dc: StationData,
     """
     typedict = {"x": 0, "y": 1, "z": 2, "hor": 3,
                 "int": 4, "inc": 5, "dec": 6}
-
+    # find data row
     index = np.where(im.station_coord[:, 1] == np.radians(dc.lon))[0]
     if len(index) == 0:
         raise Exception('No match in longitude between classes')
     elif len(index) > 1:
-        raise Exception('More than one match in longitude between classes')
+        nl, he, b, c = geod2geoc.latrad_in_geoc(np.radians(dc.lat), dc.height)
+        compare_row = (0.5*np.pi - nl, np.radians(dc.lon), he)
+        index = np.where((im.station_coord == compare_row).all(axis=1))[0]
+        if len(index) != 1:
+            raise Exception('error in matching longitude between classes: ',
+                            index)
 
     rej_xdata = []
     t_half1 = im._t_step * np.arange(im.times) - 0.25 * im._t_step
