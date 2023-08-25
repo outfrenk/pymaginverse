@@ -126,7 +126,7 @@ class StationData:
         """
         if lon > 180:  # if longitude inputted between 0 and 360
             lon -= 360
-            print(f'Longitude changed from {lon+360} to {lon}')
+            print('Longitude changed from %.2f to %.2f' % (lon, lon+360))
         if lat > 90 or lat < -90 or lon > 180 or lon < -180:
             raise ValueError(f'Your latitude is {lat} and longitude is {lon};'
                              ' latitude should be between -90 and 90 degrees,'
