@@ -352,7 +352,7 @@ class FieldInversion:
                 self._maxdegree, self.nr_splines, self._t_step,
                 spat_dict['df'], spat_dict['damp_type'], spat_dict['ddt'],
                 damp_dipole=spat_dict['damp_dipole'])
-            self.spat_damp_matrix = scs.csr_matrix(self.spat_damp_matrix)
+
         if self.verbose:
             print('Calculating temporal damping matrix')
         if temp_dict['df'] != 0 and self._t_step != 0:
@@ -360,7 +360,7 @@ class FieldInversion:
                 self._maxdegree, self.nr_splines, self._t_step,
                 temp_dict['df'], temp_dict['damp_type'], temp_dict['ddt'],
                 damp_dipole=temp_dict['damp_dipole'])
-            self.temp_damp_matrix = scs.csr_matrix(self.temp_damp_matrix)
+
         self.matrix_ready = True
         if self.verbose:
             print('Calculations finished')

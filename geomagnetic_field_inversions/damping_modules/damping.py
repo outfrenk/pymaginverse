@@ -1,4 +1,5 @@
 import numpy as np
+import scipy.sparse as scs
 from scipy.integrate import newton_cotes
 from typing import Literal, Tuple
 
@@ -16,7 +17,7 @@ def damp_matrix(max_degree: int,
                 damp_type: _DampingMethods,
                 ddt: int,
                 damp_dipole: bool = True,
-                ) -> Tuple[np.ndarray, np.ndarray]:
+                ) -> Tuple[scs.csr_matrix, np.ndarray]:
     """ Creates spatial and temporal damping matrices
 
     Parameters
@@ -46,22 +47,25 @@ def damp_matrix(max_degree: int,
     """
     spl_degree = 3
     nm_total = (max_degree + 1) ** 2 - 1
-    matrix = np.zeros((nm_total * nr_splines, nm_total * nr_splines))
+    row = np.zeros(0, dtype=int)
+    col = np.zeros(0, dtype=int)
+    data = np.zeros(0)
     damp_diag = np.zeros(0)
     if damp_factor != 0:
         damp_diag = dampingtype(max_degree, damp_type, damp_dipole)
         # start combining interacting splines
         for spl1 in range(nr_splines):  # loop through splines with j
             # loop with spl2 between spl1-spl_degree and spl1+spl_degree
-            for spl2 in range(max(0, spl1 - spl_degree),
-                              min(spl1 + spl_degree + 1, nr_splines)):
+            for spl2 in range(spl1, min(spl1 + spl_degree + 1, nr_splines)):
                 # integrate cubic B-Splines
                 spl_integral = integrator(spl1, spl2, nr_splines, t_step, ddt)
                 # place damping in matrix
-                matrix[spl1 * nm_total:(spl1 + 1) * nm_total,
-                       spl2 * nm_total:(spl2 + 1) * nm_total] = \
-                    damp_factor * spl_integral * np.diag(damp_diag)
-    return matrix, damp_diag
+                row = np.append(row, np.arange(spl1 * nm_total,
+                                               (spl1 + 1) * nm_total))
+                col = np.append(col, np.arange(spl2 * nm_total,
+                                               (spl2 + 1) * nm_total))
+                data = np.append(data, damp_factor * spl_integral * damp_diag)
+    return scs.csr_matrix((data, (row, col))), damp_diag
 
 
 def integrator(spl1: int,
