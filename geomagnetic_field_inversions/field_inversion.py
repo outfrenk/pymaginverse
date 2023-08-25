@@ -109,14 +109,16 @@ class FieldInversion:
         self.nr_splines = len(array) + self._SPL_DEGREE - 1
         # location of timeknots
         self.time_knots = np.linspace(
-            array[0] - self._SPL_DEGREE * self._t_step,
-            array[-1] + self._SPL_DEGREE * self._t_step,
+            array[0] - self._SPL_DEGREE * self._t_step * (1 + 1e-12),
+            array[-1] + self._SPL_DEGREE * self._t_step * (1 + 1e-12),
             num=len(array) + 2*self._SPL_DEGREE)
         # check for equally spaced time array
         for i in range(len(array)-1):
-            if self._t_array[i+1] - self._t_array[i] != self._t_step:
-                raise Exception("Time vector has different timesteps."
-                                " Redefine vector with same timestep")
+            step = self._t_array[i+1] - self._t_array[i]
+            if abs(step - self._t_step) > self._t_step * 1e-12:
+                raise Exception("Time vector has different timesteps. "
+                                " Redefine vector with same timestep. "
+                                f"Difference: {abs(step - self._t_step)}")
         self.times = len(array)
         self.matrix_ready = False
 
@@ -314,9 +316,11 @@ class FieldInversion:
             temp_dict = {"df": 0, "damp_type": 'Br2cmb',
                          "ddt": 2, "damp_dipole": True}
         self.spat_ddt, self.temp_ddt = spat_dict['ddt'], temp_dict['ddt']
-        assert self._nm_total <= len(self.data_array), \
-            'The spherical order of the model is too high,' \
-            f' decrease maxdegree from {self._maxdegree} to a lower value.'
+        # print warning
+        if self._nm_total >= len(self.data_array):
+            print('The spherical order of the model is too high (variables:'
+                  f' {self._nm_total} vs data: {len(self.data_array)}), '
+                  f'decrease maxdegree to a lower value.')
 
         # order datatypes in a more straightforward way
         if not self.types_ready:
