@@ -56,7 +56,8 @@ def damp_matrix(max_degree: int,
         # start combining interacting splines
         for spl1 in range(nr_splines):  # loop through splines with j
             # loop with spl2 between spl1-spl_degree and spl1+spl_degree
-            for spl2 in range(spl1, min(spl1 + spl_degree + 1, nr_splines)):
+            for spl2 in range(max(spl1 - spl_degree, 0),
+                              min(spl1 + spl_degree + 1, nr_splines)):
                 # integrate cubic B-Splines
                 spl_integral = integrator(spl1, spl2, nr_splines, t_step, ddt)
                 # place damping in matrix
