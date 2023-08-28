@@ -47,9 +47,9 @@ def damp_matrix(max_degree: int,
     """
     spl_degree = 3
     nm_total = (max_degree + 1) ** 2 - 1
-    row = np.zeros(0, dtype=int)
-    col = np.zeros(0, dtype=int)
-    data = np.zeros(0)
+    row = []
+    col = []
+    data = []
     damp_diag = np.zeros(0)
     if damp_factor != 0:
         damp_diag = dampingtype(max_degree, damp_type, damp_dipole)
@@ -61,11 +61,9 @@ def damp_matrix(max_degree: int,
                 # integrate cubic B-Splines
                 spl_integral = integrator(spl1, spl2, nr_splines, t_step, ddt)
                 # place damping in matrix
-                row = np.append(row, np.arange(spl1 * nm_total,
-                                               (spl1 + 1) * nm_total))
-                col = np.append(col, np.arange(spl2 * nm_total,
-                                               (spl2 + 1) * nm_total))
-                data = np.append(data, damp_factor * spl_integral * damp_diag)
+                row.extend(range(spl1 * nm_total, (spl1 + 1) * nm_total))
+                col.extend(range(spl2 * nm_total, (spl2 + 1) * nm_total))
+                data.extend(damp_factor * spl_integral * damp_diag)
     return scs.csr_matrix((data, (row, col))), damp_diag
 
 
