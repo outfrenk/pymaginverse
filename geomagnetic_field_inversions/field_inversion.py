@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.interpolate import BSpline, interp1d
 import scipy.sparse as scs
+import scipy.linalg as scl
 import pandas as pd
 from typing import Union, Final
 from pathlib import Path
@@ -486,7 +487,7 @@ class FieldInversion:
                         ] += np.matmul(frech.T*self._bspline(j+1)
                                        / self.error_array[:, t]**2,
                                        frech*self._bspline(k+1))
-            normal_eq_splined = scs.csr_matrix(normal_eq_splined)
+
             rhs_splined = np.zeros(self.nr_splines * self._nm_total)
             for i in range(self._nm_total):
                 rhs_splined[i::self._nm_total] = np.convolve(
@@ -498,8 +499,18 @@ class FieldInversion:
 
             # solve the equations
             if self.verbose:
-                print('Solve equations')
-            update = scs.linalg.spsolve(normal_eq_splined, rhs_splined)
+                print('Prepare and solve equations')
+            # create diagonals for quick inversion
+            diag = np.zeros(((self._SPL_DEGREE + 1) * self._nm_total * 2 - 1,
+                             len(normal_eq_splined)))
+            hdiags = int((self._SPL_DEGREE + 1) * self._nm_total - 1)
+            diag[hdiags] = np.diag(normal_eq_splined)
+            for i in range(hdiags):
+                diag[i, hdiags-i:] = np.diagonal(normal_eq_splined, hdiags-i)
+                diag[-(i+1), :-(hdiags-i)] = np.diagonal(
+                    normal_eq_splined, -(hdiags-i))
+            update = scl.solve_banded((hdiags, hdiags), diag, rhs_splined)
+
             self.splined_gh = (self.splined_gh.flatten() + update).reshape(
                 self.nr_splines, self._nm_total)
             # cut of the sides that do not have physical meaning
