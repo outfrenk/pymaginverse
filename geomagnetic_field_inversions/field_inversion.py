@@ -207,23 +207,18 @@ class FieldInversion:
                 # Extract data from StationData-class
                 if self.verbose:
                     print(f'Adding {types}-type')
-                if types == 'inc':
-                    # get inclination data at specified points in time
-                    temp = data_class.fit_data[c](
-                        self._t_array[arg_min:arg_max])
-                    data_entry[c, arg_min:arg_max] = np.radians(temp)
-                elif types == 'dec':
-                    # get declination data at specified points in time
-                    temp = data_class.fit_data[c](
-                        self._t_array[arg_min:arg_max])
-                    data_entry[c, arg_min:arg_max] = np.radians(temp)
-                else:
-                    data_entry[c, arg_min:arg_max] = data_class.fit_data[c](
-                        self._t_array[arg_min:arg_max])
+                # temporary data and error storage
+                temp_d = data_class.fit_data[c](self._t_array[arg_min:arg_max])
+                temp_e = data_class.data[c][2]
+                if types == 'inc' or types == 'dec':
+                    # transform incl/decl data to radians
+                    temp_d = np.radians(temp_d)
+                    temp_e = np.radians(temp_e)
+
+                # add to data array
+                data_entry[c, arg_min:arg_max] = temp_d
                 # sample errors for time_array
-                f = interp1d(data_class.data[c][0],
-                             data_class.data[c][2],
-                             kind=error_interp)
+                f = interp1d(data_class.data[c][0], temp_e, kind=error_interp)
                 error_entry[c, arg_min:arg_max] = f(
                     self._t_array[arg_min:arg_max])
                 # count occurrence datatype and add to list

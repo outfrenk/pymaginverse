@@ -172,7 +172,7 @@ class StationData:
             should be 1.000.000.
         error
             error of the data, which should be list or numpy array with length
-            equal to length of time vector.
+            equal to length of time vector. Either nT or degrees
 
         Creates or modifies
         -------------------
