@@ -369,7 +369,7 @@ class FieldInversion:
             print('Calculations finished')
 
     def run_inversion(self,
-                      x0: Union[np.ndarray, list],
+                      x0: np.ndarray,
                       max_iter: int = 10,
                       rej_crits: np.ndarray = None
                       ) -> None:
@@ -379,8 +379,9 @@ class FieldInversion:
         Parameters
         ----------
         x0
-            starting model gaussian coefficients, should be a float or
-            as long as (spherical_order + 1)^2 - 1
+            starting model gaussian coefficients, should have length:
+            (spherical_order + 1)^2 - 1 or
+            (spherical_order + 1)^2 - 1 X nr_splines if changing through time
         max_iter
             maximum amount of iterations
         rej_crits
@@ -409,23 +410,28 @@ class FieldInversion:
                             'Please run prepare_inversion first.')
         if rej_crits is not None:
             self.rejected = np.zeros(max_iter)
-
+        # initiate array counting residual per type
         self.res_iter = np.zeros((max_iter+1, 8))
         # initiate splined values with starting model
         if self.verbose:
             print('Setting up starting model')
-        assert len(x0) == self._nm_total, \
-            f'x0 has incorrect shape: {len(x0)},'\
-            f' it should have length {self._nm_total}'
         self.splined_gh = np.zeros((self.nr_splines, self._nm_total))
-        self.splined_gh[:] = x0
+        if x0.ndim == 1 and len(x0) == self._nm_total:
+            self.splined_gh[:] = x0
+        elif x0.shape == (self.nr_splines, self._nm_total):
+            self.splined_gh = x0
+        else:
+            raise Exception(f'x0 has incorrect shape: {x0.shape}. \n'
+                            f'It should have shape ({self._nm_total},) or'
+                            f' ({self.nr_splines}, {self._nm_total})')
+        # initiate accept_matrix (default accept all) + diagonal damping matrix
         self.accept_matrix = np.ones((len(self.types_sorted), self.times))
         spacing = self._nm_total*self._SPL_DEGREE
         sparse_damp = scs.dia_matrix(
             (self.damp_matrix,
              np.linspace(spacing, -spacing, 2*self._SPL_DEGREE+1)), shape=
             (len(self.damp_matrix[0]), len(self.damp_matrix[0])))
-        for it in range(max_iter):
+        for it in range(max_iter):  # start outer iteration loop
             if self.verbose:
                 print(f'Start iteration {it+1}')
             rhs_matrix = np.zeros((self.times, self._nm_total))
@@ -439,7 +445,7 @@ class FieldInversion:
                                extrapolate=False)(self._t_array)
 
             # Calculate frechet and residual matrix for all times
-            # and apply time constraint
+            # and apply time constraint (time_cover)
             if self.verbose:
                 print('Create forward and residual observations')
             forwobs_matrix = fwtools.forward_obs(
@@ -453,7 +459,7 @@ class FieldInversion:
                 forwobs_matrixrs, self.data_array, self.types_sorted)
             res_matrix *= self.time_cover
 
-            # reject data
+            # reject data if inputted through accept_matrix
             use_data_boolean = self.time_cover.copy()
             if rej_crits is not None:
                 self.accept_matrix = rejection.reject_data(
@@ -512,18 +518,18 @@ class FieldInversion:
                 diag[i, hdiags-i:] = np.diagonal(normal_eq_splined, hdiags-i)
                 diag[-(i+1), :-(hdiags-i)] = np.diagonal(
                     normal_eq_splined, -(hdiags-i))
-            # add damping
+            # add damping to required diagonals
             damp_diags = np.linspace(hdiags-spacing, hdiags+spacing,
                                      2*self._SPL_DEGREE + 1, dtype=int)
             diag[damp_diags] += self.damp_matrix
-            # add spatial and temporal damping to the vector
+            # add damping to the vector
             rhs_splined += rhs_damp
             # solve banded system
             update = scl.solve_banded((hdiags, hdiags), diag, rhs_splined)
 
             self.splined_gh = (self.splined_gh.flatten() + update).reshape(
                 self.nr_splines, self._nm_total)
-            # cut of the sides that do not have physical meaning
+            # despline Gauss coefficients and form function
             spline = BSpline(t=self.time_knots, c=self.splined_gh,
                              k=3, axis=0, extrapolate=False)
             self.unsplined_iter_gh.append(spline)
