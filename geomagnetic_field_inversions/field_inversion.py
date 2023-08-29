@@ -242,7 +242,7 @@ class FieldInversion:
                 sd = 0.
                 station_entry = np.array([np.radians(90-data_class.lat),
                                           np.radians(data_class.lon),
-                                          6371.2])
+                                          6371.2+data_class.height*1e-3])
 
             # add data to attributes of the class if all is fine
             if self.verbose:
@@ -627,7 +627,7 @@ class FieldInversion:
                       max_iter: int = 10,
                       rej_crits: np.ndarray = None,
                       basedir: Union[str, Path] = '.',
-                      overwrite: bool = False
+                      overwrite: bool = True
                       ) -> None:
         """ Sweep through damping parameters to find ideal set
 
