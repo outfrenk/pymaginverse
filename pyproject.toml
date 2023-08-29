@@ -1,8 +1,11 @@
 [tool.poetry]
 name = "geomagnetic-field-inversions"
-version = "0.1.0"
+version = "1.0.0"
 description = "Python Library performing Geomagnetic Field inversions for (paleo)magnetic data"
-authors = ["Frenk Out <outfrenk@gmail.com>"]
+authors = ["Frenk Out <outfrenk@gmail.com>",
+		   "Liz van Grinsven",
+		   "Monika Korte",
+		   "Lennart de Groot"]
 license = "MIT License"
 readme = "README.md"
 
