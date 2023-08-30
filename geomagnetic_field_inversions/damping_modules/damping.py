@@ -18,7 +18,7 @@ def damp_matrix(max_degree: int,
                 ddt: int,
                 damp_dipole: bool = True,
                 ) -> Tuple[scs.csr_matrix, np.ndarray]:
-    """ Creates spatial and temporal damping matrices
+    """ Creates spatial and temporal damping matrices through diagonals
 
     Parameters
     ----------
@@ -47,9 +47,6 @@ def damp_matrix(max_degree: int,
     """
     spl_degree = 3
     nm_total = (max_degree + 1) ** 2 - 1
-    # row = []
-    # col = []
-    # data = []
     damp_diag = np.zeros(0)
     matrix_diag = np.zeros((2 * spl_degree + 1, nr_splines * nm_total))
     if damp_factor != 0:
@@ -62,10 +59,9 @@ def damp_matrix(max_degree: int,
                 # integrate cubic B-Splines
                 spl_integral = integrator(spl1, spl2, nr_splines, t_step, ddt)
                 # place damping in matrix
-                # row.extend(range(spl1 * nm_total, (spl1 + 1) * nm_total))
-                # col.extend(range(spl2 * nm_total, (spl2 + 1) * nm_total))
-                # data.extend(damp_factor * spl_integral * damp_diag)
-                matrix_diag[spl2-spl1+spl_degree, spl1*nm_total:(spl1+1)*nm_total] = damp_factor * spl_integral * damp_diag
+                matrix_diag[spl2-spl1+spl_degree,
+                            spl1*nm_total:(spl1+1)*nm_total
+                ] = damp_factor * spl_integral * damp_diag
     return matrix_diag, damp_diag
 
 
