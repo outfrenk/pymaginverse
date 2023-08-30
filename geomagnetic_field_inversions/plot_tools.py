@@ -8,7 +8,7 @@ import cartopy.crs as ccrs
 from .field_inversion import FieldInversion
 from .forward_modules import frechet, fwtools
 from .data_prep import StationData
-from .tools import bsplines, geod2geoc
+from .tools import bsplines, geod2geoc, field_inversion_onestep
 
 _DataTypes = Literal['x', 'y', 'z', 'hor', 'inc', 'dec', 'int']
 
@@ -235,9 +235,10 @@ def plot_dampnorm(ax: plt.Axes,
 
 
 def plot_world(axes: Tuple[plt.Axes, plt.Axes, plt.Axes],
-               im: FieldInversion,
+               im: Union[FieldInversion,
+                         field_inversion_onestep.FieldInversion_notime],
                proj: ccrs,
-               time: float,
+               time: float = None,
                cmb: bool = False,
                it: int = -1,
                contour_kw: dict = None
@@ -255,7 +256,8 @@ def plot_world(axes: Tuple[plt.Axes, plt.Axes, plt.Axes],
         Projection type used for plotting on a world map. Should be an instance
         of cartopy.crs
     time
-        Plotting time
+        Plotting time. If time is None, assuming im is an instance of
+        field_inversion_onestep.FieldInversion_notime
     cmb
         Boolean that determines whether to plot the field at the cmb
     it
@@ -264,7 +266,10 @@ def plot_world(axes: Tuple[plt.Axes, plt.Axes, plt.Axes],
     contour_kw
         optional plotting parameters
     """
-    coeff = im.unsplined_iter_gh[it](time)[np.newaxis, :]
+    if time is None:
+        coeff = im.unsplined_iter_gh[it][np.newaxis, :]
+    else:
+        coeff = im.unsplined_iter_gh[it](time)[np.newaxis, :]
     # make a grid of coordinates and apply forward model
     forwlat = np.arange(-89, 90, 1)
     forwlon = np.arange(0, 360, 1)
