@@ -366,7 +366,8 @@ class FieldInversion:
     def run_inversion(self,
                       x0: np.ndarray,
                       max_iter: int = 10,
-                      rej_crits: np.ndarray = None
+                      rej_crits: np.ndarray = None,
+                      path: Path = None,
                       ) -> None:
         """
         Runs the iterative inversion
@@ -385,6 +386,10 @@ class FieldInversion:
             components. Criteria can be made time dependent by providing
             rejection criteria for every timestep. In that case shape should
             be (7, len(time vector))). inc/dec in radians!
+        path
+            path to location where to save normal_eq_splined and damp_matrix
+            for calculating optional covariance and resolution matrix.
+            If not provided, matrices are not solved. See tools/covar.py
 
         Creates or modifies
         -------------------
@@ -509,6 +514,7 @@ class FieldInversion:
                              len(normal_eq_splined)))
             hdiags = int((self._SPL_DEGREE + 1) * self._nm_total - 1)
             diag[hdiags] = np.diag(normal_eq_splined)
+            # upper to lower diagonal
             for i in range(hdiags):
                 diag[i, hdiags-i:] = np.diagonal(normal_eq_splined, hdiags-i)
                 diag[-(i+1), :-(hdiags-i)] = np.diagonal(
@@ -557,6 +563,12 @@ class FieldInversion:
                 self.temp_norm = damping.damp_norm(
                     self.temp_fac, self.splined_gh, self.temp_ddt, self._t_step
                 )
+                if path is not None:
+                    if self.verbose:
+                        print('Saving matrices')
+                    np.save(path / 'normal_eq_splined', normal_eq_splined)
+                    np.save(path / 'sparse_damp', sparse_damp)
+
                 if self.verbose:
                     print('Finished inversion')
 

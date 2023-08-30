@@ -245,7 +245,8 @@ class FieldInversion_notime:
     def run_inversion(self,
                       x0: np.ndarray,
                       max_iter: int = 10,
-                      rej_crits: np.ndarray = None
+                      rej_crits: np.ndarray = None,
+                      path: Path = None
                       ) -> None:
         """
         Runs the iterative inversion
@@ -261,6 +262,10 @@ class FieldInversion_notime:
             Optional rejection criteria. Should be a length 7 array containing
             rejection criteria for x, y, z, hor, int, incl, and decl
             components. inc/dec in radians!
+        path
+            path to location where to save normal_eq for calculating optional
+            covariance and resolution matrix.
+            If not provided, matrix are not saved. See tools/covar.py
 
         Creates or modifies
         -------------------
@@ -365,6 +370,11 @@ class FieldInversion_notime:
                     res_weight, self.types_sorted, self.count_type)
                 if self.verbose:
                     print('Residual is %.2f' % self.res_iter[it+1, 7])
+                if path is not None:
+                    if self.verbose:
+                        print('Saving matrix')
+                    np.save(path / 'normal_eq', normal_eq)
+                if self.verbose:
                     print('Finished inversion')
 
     def save_coefficients(self,
