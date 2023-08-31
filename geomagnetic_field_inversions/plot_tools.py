@@ -89,7 +89,8 @@ def plot_coeff(ax: plt.Axes,
                im: FieldInversion,
                degree: int = None,
                index: list = None,
-               it: int = -1
+               it: int = -1,
+               std: np.ndarray = None,
                ) -> plt.Axes:
     """ Plots Gaussian coefficients through time
 
@@ -109,6 +110,9 @@ def plot_coeff(ax: plt.Axes,
     it
         Determines which iteration is used to plot coefficients. Defaults to
         final iteration.
+    std
+        array containing the standard deviations of the Gauss coefficients. As
+        produced by stdev.py.
     """
     # TODO: add uncertainty bars
     linestyles = ['solid', 'dotted', 'dashed', 'dashdot',
@@ -132,10 +136,18 @@ def plot_coeff(ax: plt.Axes,
 
     labels = [labels[i] for i in index]
     for i, item in enumerate(index):
+        if std is not None:
+            ax.errorbar(im.t_array,
+                        im.unsplined_iter_gh[it](im.t_array)[:, item],
+                        yerr=std[:, item], capsize=4,
+                        linestyle=linestyles[i % len(linestyles)],
+                        color=colorstyles[i % len(colorstyles)],)
         ax.plot(im.t_array, im.unsplined_iter_gh[it](im.t_array)[:, item],
                 linestyle=linestyles[i % len(linestyles)],
                 marker=markerstyles[i % len(markerstyles)],
-                color=colorstyles[i % len(colorstyles)], label=labels[i])
+                color=colorstyles[i % len(colorstyles)],
+                markersize=3, label=labels[i])
+
     return ax
 
 

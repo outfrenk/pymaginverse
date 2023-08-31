@@ -389,7 +389,7 @@ class FieldInversion:
         path
             path to location where to save normal_eq_splined and damp_matrix
             for calculating optional covariance and resolution matrix.
-            If not provided, matrices are not solved. See tools/covar.py
+            If not provided, matrices are not solved. See tools/stdev.py
 
         Creates or modifies
         -------------------
@@ -566,8 +566,22 @@ class FieldInversion:
                 if path is not None:
                     if self.verbose:
                         print('Saving matrices')
-                    np.save(path / 'normal_eq_splined', normal_eq_splined)
-                    np.save(path / 'sparse_damp', sparse_damp)
+                    save_diag = np.zeros(
+                        ((self._SPL_DEGREE + 1) * self._nm_total * 2 - 1,
+                         len(normal_eq_splined)))
+                    save_diag[hdiags] = np.diag(normal_eq_splined)
+                    # upper to lower diagonal
+                    for i in range(hdiags):
+                        save_diag[i, hdiags - i:] = np.diagonal(
+                            normal_eq_splined, hdiags - i)
+                        save_diag[-(i + 1), :-(hdiags - i)] = np.diagonal(
+                            normal_eq_splined, -(hdiags - i))
+                    dia_matrix = scs.dia_matrix(
+                        (save_diag, np.linspace(hdiags, -hdiags, 2*hdiags + 1)
+                         ), shape=(len(self.damp_matrix[0]),
+                                   len(self.damp_matrix[0])))
+                    scs.save_npz(path / 'forward_matrix', dia_matrix)
+                    scs.save_npz(path / 'damp_matrix', sparse_damp)
 
                 if self.verbose:
                     print('Finished inversion')

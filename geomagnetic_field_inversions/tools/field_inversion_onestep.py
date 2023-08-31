@@ -265,7 +265,7 @@ class FieldInversion_notime:
         path
             path to location where to save normal_eq for calculating optional
             covariance and resolution matrix.
-            If not provided, matrix are not saved. See tools/covar.py
+            If not provided, matrix are not saved. See tools/stdev.py
 
         Creates or modifies
         -------------------
