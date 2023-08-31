@@ -26,6 +26,7 @@ numba = "^0.57.1"
 [tool.poetry.group.test]
 optional= true
 [tool.poetry.group.test.dependencies]
+pytest = "^7.4.0"
 
 [build-system]
 requires = ["poetry-core"]
