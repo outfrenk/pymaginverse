@@ -6,9 +6,9 @@ def reject_data(residual: np.ndarray,
                 rej_crits: np.ndarray
                 ) -> np.ndarray:
     if rej_crits.shape != (7,) and rej_crits.shape != (7, len(residual[0])):
-        raise Exception('rejection criteria incorrectly inputted!'
-                        'should be an array with 7 rows with optional columns'
-                        'for time dependence. Shape is now: ', rej_crits.shape)
+        raise Exception('rejection criteria incorrectly inputted! \t'
+                        'Should be an array with 7 rows with optional columns '
+                        'for time dependence. Shape is now:', rej_crits.shape)
     if len(types_sort) != len(residual):
         raise Exception(f'length types array does not match length residual; '
                         f'{len(types_sort)} vs {len(residual)}')

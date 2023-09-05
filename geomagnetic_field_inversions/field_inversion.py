@@ -70,8 +70,6 @@ class FieldInversion:
         self.station_coord = np.zeros((0, 3))
         self.gcgd_conv = np.zeros((0, 2))
         self.damp_matrix = np.empty(0)
-        self.spat_fac = np.empty(0)  # contains damping factors
-        self.temp_fac = np.empty(0)
         self.spat_norm = np.empty(0)
         self.temp_norm = np.empty(0)
         self.spat_ddt = 0
@@ -92,6 +90,8 @@ class FieldInversion:
         # determines the maximum number of spherical coefficients
         self._nm_total = int((degree+1)**2 - 1)
         self._maxdegree = int(degree)
+        self.spat_fac = np.zeros(self._nm_total)  # contains damping factors
+        self.temp_fac = np.zeros(self._nm_total)
         self.matrix_ready = False
 
     @property
@@ -240,7 +240,7 @@ class FieldInversion:
                           ' no translation required.')
                 cd = 1.  # this will not change dx and dz when forming frechet
                 sd = 0.
-                station_entry = np.array([np.radians(90-data_class.lat),
+                station_entry = np.array([0.5*np.pi-np.radians(data_class.lat),
                                           np.radians(data_class.lon),
                                           6371.2+data_class.height*1e-3])
 
@@ -557,12 +557,14 @@ class FieldInversion:
                 if self.verbose:
                     print('Residual is %.2f' % self.res_iter[it+1, 7])
                     print('Calculating spatial and temporal norms')
-                self.spat_norm = damping.damp_norm(
-                    self.spat_fac, self.splined_gh, self.spat_ddt, self._t_step
-                )
-                self.temp_norm = damping.damp_norm(
-                    self.temp_fac, self.splined_gh, self.temp_ddt, self._t_step
-                )
+                if np.any(self.spat_fac != 0):
+                    self.spat_norm = damping.damp_norm(
+                        self.spat_fac, self.splined_gh, self.spat_ddt,
+                        self._t_step)
+                if np.any(self.temp_fac != 0):
+                    self.temp_norm = damping.damp_norm(
+                        self.temp_fac, self.splined_gh, self.temp_ddt,
+                        self._t_step)
                 if path is not None:
                     if self.verbose:
                         print('Saving matrices')

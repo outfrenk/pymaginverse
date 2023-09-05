@@ -1,5 +1,4 @@
 import numpy as np
-import scipy.sparse as scs
 from scipy.integrate import newton_cotes
 from typing import Literal, Tuple
 
@@ -17,7 +16,7 @@ def damp_matrix(max_degree: int,
                 damp_type: _DampingMethods,
                 ddt: int,
                 damp_dipole: bool = True,
-                ) -> Tuple[scs.csr_matrix, np.ndarray]:
+                ) -> Tuple[np.ndarray, np.ndarray]:
     """ Creates spatial and temporal damping matrices through diagonals
 
     Parameters
@@ -47,7 +46,8 @@ def damp_matrix(max_degree: int,
     """
     spl_degree = 3
     nm_total = (max_degree + 1) ** 2 - 1
-    damp_diag = np.zeros(0)
+    damp_diag = np.zeros(nm_total)
+
     matrix_diag = np.zeros((2 * spl_degree + 1, nr_splines * nm_total))
     if damp_factor != 0:
         damp_diag = dampingtype(max_degree, damp_type, damp_dipole)
@@ -61,7 +61,7 @@ def damp_matrix(max_degree: int,
                 # place damping in matrix
                 matrix_diag[spl2-spl1+spl_degree,
                             spl1*nm_total:(spl1+1)*nm_total
-                ] = damp_factor * spl_integral * damp_diag
+                            ] = damp_factor * spl_integral * damp_diag
     return matrix_diag, damp_diag
 
 

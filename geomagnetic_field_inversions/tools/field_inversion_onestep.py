@@ -184,8 +184,8 @@ class FieldInversion_notime:
             if self.verbose:
                 print(f'Data of {name} is added to class')
             self.dcname.append(name)
-            self.data_array = np.vstack((self.data_array, data_entry))
-            self.error_array = np.vstack((self.error_array, error_entry))
+            self.data_array = np.concatenate((self.data_array, data_entry))
+            self.error_array = np.concatenate((self.error_array, error_entry))
             self.types.append(types_entry)  # is now one long list
             self.station_coord = np.vstack((self.station_coord, station_entry))
             self.gcgd_conv = np.vstack((self.gcgd_conv, np.array([cd, sd])))
@@ -303,12 +303,12 @@ class FieldInversion_notime:
             # and apply time constraint (time_cover)
             if self.verbose:
                 print('Create forward and residual observations')
-            forwobs_matrix = fwtools.forward_obs(self.unsplined_iter_gh[it],
-                                                 self.station_frechet,
-                                                 reshape=False)
+            forwobs_matrix = fwtools.forward_obs(
+                self.unsplined_iter_gh[it][np.newaxis, :],
+                self.station_frechet, reshape=False)
             frech_matrix = frechet.frechet_types(
                 self.station_frechet, self.types_sorted, forwobs_matrix)
-            forwobs_matrixrs = forwobs_matrix.flatten()[self.types_sorted]
+            forwobs_matrixrs = forwobs_matrix.T.flatten()[self.types_sorted]
             res_matrix = fwtools.residual_obs(
                 forwobs_matrixrs, self.data_array, self.types_sorted)
 
@@ -325,7 +325,8 @@ class FieldInversion_notime:
                 use_data_boolean = self.accept_matrix
 
             # apply rejection and time constraint to matrices
-            frech_matrix *= np.repeat(use_data_boolean, self._nm_total, axis=1)
+            frech_matrix *= np.repeat(use_data_boolean[:, np.newaxis],
+                                      self._nm_total, axis=1)
             res_matrix *= use_data_boolean
             res_weight = res_matrix / self.error_array
             # sum residuals
@@ -358,9 +359,11 @@ class FieldInversion_notime:
             if it == max_iter - 1:
                 if self.verbose:
                     print('Calculate residual last iteration')
-                forwobs_matrixrs = fwtools.forward_obs(
-                    self.unsplined_iter_gh[it+1], self.station_frechet,
-                    reshape=True)[self.types_sorted]
+                forwobs_matrix = fwtools.forward_obs(
+                    self.unsplined_iter_gh[it][np.newaxis, :],
+                    self.station_frechet, reshape=False)
+                forwobs_matrixrs = forwobs_matrix.T.flatten(
+                    )[self.types_sorted]
                 res_matrix = fwtools.residual_obs(
                     forwobs_matrixrs, self.data_array, self.types_sorted)
                 res_matrix *= use_data_boolean
