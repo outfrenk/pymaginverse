@@ -22,7 +22,9 @@ setuptools.setup(
                       'tqdm',
                       'pyshtools',
                       'cartopy',
-					  'numba'],
+					  'numba',
+                      'openpyxl',
+                      'pytest'],
     # TODO: Update license
     classifiers=['License :: BSD2 License',
                  'Programming Language :: Python :: 3 :: Only',

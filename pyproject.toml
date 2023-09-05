@@ -23,6 +23,9 @@ jupyter = "^1.0.0"
 ipykernel = "^6.25.1"
 numba = "^0.57.1"
 
+[tool.poetry.group.tutorial.dependencies]
+openpyxl = "^3.1.2"
+
 [tool.poetry.group.test]
 optional= true
 [tool.poetry.group.test.dependencies]
