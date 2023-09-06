@@ -8,7 +8,7 @@ import cartopy.crs as ccrs
 from .field_inversion import FieldInversion
 from .forward_modules import frechet, fwtools
 from .data_prep import StationData
-from .tools import bsplines, geod2geoc, field_inversion_onestep
+from .tools import bsplines, geod2geoc, FieldInversionNoTime
 
 _DataTypes = Literal['x', 'y', 'z', 'hor', 'inc', 'dec', 'int']
 
@@ -48,7 +48,7 @@ def plot_station(axes: Union[list, plt.Axes],
 
 
 def plot_residuals(ax: plt.Axes,
-                   im: FieldInversion,
+                   im: Union[FieldInversion, FieldInversionNoTime],
                    **plt_kwargs
                    ) -> plt.Axes:
     """ Plots the residuals of the geomagnetic field inversion per iteration
@@ -86,13 +86,15 @@ def plot_residuals(ax: plt.Axes,
 
 
 def plot_coeff(ax: plt.Axes,
-               im: FieldInversion,
+               im: Union[FieldInversion, FieldInversionNoTime],
                degree: int = None,
                index: list = None,
-               it: int = -1,
+               it_time: int = -1,
                std: np.ndarray = None,
+               plot_iter: bool = False,
                ) -> plt.Axes:
-    """ Plots Gaussian coefficients through time
+    """ Plots Gaussian coefficients through time or iteration.
+    Note: FieldInversionNoTime only works with plot_iter=True
 
     Parameters
     ----------
@@ -102,17 +104,22 @@ def plot_coeff(ax: plt.Axes,
         An instance of the `geomagnetic_field_inversion` class. This function
         uses the unsplined_iter_gh, and t_array attributes.
     degree
-        integer of degree of all g's and h's to print.
+        Integer of degree of all g's and h's to print.
         If given you do not have to use index.
     index
         List containing the index of the gaussian coefficients to plot,
         assuming ordering like: g^0_1, g^1_1, h^1_1, g^0_2, etc..
-    it
+    it_time
         Determines which iteration is used to plot coefficients. Defaults to
-        final iteration.
+        final iteration. if plot_iter is True, it_time indicates which timestep
+        to plot. Defaults to final time.
     std
-        array containing the standard deviations of the Gauss coefficients. As
+        Array containing the standard deviations of the Gauss coefficients. As
         produced by stdev.py.
+    plot_iter
+        Boolean indicating whether to plot Gauss coefficients against inversion
+        iterations (True) or against time for the chosen iteration (False).
+        Default option is set to False.
     """
     # TODO: add uncertainty bars
     linestyles = ['solid', 'dotted', 'dashed', 'dashdot',
@@ -136,17 +143,34 @@ def plot_coeff(ax: plt.Axes,
 
     labels = [labels[i] for i in index]
     for i, item in enumerate(index):
-        if std is not None:
-            ax.errorbar(im.t_array,
-                        im.unsplined_iter_gh[it](im.t_array)[:, item],
-                        yerr=std[:, item], capsize=4,
-                        linestyle=linestyles[i % len(linestyles)],
-                        color=colorstyles[i % len(colorstyles)],)
-        ax.plot(im.t_array, im.unsplined_iter_gh[it](im.t_array)[:, item],
-                linestyle=linestyles[i % len(linestyles)],
-                marker=markerstyles[i % len(markerstyles)],
-                color=colorstyles[i % len(colorstyles)],
-                markersize=3, label=labels[i])
+        if plot_iter:
+            if isinstance(im, FieldInversion):
+                coeff = np.zeros(len(im.unsplined_iter_gh))
+                for c in range(len(coeff)):
+                    coeff[c] = im.unsplined_iter_gh[c](
+                        im.t_array[it_time])[item]
+            elif isinstance(im, FieldInversionNoTime):
+                coeff = im.unsplined_iter_gh[:, item]
+            else:
+                raise Exception('Class not found')
+            ax.plot(np.arange(len(coeff)), coeff,
+                    linestyle=linestyles[i % len(linestyles)],
+                    marker=markerstyles[i % len(markerstyles)],
+                    color=colorstyles[i % len(colorstyles)],
+                    markersize=3, label=labels[i])
+        else:
+            if std is not None:
+                ax.errorbar(im.t_array,
+                            im.unsplined_iter_gh[it_time](im.t_array)[:, item],
+                            yerr=std[:, item], capsize=4,
+                            linestyle=linestyles[i % len(linestyles)],
+                            color=colorstyles[i % len(colorstyles)],)
+            ax.plot(im.t_array,
+                    im.unsplined_iter_gh[it_time](im.t_array)[:, item],
+                    linestyle=linestyles[i % len(linestyles)],
+                    marker=markerstyles[i % len(markerstyles)],
+                    color=colorstyles[i % len(colorstyles)],
+                    markersize=3, label=labels[i])
 
     return ax
 
@@ -247,8 +271,7 @@ def plot_dampnorm(ax: plt.Axes,
 
 
 def plot_world(axes: Tuple[plt.Axes, plt.Axes, plt.Axes],
-               im: Union[FieldInversion,
-                         field_inversion_onestep.FieldInversion_notime],
+               im: Union[FieldInversion, FieldInversionNoTime],
                proj: ccrs,
                time: float = None,
                cmb: bool = False,

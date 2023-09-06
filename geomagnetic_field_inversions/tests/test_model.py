@@ -3,15 +3,15 @@ import numpy as np
 from pathlib import Path
 import os
 
-from geomagnetic_field_inversions.data_prep import StationData
-from geomagnetic_field_inversions.field_inversion import FieldInversion
+from geomagnetic_field_inversions import StationData, FieldInversion
 from geomagnetic_field_inversions.forward_modules import fwtools, frechet
 
 SCENARIOS = [(3, [0, 1, 2], 2), (3, [4, 5, 6], 40),
              (10, [0, 1, 2], 2), (10, [4, 5, 6], 40)]
 
 
-def read_igrf(degree):
+def read_igrf(degree: int) -> (np.ndarray, np.ndarray):
+    """ Reads IGRF data"""
     nm_total = (degree+1)**2 - 1
     path = Path(os.path.dirname(__file__))
     f = open(path / 'IGRFcoeff.txt', 'r')
@@ -29,7 +29,29 @@ def read_igrf(degree):
 
 
 @pytest.mark.parametrize("maxdegree, types, max_iter", SCENARIOS)
-def test_model(maxdegree, types, max_iter, latp=15, lonp=15):
+def test_model(maxdegree: int,
+               types: list,
+               max_iter: int,
+               latp: int = 15,
+               lonp: int = 15):
+    """ Tests the FieldInversion class
+
+    Parameters
+    ----------
+    maxdegree
+        maximum spherical harmonics degree
+    types
+        list of integers corresponding to datatypes to be tested.
+        [x, y, z, hor, int, incl, decl]
+    max_iter
+        maximum amount of iterations for inversion
+    latp
+        number of points in latitudinal direction
+    lonp
+        number of points in longitudinal direction
+
+    If test successful returns: 'test succesfull'
+    """
     datatypes = ['x', 'y', 'z', 'hor', 'int', 'inc', 'dec']
     errortypes = [1, 1, 1, 1, 1, np.radians(1), np.radians(1)]
     # load coefficients

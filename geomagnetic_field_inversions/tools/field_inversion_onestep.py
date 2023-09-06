@@ -10,7 +10,7 @@ from ..forward_modules import frechet, fwtools, rejection
 from ..tools import geod2geoc as g2g
 
 
-class FieldInversion_notime:
+class FieldInversionNoTime:
     """
     Calculates geomagnetic field coefficients at one time based on inputted
     data and damping parameters using the approach of Korte et al. (????)
