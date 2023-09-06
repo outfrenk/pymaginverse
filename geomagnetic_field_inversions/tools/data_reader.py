@@ -1,5 +1,6 @@
 import numpy as np
 from pathlib import Path
+import os
 
 
 def read_write(path: Path,
@@ -40,8 +41,6 @@ def read_write(path: Path,
 
 def read_data(path: Path,
               datafile: str,
-              outputfile: str = None,
-              overwrite: bool = True,
               ) -> (np.ndarray, np.ndarray):
     """ Prepares data using the format of Korte et al.
 
@@ -51,10 +50,6 @@ def read_data(path: Path,
         Path to your file with data (and to be created output file)
     datafile
         Name of your data file
-    outputfile
-        Optional name of output file
-    overwrite
-        Whether to overwrite existing output files. Defaults to True
 
     Returns
     -------
@@ -65,10 +60,8 @@ def read_data(path: Path,
         per row (one location): list of lists per datatype through time:
         Each list (length time) contains time, data, error, type
     """
-    if outputfile is None:
-        outputfile = 'output'
-    if overwrite or not (path / outputfile).is_file():
-        read_write(path, datafile, outputfile)
+    outputfile = 'OUTPUTFILE.txt'
+    read_write(path, datafile, outputfile)
 
     data = np.loadtxt(path / outputfile, delimiter=',')
     # lat, long, height (m) above geoid
@@ -88,4 +81,6 @@ def read_data(path: Path,
             data_per_type[t] = data_type[
                 data_type[:, 0].argsort()]  # order through time
         stations[i] = data_per_type
+    # remove file
+    os.remove(path / outputfile)
     return unique_coords, stations
