@@ -9,13 +9,13 @@ The library consists of three main modules:
 - `geomagnetic_field_inversions/field_inversion.py`: contains the `FieldInversion`-class that performs the actual inversion of geomagnetic field data. It requires, besides the time vector over which the inversion will take place, instances of `StationData` as minimum input.
 - `geomagnetic_field_inversions/plot_tools.py`: contains basic plot tools for visualising data produced by the `FieldInversion`-class.
 The `plot_tools.py` method allows easy plotting of:
-- residuals
-- Gauss coefficients through time
-- spatial and temporal damping norms through time
-- powerspectra and secular variation
-- residual vs model norm plots (for choosing damping parameters)
-- forward geomagnetic field maps of the world
-- forward modeled data at specific locations
+  - residuals
+  - Gauss coefficients through time and iteration
+  - spatial and temporal damping norms through time
+  - powerspectra and secular variation
+  - residual vs model norm plots (for choosing damping parameters)
+  - forward geomagnetic field maps of the world
+  - forward modeled data at specific locations
 
 ## Installation
 You can install the library in two ways:
