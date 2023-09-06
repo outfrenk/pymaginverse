@@ -8,7 +8,7 @@ import cartopy.crs as ccrs
 from .field_inversion import FieldInversion
 from .forward_modules import frechet, fwtools
 from .data_prep import StationData
-from .tools import bsplines, geod2geoc
+from .tools import bsplines, geod2geoc, FieldInversionNoTime
 
 _DataTypes = Literal['x', 'y', 'z', 'hor', 'inc', 'dec', 'int']
 
@@ -48,7 +48,7 @@ def plot_station(axes: Union[list, plt.Axes],
 
 
 def plot_residuals(ax: plt.Axes,
-                   im: FieldInversion,
+                   im: Union[FieldInversion, FieldInversionNoTime],
                    **plt_kwargs
                    ) -> plt.Axes:
     """ Plots the residuals of the geomagnetic field inversion per iteration
@@ -86,12 +86,15 @@ def plot_residuals(ax: plt.Axes,
 
 
 def plot_coeff(ax: plt.Axes,
-               im: FieldInversion,
+               im: Union[FieldInversion, FieldInversionNoTime],
                degree: int = None,
                index: list = None,
-               it: int = -1
+               it_time: int = -1,
+               std: np.ndarray = None,
+               plot_iter: bool = False,
                ) -> plt.Axes:
-    """ Plots Gaussian coefficients through time
+    """ Plots Gaussian coefficients through time or iteration.
+    Note: FieldInversionNoTime only works with plot_iter=True
 
     Parameters
     ----------
@@ -101,14 +104,22 @@ def plot_coeff(ax: plt.Axes,
         An instance of the `geomagnetic_field_inversion` class. This function
         uses the unsplined_iter_gh, and t_array attributes.
     degree
-        integer of degree of all g's and h's to print.
+        Integer of degree of all g's and h's to print.
         If given you do not have to use index.
     index
         List containing the index of the gaussian coefficients to plot,
         assuming ordering like: g^0_1, g^1_1, h^1_1, g^0_2, etc..
-    it
+    it_time
         Determines which iteration is used to plot coefficients. Defaults to
-        final iteration.
+        final iteration. if plot_iter is True, it_time indicates which timestep
+        to plot. Defaults to final time.
+    std
+        Array containing the standard deviations of the Gauss coefficients. As
+        produced by stdev.py.
+    plot_iter
+        Boolean indicating whether to plot Gauss coefficients against inversion
+        iterations (True) or against time for the chosen iteration (False).
+        Default option is set to False.
     """
     # TODO: add uncertainty bars
     linestyles = ['solid', 'dotted', 'dashed', 'dashdot',
@@ -132,10 +143,35 @@ def plot_coeff(ax: plt.Axes,
 
     labels = [labels[i] for i in index]
     for i, item in enumerate(index):
-        ax.plot(im.t_array, im.unsplined_iter_gh[it](im.t_array)[:, item],
-                linestyle=linestyles[i % len(linestyles)],
-                marker=markerstyles[i % len(markerstyles)],
-                color=colorstyles[i % len(colorstyles)], label=labels[i])
+        if plot_iter:
+            if isinstance(im, FieldInversion):
+                coeff = np.zeros(len(im.unsplined_iter_gh))
+                for c in range(len(coeff)):
+                    coeff[c] = im.unsplined_iter_gh[c](
+                        im.t_array[it_time])[item]
+            elif isinstance(im, FieldInversionNoTime):
+                coeff = im.unsplined_iter_gh[:, item]
+            else:
+                raise Exception('Class not found')
+            ax.plot(np.arange(len(coeff)), coeff,
+                    linestyle=linestyles[i % len(linestyles)],
+                    marker=markerstyles[i % len(markerstyles)],
+                    color=colorstyles[i % len(colorstyles)],
+                    markersize=3, label=labels[i])
+        else:
+            if std is not None:
+                ax.errorbar(im.t_array,
+                            im.unsplined_iter_gh[it_time](im.t_array)[:, item],
+                            yerr=std[:, item], capsize=4,
+                            linestyle=linestyles[i % len(linestyles)],
+                            color=colorstyles[i % len(colorstyles)],)
+            ax.plot(im.t_array,
+                    im.unsplined_iter_gh[it_time](im.t_array)[:, item],
+                    linestyle=linestyles[i % len(linestyles)],
+                    marker=markerstyles[i % len(markerstyles)],
+                    color=colorstyles[i % len(colorstyles)],
+                    markersize=3, label=labels[i])
+
     return ax
 
 
@@ -235,9 +271,9 @@ def plot_dampnorm(ax: plt.Axes,
 
 
 def plot_world(axes: Tuple[plt.Axes, plt.Axes, plt.Axes],
-               im: FieldInversion,
+               im: Union[FieldInversion, FieldInversionNoTime],
                proj: ccrs,
-               time: float,
+               time: float = None,
                cmb: bool = False,
                it: int = -1,
                contour_kw: dict = None
@@ -255,7 +291,8 @@ def plot_world(axes: Tuple[plt.Axes, plt.Axes, plt.Axes],
         Projection type used for plotting on a world map. Should be an instance
         of cartopy.crs
     time
-        Plotting time
+        Plotting time. If time is None, assuming im is an instance of
+        field_inversion_onestep.FieldInversion_notime
     cmb
         Boolean that determines whether to plot the field at the cmb
     it
@@ -264,9 +301,12 @@ def plot_world(axes: Tuple[plt.Axes, plt.Axes, plt.Axes],
     contour_kw
         optional plotting parameters
     """
-    coeff = im.unsplined_iter_gh[it](time)[np.newaxis, :]
+    if time is None:
+        coeff = im.unsplined_iter_gh[it][np.newaxis, :]
+    else:
+        coeff = im.unsplined_iter_gh[it](time)[np.newaxis, :]
     # make a grid of coordinates and apply forward model
-    forwlat = np.arange(-89, 90, 1)
+    forwlat = np.arange(-89, 89, 1)
     forwlon = np.arange(0, 360, 1)
     longrid, latgrid = np.meshgrid(forwlon, forwlat)
     latgrid = latgrid.flatten()
@@ -280,29 +320,31 @@ def plot_world(axes: Tuple[plt.Axes, plt.Axes, plt.Axes],
         world_coord[:, 2] = 6371.2
     frechxyz = frechet.frechet_basis(world_coord, im.maxdegree)
     forw_obs = fwtools.forward_obs(coeff, frechxyz, reshape=False)
+    plot = np.zeros((3, len(forw_obs[0])))
+    title = []
     if cmb:
-        plot0 = forw_obs[0]
-        title0 = 'North'
-        plot1 = forw_obs[1]
-        title1 = 'East'
-        plot2 = -1 * forw_obs[2]  # Br
-        title2 = 'Radial'
+        plot[0] = forw_obs[0]
+        title.append('North')
+        plot[1] = forw_obs[1]
+        title.append('East')
+        plot[2] = -1 * forw_obs[2]  # Br
+        title.append('Radial')
     else:
-        plot0 = forw_obs[4]
-        title0 = 'Intensity'
-        plot1 = forw_obs[5]
-        title1 = 'Inclination'
-        plot2 = forw_obs[6]
-        title2 = 'Declination'
+        plot[0] = forw_obs[4]
+        title.append('Intensity')
+        plot[1] = forw_obs[5]
+        title.append('Inclination')
+        plot[2] = forw_obs[6]
+        title.append('Declination')
 
-    default_kw = {'lvf_0': np.linspace(min(plot0), max(plot0), 10),
-                  'lv_0': np.linspace(min(plot0), max(plot0), 10),
+    default_kw = {'lvf_0': np.linspace(min(plot[0]), max(plot[0]), 10),
+                  'lv_0': np.linspace(min(plot[0]), max(plot[0]), 10),
                   'cmap_0': 'RdBu_r',
-                  'lvf_1': np.linspace(min(plot1), max(plot1), 10),
-                  'lv_1': np.linspace(min(plot1), max(plot1), 10),
+                  'lvf_1': np.linspace(min(plot[1]), max(plot[1]), 10),
+                  'lv_1': np.linspace(min(plot[1]), max(plot[1]), 10),
                   'cmap_1': 'RdBu_r',
-                  'lvf_2': np.linspace(min(plot2), max(plot2), 10),
-                  'lv_2': np.linspace(min(plot2), max(plot2), 10),
+                  'lvf_2': np.linspace(min(plot[2]), max(plot[2]), 10),
+                  'lv_2': np.linspace(min(plot[2]), max(plot[2]), 10),
                   'cmap_2': 'RdBu_r'}
     if contour_kw is None:
         contour_kw = default_kw
@@ -311,41 +353,19 @@ def plot_world(axes: Tuple[plt.Axes, plt.Axes, plt.Axes],
             if item not in contour_kw:
                 contour_kw[item] = default_kw[item]
 
-    axes[0].set_global()
-    axes[0].contourf(forwlon, forwlat, plot0.reshape(179, 360),
-                     cmap=contour_kw['cmap_0'],
-                     levels=contour_kw['lvf_0'], transform=proj)
-    c = axes[0].contour(forwlon, forwlat, plot0.reshape(179, 360),
-                        levels=contour_kw['lv_0'], colors='k',
-                        transform=proj)
-    axes[0].coastlines()
-    axes[0].gridlines()
-    axes[0].clabel(c, fontsize=12, inline=True, fmt='%.1f')
-    axes[0].set_title(title0)
+    for i in range(3):
+        axes[i].set_global()
+        axes[i].contourf(forwlon, forwlat, plot[i].reshape(178, 360),
+                         cmap=contour_kw[f'cmap_{i}'],
+                         levels=contour_kw[f'lvf_{i}'], transform=proj)
+        c = axes[i].contour(forwlon, forwlat, plot[i].reshape(178, 360),
+                            levels=contour_kw[f'lv_{i}'], colors='k',
+                            transform=proj)
+        axes[i].coastlines()
+        axes[i].gridlines()
+        axes[i].clabel(c, fontsize=12, inline=True, fmt='%.1f')
+        axes[i].set_title(title[i])
 
-    axes[1].set_global()
-    axes[1].contourf(forwlon, forwlat, plot1.reshape(179, 360),
-                     cmap=contour_kw['cmap_1'],
-                     levels=contour_kw['lvf_1'], transform=proj)
-    c = axes[1].contour(forwlon, forwlat, plot1.reshape(179, 360),
-                        levels=contour_kw['lv_1'], colors='k',
-                        transform=proj)
-    axes[1].coastlines()
-    axes[1].gridlines()
-    axes[1].clabel(c, fontsize=12, inline=True, fmt='%.1f')
-    axes[1].set_title(title1)
-
-    axes[2].set_global()
-    axes[2].contourf(forwlon, forwlat, plot2.reshape(179, 360),
-                     cmap=contour_kw['cmap_2'],
-                     levels=contour_kw['lvf_2'], transform=proj)
-    c = axes[2].contour(forwlon, forwlat, plot2.reshape(179, 360),
-                        levels=contour_kw['lv_2'], colors='k',
-                        transform=proj)
-    axes[2].coastlines()
-    axes[2].gridlines()
-    axes[2].clabel(c, fontsize=12, inline=True, fmt='%.1f')
-    axes[2].set_title(title2)
     return axes
 
 
@@ -428,8 +448,10 @@ def compare_loc(axes: list,
     if len(axes) != len(dc.types):
         raise Exception('Not enough axes defined'
                         f', you need {len(dc.types)} axes.')
+    reject = np.any(im.accept_matrix == 0)
     # find rejected data
-    rej_xdata = find_rejected(dc, im)
+    if reject:
+        rej_xdata = find_rejected(dc, im)
     for i, item in enumerate(dc.types):
         xdata = np.array(dc.data[i][0])
         if plot_fit:
@@ -451,8 +473,9 @@ def compare_loc(axes: list,
             axes[i].set_ylabel('%s' % item)
             axes[i].scatter(xdata, ydata, label='data')
         # plot rejected data
-        for rej in rej_xdata[i]:
-            axes[i].axvspan(rej[0], rej[1], alpha=0.5, color='red')
+        if reject:
+            for rej in rej_xdata[i]:
+                axes[i].axvspan(rej[0], rej[1], alpha=0.5, color='red')
         mindata, maxdata = min(xdata), max(xdata)
         minmodel, maxmodel = min(im.t_array), max(im.t_array)
         axes[i].set_xlabel('Time')
@@ -549,7 +572,12 @@ def find_rejected(dc: StationData,
     if len(index) == 0:
         raise Exception('No match in longitude between classes')
     elif len(index) > 1:
-        nl, he, b, c = geod2geoc.latrad_in_geoc(np.radians(dc.lat), dc.height)
+        if im.geodetic:
+            nl, he, b, c = geod2geoc.latrad_in_geoc(np.radians(dc.lat),
+                                                    dc.height)
+        else:
+            nl = np.radians(dc.lat)
+            he = 6371.2 + dc.height*1e-3
         compare_row = (0.5*np.pi - nl, np.radians(dc.lon), he)
         index = np.where((im.station_coord == compare_row).all(axis=1))[0]
         if len(index) != 1:

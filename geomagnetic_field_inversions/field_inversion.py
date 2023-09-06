@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.interpolate import BSpline, interp1d
 import scipy.sparse as scs
+import scipy.linalg as scl
 import pandas as pd
 from typing import Union, Final
 from pathlib import Path
@@ -68,10 +69,7 @@ class FieldInversion:
         self.count_type = np.zeros(7)
         self.station_coord = np.zeros((0, 3))
         self.gcgd_conv = np.zeros((0, 2))
-        self.spat_damp_matrix = np.empty(0)
-        self.temp_damp_matrix = np.empty(0)
-        self.spat_fac = np.empty(0)  # contains damping factors
-        self.temp_fac = np.empty(0)
+        self.damp_matrix = np.empty(0)
         self.spat_norm = np.empty(0)
         self.temp_norm = np.empty(0)
         self.spat_ddt = 0
@@ -92,6 +90,8 @@ class FieldInversion:
         # determines the maximum number of spherical coefficients
         self._nm_total = int((degree+1)**2 - 1)
         self._maxdegree = int(degree)
+        self.spat_fac = np.zeros(self._nm_total)  # contains damping factors
+        self.temp_fac = np.zeros(self._nm_total)
         self.matrix_ready = False
 
     @property
@@ -207,23 +207,18 @@ class FieldInversion:
                 # Extract data from StationData-class
                 if self.verbose:
                     print(f'Adding {types}-type')
-                if types == 'inc':
-                    # get inclination data at specified points in time
-                    temp = data_class.fit_data[c](
-                        self._t_array[arg_min:arg_max])
-                    data_entry[c, arg_min:arg_max] = np.radians(temp)
-                elif types == 'dec':
-                    # get declination data at specified points in time
-                    temp = data_class.fit_data[c](
-                        self._t_array[arg_min:arg_max])
-                    data_entry[c, arg_min:arg_max] = np.radians(temp)
-                else:
-                    data_entry[c, arg_min:arg_max] = data_class.fit_data[c](
-                        self._t_array[arg_min:arg_max])
+                # temporary data and error storage
+                temp_d = data_class.fit_data[c](self._t_array[arg_min:arg_max])
+                temp_e = data_class.data[c][2]
+                if types == 'inc' or types == 'dec':
+                    # transform incl/decl data to radians
+                    temp_d = np.radians(temp_d)
+                    temp_e = np.radians(temp_e)
+
+                # add to data array
+                data_entry[c, arg_min:arg_max] = temp_d
                 # sample errors for time_array
-                f = interp1d(data_class.data[c][0],
-                             data_class.data[c][2],
-                             kind=error_interp)
+                f = interp1d(data_class.data[c][0], temp_e, kind=error_interp)
                 error_entry[c, arg_min:arg_max] = f(
                     self._t_array[arg_min:arg_max])
                 # count occurrence datatype and add to list
@@ -245,9 +240,9 @@ class FieldInversion:
                           ' no translation required.')
                 cd = 1.  # this will not change dx and dz when forming frechet
                 sd = 0.
-                station_entry = np.array([np.radians(90-data_class.lat),
+                station_entry = np.array([0.5*np.pi-np.radians(data_class.lat),
                                           np.radians(data_class.lon),
-                                          6371.2])
+                                          6371.2+data_class.height*1e-3])
 
             # add data to attributes of the class if all is fine
             if self.verbose:
@@ -316,6 +311,8 @@ class FieldInversion:
             temp_dict = {"df": 0, "damp_type": 'Br2cmb',
                          "ddt": 2, "damp_dipole": True}
         self.spat_ddt, self.temp_ddt = spat_dict['ddt'], temp_dict['ddt']
+        self.damp_matrix = np.zeros(
+            (2 * self._SPL_DEGREE + 1, self.nr_splines * self._nm_total))
         # print warning
         if self._nm_total >= len(self.data_array):
             print('The spherical order of the model is too high (variables:'
@@ -348,27 +345,29 @@ class FieldInversion:
         if self.verbose:
             print('Calculating spatial damping matrix')
         if spat_dict['df'] != 0 and self._t_step != 0:
-            self.spat_damp_matrix, self.spat_fac = damping.damp_matrix(
+            spat_damp_diag, self.spat_fac = damping.damp_matrix(
                 self._maxdegree, self.nr_splines, self._t_step,
                 spat_dict['df'], spat_dict['damp_type'], spat_dict['ddt'],
                 damp_dipole=spat_dict['damp_dipole'])
-            self.spat_damp_matrix = scs.csr_matrix(self.spat_damp_matrix)
+            self.damp_matrix += spat_damp_diag
         if self.verbose:
             print('Calculating temporal damping matrix')
         if temp_dict['df'] != 0 and self._t_step != 0:
-            self.temp_damp_matrix, self.temp_fac = damping.damp_matrix(
+            temp_damp_diag, self.temp_fac = damping.damp_matrix(
                 self._maxdegree, self.nr_splines, self._t_step,
                 temp_dict['df'], temp_dict['damp_type'], temp_dict['ddt'],
                 damp_dipole=temp_dict['damp_dipole'])
-            self.temp_damp_matrix = scs.csr_matrix(self.temp_damp_matrix)
+            self.damp_matrix += temp_damp_diag
+
         self.matrix_ready = True
         if self.verbose:
             print('Calculations finished')
 
     def run_inversion(self,
-                      x0: Union[np.ndarray, list],
+                      x0: np.ndarray,
                       max_iter: int = 10,
-                      rej_crits: np.ndarray = None
+                      rej_crits: np.ndarray = None,
+                      path: Path = None,
                       ) -> None:
         """
         Runs the iterative inversion
@@ -376,8 +375,9 @@ class FieldInversion:
         Parameters
         ----------
         x0
-            starting model gaussian coefficients, should be a float or
-            as long as (spherical_order + 1)^2 - 1
+            starting model gaussian coefficients, should have length:
+            (spherical_order + 1)^2 - 1 or
+            (spherical_order + 1)^2 - 1 X nr_splines if changing through time
         max_iter
             maximum amount of iterations
         rej_crits
@@ -386,6 +386,10 @@ class FieldInversion:
             components. Criteria can be made time dependent by providing
             rejection criteria for every timestep. In that case shape should
             be (7, len(time vector))). inc/dec in radians!
+        path
+            path to location where to save normal_eq_splined and damp_matrix
+            for calculating optional covariance and resolution matrix.
+            If not provided, matrices are not solved. See tools/stdev.py
 
         Creates or modifies
         -------------------
@@ -406,32 +410,42 @@ class FieldInversion:
                             'Please run prepare_inversion first.')
         if rej_crits is not None:
             self.rejected = np.zeros(max_iter)
-
+        # initiate array counting residual per type
         self.res_iter = np.zeros((max_iter+1, 8))
         # initiate splined values with starting model
         if self.verbose:
             print('Setting up starting model')
-        assert len(x0) == self._nm_total, \
-            f'x0 has incorrect shape: {len(x0)},'\
-            f' it should have length {self._nm_total}'
         self.splined_gh = np.zeros((self.nr_splines, self._nm_total))
-        self.splined_gh[:] = x0
+        if x0.ndim == 1 and len(x0) == self._nm_total:
+            self.splined_gh[:] = x0
+        elif x0.shape == (self.nr_splines, self._nm_total):
+            self.splined_gh = x0
+        else:
+            raise Exception(f'x0 has incorrect shape: {x0.shape}. \n'
+                            f'It should have shape ({self._nm_total},) or'
+                            f' ({self.nr_splines}, {self._nm_total})')
+        # initiate accept_matrix (default accept all) + diagonal damping matrix
         self.accept_matrix = np.ones((len(self.types_sorted), self.times))
-        for it in range(max_iter):
+        spacing = self._nm_total*self._SPL_DEGREE
+        sparse_damp = scs.dia_matrix(
+            (self.damp_matrix,
+             np.linspace(spacing, -spacing, 2*self._SPL_DEGREE+1)), shape=
+            (len(self.damp_matrix[0]), len(self.damp_matrix[0])))
+        for it in range(max_iter):  # start outer iteration loop
             if self.verbose:
                 print(f'Start iteration {it+1}')
             rhs_matrix = np.zeros((self.times, self._nm_total))
             normal_eq_splined = np.zeros((self._nm_total * self.nr_splines,
                                           self._nm_total * self.nr_splines))
 
-            rhs_spat_damp = -1*self.spat_damp_matrix*self.splined_gh.flatten()
-            rhs_temp_damp = -1*self.temp_damp_matrix*self.splined_gh.flatten()
+            rhs_damp = -sparse_damp.dot(self.splined_gh.flatten())
+
             gh_tstep = BSpline(c=self.splined_gh, t=self.time_knots,
                                k=self._SPL_DEGREE, axis=0,
                                extrapolate=False)(self._t_array)
 
             # Calculate frechet and residual matrix for all times
-            # and apply time constraint
+            # and apply time constraint (time_cover)
             if self.verbose:
                 print('Create forward and residual observations')
             forwobs_matrix = fwtools.forward_obs(
@@ -445,7 +459,7 @@ class FieldInversion:
                 forwobs_matrixrs, self.data_array, self.types_sorted)
             res_matrix *= self.time_cover
 
-            # reject data
+            # reject data if inputted through accept_matrix
             use_data_boolean = self.time_cover.copy()
             if rej_crits is not None:
                 self.accept_matrix = rejection.reject_data(
@@ -470,7 +484,7 @@ class FieldInversion:
             self.res_iter[it] = fwtools.residual_type(
                 res_weight, self.types_sorted, self.count_type)
 
-            # create time dependent matrices
+            # create time dependent matrix and vector
             if self.verbose:
                 print('Start formation time dependent matrices')
             for t in range(self.times):
@@ -486,23 +500,37 @@ class FieldInversion:
                         ] += np.matmul(frech.T*self._bspline(j+1)
                                        / self.error_array[:, t]**2,
                                        frech*self._bspline(k+1))
-            normal_eq_splined = scs.csr_matrix(normal_eq_splined)
             rhs_splined = np.zeros(self.nr_splines * self._nm_total)
             for i in range(self._nm_total):
                 rhs_splined[i::self._nm_total] = np.convolve(
                     rhs_matrix[:, i], self._bspline(np.arange(
                         1, self._SPL_DEGREE+1)))
-            # add spatial and temporal damping to the matrix and vector
-            normal_eq_splined += self.spat_damp_matrix + self.temp_damp_matrix
-            rhs_splined += rhs_spat_damp + rhs_temp_damp
 
             # solve the equations
             if self.verbose:
-                print('Solve equations')
-            update = scs.linalg.spsolve(normal_eq_splined, rhs_splined)
+                print('Prepare and solve equations')
+            # create diagonals for quick inversion
+            diag = np.zeros(((self._SPL_DEGREE + 1) * self._nm_total * 2 - 1,
+                             len(normal_eq_splined)))
+            hdiags = int((self._SPL_DEGREE + 1) * self._nm_total - 1)
+            diag[hdiags] = np.diag(normal_eq_splined)
+            # upper to lower diagonal
+            for i in range(hdiags):
+                diag[i, hdiags-i:] = np.diagonal(normal_eq_splined, hdiags-i)
+                diag[-(i+1), :-(hdiags-i)] = np.diagonal(
+                    normal_eq_splined, -(hdiags-i))
+            # add damping to required diagonals
+            damp_diags = np.linspace(hdiags-spacing, hdiags+spacing,
+                                     2*self._SPL_DEGREE + 1, dtype=int)
+            diag[damp_diags] += self.damp_matrix
+            # add damping to the vector
+            rhs_splined += rhs_damp
+            # solve banded system
+            update = scl.solve_banded((hdiags, hdiags), diag, rhs_splined)
+
             self.splined_gh = (self.splined_gh.flatten() + update).reshape(
                 self.nr_splines, self._nm_total)
-            # cut of the sides that do not have physical meaning
+            # despline Gauss coefficients and form function
             spline = BSpline(t=self.time_knots, c=self.splined_gh,
                              k=3, axis=0, extrapolate=False)
             self.unsplined_iter_gh.append(spline)
@@ -529,12 +557,34 @@ class FieldInversion:
                 if self.verbose:
                     print('Residual is %.2f' % self.res_iter[it+1, 7])
                     print('Calculating spatial and temporal norms')
-                self.spat_norm = damping.damp_norm(
-                    self.spat_fac, self.splined_gh, self.spat_ddt, self._t_step
-                )
-                self.temp_norm = damping.damp_norm(
-                    self.temp_fac, self.splined_gh, self.temp_ddt, self._t_step
-                )
+                if np.any(self.spat_fac != 0):
+                    self.spat_norm = damping.damp_norm(
+                        self.spat_fac, self.splined_gh, self.spat_ddt,
+                        self._t_step)
+                if np.any(self.temp_fac != 0):
+                    self.temp_norm = damping.damp_norm(
+                        self.temp_fac, self.splined_gh, self.temp_ddt,
+                        self._t_step)
+                if path is not None:
+                    if self.verbose:
+                        print('Saving matrices')
+                    save_diag = np.zeros(
+                        ((self._SPL_DEGREE + 1) * self._nm_total * 2 - 1,
+                         len(normal_eq_splined)))
+                    save_diag[hdiags] = np.diag(normal_eq_splined)
+                    # upper to lower diagonal
+                    for i in range(hdiags):
+                        save_diag[i, hdiags - i:] = np.diagonal(
+                            normal_eq_splined, hdiags - i)
+                        save_diag[-(i + 1), :-(hdiags - i)] = np.diagonal(
+                            normal_eq_splined, -(hdiags - i))
+                    dia_matrix = scs.dia_matrix(
+                        (save_diag, np.linspace(hdiags, -hdiags, 2*hdiags + 1)
+                         ), shape=(len(self.damp_matrix[0]),
+                                   len(self.damp_matrix[0])))
+                    scs.save_npz(path / 'forward_matrix', dia_matrix)
+                    scs.save_npz(path / 'damp_matrix', sparse_damp)
+
                 if self.verbose:
                     print('Finished inversion')
 
@@ -605,7 +655,7 @@ class FieldInversion:
                       max_iter: int = 10,
                       rej_crits: np.ndarray = None,
                       basedir: Union[str, Path] = '.',
-                      overwrite: bool = False
+                      overwrite: bool = True
                       ) -> None:
         """ Sweep through damping parameters to find ideal set
 

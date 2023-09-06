@@ -172,7 +172,7 @@ class StationData:
             should be 1.000.000.
         error
             error of the data, which should be list or numpy array with length
-            equal to length of time vector.
+            equal to length of time vector. Either nT or degrees
 
         Creates or modifies
         -------------------
@@ -219,9 +219,9 @@ class StationData:
                                                     self.data[i][1],
                                                     method='linear')
         else:
-            row = np.where(self.types == ttype)[0]
+            row = np.where(np.char.find(self.types, ttype) == 0)[0]
             if len(row) == 0:
                 raise Exception('datatype not found, try again')
-            self.fit_data[row] = interpolate_data(
-                self.data[row][0], self.data[row][1],
+            self.fit_data[row[0]] = interpolate_data(
+                self.data[row[0]][0], self.data[row[0]][1],
                 order, smoothing, method)

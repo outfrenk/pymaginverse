@@ -32,8 +32,23 @@ git clone https://github.com/geomagnetic_field_inversions
 cd geomagnetic_field_inversions
 poetry install
 ```
-The package is *only* installed in a virtual environment created by poetry. Be sure to enter this environment by typing `poetry shell` into the terminal. In this environment you can start a jupyter notebook (type: `jupyter notebook`) and follow the tutorial: 
+The package is either installed into a virtual environment you set up or installed in a virtual environment created by poetry. For the latter, you can enter this environment by typing `poetry shell` into the terminal. In this environment you can start a jupyter notebook (type: `jupyter notebook`) and follow the tutorial. [Click here](https://python-poetry.org/docs/basic-usage/#using-your-virtual-environment) for more information about virtual environments within poetry. Or [click here](https://docs.python.org/3/library/venv.html) for more information about virtual environments in Python itself.
 
+Uninstallation is possible by typing in the terminal (possibly in the specific virtual environment):
+```
+pip uninstall geomagnetic_field_inversions
+```
 ## Tutorial
 We have provided a tutorial to make the library easier to use and understand. You can find the jupyter notebook containing the tutorial under `doc/Tutorial Geomagnetic Field Inversions.ipynb`.
-This tutorial explains almost all methods of the three main modules and explains how to run a geomagnetic model with the `FieldInversion`-class.
+This tutorial explains almost all methods of the three main modules, explains how to run a geomagnetic model with the `FieldInversion`-class, how to start a time-independent model, and how to read special data formats.
+
+## Testing
+The Library comes with two tests that test the `FieldInversion` and `FieldInversionNoTime` classes. To run the tests you need to install pytest, either with `pip install pytest` or `poetry install --with test`.
+After installation of pytest, you can test the code by typing `pytest`.
+
+## Acknowledgements
+This Library is based on years of geomagnetic code development by:
+- Monika Korte
+- Catherine Constable
+- Jeremy Bloxham
+- and many others

@@ -7,7 +7,7 @@ with open('README.md') as f:
 
 setuptools.setup(
     name='geomagnetic_field_inversions',
-    version='0.1.0',
+    version='1.0.0',
     description=('Python lib to perform geomagnetic field inversions'),
     long_description=long_description,
     long_description_content_type='text/markdown',
@@ -21,7 +21,10 @@ setuptools.setup(
                       'pathlib',
                       'tqdm',
                       'pyshtools',
-                      'cartopy'],
+                      'cartopy',
+					  'numba',
+                      'openpyxl',
+                      'pytest'],
     # TODO: Update license
     classifiers=['License :: BSD2 License',
                  'Programming Language :: Python :: 3 :: Only',

@@ -17,7 +17,7 @@ def damp_matrix(max_degree: int,
                 ddt: int,
                 damp_dipole: bool = True,
                 ) -> Tuple[np.ndarray, np.ndarray]:
-    """ Creates spatial and temporal damping matrices
+    """ Creates spatial and temporal damping matrices through diagonals
 
     Parameters
     ----------
@@ -46,22 +46,23 @@ def damp_matrix(max_degree: int,
     """
     spl_degree = 3
     nm_total = (max_degree + 1) ** 2 - 1
-    matrix = np.zeros((nm_total * nr_splines, nm_total * nr_splines))
-    damp_diag = np.zeros(0)
+    damp_diag = np.zeros(nm_total)
+
+    matrix_diag = np.zeros((2 * spl_degree + 1, nr_splines * nm_total))
     if damp_factor != 0:
         damp_diag = dampingtype(max_degree, damp_type, damp_dipole)
         # start combining interacting splines
         for spl1 in range(nr_splines):  # loop through splines with j
             # loop with spl2 between spl1-spl_degree and spl1+spl_degree
-            for spl2 in range(max(0, spl1 - spl_degree),
+            for spl2 in range(max(spl1 - spl_degree, 0),
                               min(spl1 + spl_degree + 1, nr_splines)):
                 # integrate cubic B-Splines
                 spl_integral = integrator(spl1, spl2, nr_splines, t_step, ddt)
                 # place damping in matrix
-                matrix[spl1 * nm_total:(spl1 + 1) * nm_total,
-                       spl2 * nm_total:(spl2 + 1) * nm_total] = \
-                    damp_factor * spl_integral * np.diag(damp_diag)
-    return matrix, damp_diag
+                matrix_diag[spl2-spl1+spl_degree,
+                            spl1*nm_total:(spl1+1)*nm_total
+                            ] = damp_factor * spl_integral * damp_diag
+    return matrix_diag, damp_diag
 
 
 def integrator(spl1: int,
