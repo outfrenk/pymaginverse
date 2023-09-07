@@ -31,7 +31,7 @@ def plot_station(axes: Union[list, plt.Axes],
     """
     if len(dc.types) == 1 and type(axes) != list:
         axes = [axes]
-    assert len(axes) == len(dc.types), 'not defined enough plot axes'
+    assert len(axes) >= len(dc.types), 'not defined enough plot axes'
     for i in range(len(dc.types)):
         time_arr = np.linspace(dc.data[i][0][0], dc.data[i][0][-1], steps)
         axes[i].set_title('Fitting %s of data' % dc.types[i])
