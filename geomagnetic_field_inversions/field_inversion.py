@@ -654,7 +654,7 @@ class FieldInversion:
                       temp_dict: dict = None,
                       max_iter: int = 10,
                       rej_crits: np.ndarray = None,
-                      basedir: Union[str, Path] = '.',
+                      basedir: Path = Path().absolute(),
                       overwrite: bool = True
                       ) -> None:
         """ Sweep through damping parameters to find ideal set
