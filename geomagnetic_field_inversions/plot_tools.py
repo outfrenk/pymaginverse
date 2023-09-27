@@ -227,7 +227,7 @@ def plot_spectrum(axes: Tuple[plt.Axes, plt.Axes],
     for l in range(im.maxdegree):
         for m in range(2*l + 1):
             sum_coeff_pow[l] += coeff_pow[counter] * (l+2) * depth**(2*(l+1)+4)
-            sum_coeff_sv[l] += coeff_sv[counter]
+            sum_coeff_sv[l] += coeff_sv[counter] * (l+2) * depth**(2*(l+1)+4)
             counter += 1
 
     axes[0].plot(np.arange(1, im.maxdegree + 1), sum_coeff_pow,
