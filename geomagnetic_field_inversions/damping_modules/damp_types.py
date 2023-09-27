@@ -71,6 +71,9 @@ def uniform(d: int, rbycmb: float) -> float:
 
 
 def dissipation(d: int, rbycmb: float) -> float:
+    # according to gubbins and bloxham 1985, bloxham 1987:
+    # res = 4*np.pi * (d+1)**2 * (2-d*(d+1)) / ((2*d + 1) * rbycmb**(2*d+4))
+    # to be combined with one spline integral (ddt=1)
     res = 4*np.pi * (d+1)**2 * d**4 / ((2*d + 1) * rbycmb**(2*d))
     return res
 
