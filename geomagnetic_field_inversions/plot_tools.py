@@ -200,12 +200,15 @@ def plot_spectrum(axes: Tuple[plt.Axes, plt.Axes],
         time = np.arange(im.times - 1)
     coeff = im.splined_gh
     if cmb:
-        counter = 0
-        for l in range(im.maxdegree):
-            mult_factor = (6371.2 / 3485.0) ** (l + 1)
-            for m in range(l + 1):
-                coeff[:, counter] *= mult_factor
-                counter += 1
+        depth = 6371.2 / 3485.0
+    else:
+        depth = 1
+    #     counter = 0
+    #     for l in range(im.maxdegree):
+    #         mult_factor = (6371.2 / 3485.0) ** (l + 1)
+    #         for m in range(l + 1):
+    #             coeff[:, counter] *= mult_factor
+    #             counter += 1
 
     spl1 = bsplines.derivatives(im._t_step, 1, derivative=1).flatten()
     spl0 = bsplines.derivatives(im._t_step, 1, derivative=0).flatten()
@@ -223,7 +226,7 @@ def plot_spectrum(axes: Tuple[plt.Axes, plt.Axes],
     sum_coeff_sv = np.zeros(im.maxdegree)
     for l in range(im.maxdegree):
         for m in range(2*l + 1):
-            sum_coeff_pow[l] += coeff_pow[counter]
+            sum_coeff_pow[l] += coeff_pow[counter] * (l+2) * depth**(2*(l+1)+4)
             sum_coeff_sv[l] += coeff_sv[counter]
             counter += 1
 
