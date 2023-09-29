@@ -21,14 +21,14 @@ The `plot_tools.py` method allows easy plotting of:
 You can install the library in two ways:
 1. Cloning the repository and then `pip`-installing:
 ```
-git clone https://github.com/geomagnetic_field_inversions
+git clone https://github.com/outfrenk/geomagnetic_field_inversions
 cd geomagnetic_field_inversions
 pip install . -U
 ```
 
 2. Cloning the repository and installing through poetry:
 ```
-git clone https://github.com/geomagnetic_field_inversions
+git clone https://github.com/outfrenk/geomagnetic_field_inversions
 cd geomagnetic_field_inversions
 poetry install
 ```
