@@ -37,11 +37,6 @@ class FieldInversion:
             maximum order for spherical harmonics model, default 3
         r_model
             where the magnetic field is modeled (km distance from core)
-        geodetic
-            boolean specifying whether to use a geodetic coordinate frame. If
-            True, geodetic coordinate frame is used and recalculated into a
-            geocentric one. Otherwise, a geocentric frame is used.
-            Default is geodetic (True)
         verbose
             Verbosity flag, defaults to False
         """
@@ -225,7 +220,7 @@ class FieldInversion:
                 types_entry.append(typedict[types])
 
             # change coordinates from geodetic to geocentric if required
-            if self.geodetic:
+            if data_class.geodetic:
                 if self.verbose:
                     print(f'Coordinates are geodetic,'
                           ' translating to geocentric coordinates.')

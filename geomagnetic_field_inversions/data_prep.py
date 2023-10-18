@@ -72,10 +72,22 @@ class StationData:
                  lat: float,
                  lon: float,
                  height: float = 0,
+                 geodetic: bool = True,
                  name: Optional[str] = None):
         """
-        Set latitude & longitude in degrees.
-        optionally geodetic height in metres and optionally name of station
+        lat
+            latitude of station
+        lon
+            longitude of station
+        height
+            height above surface in metres
+        geodetic
+            boolean specifying whether to use a geodetic coordinate frame. If
+            True, geodetic coordinate frame is used and recalculated into a
+            geocentric one. Otherwise, a geocentric frame is used.
+            Default is geodetic (True)
+        name
+            station name
         """
         if lon > 180:  # if longitude inputted between 0 and 360
             lon -= 360
@@ -87,6 +99,7 @@ class StationData:
         self.lat = lat
         self.lon = lon
         self.height = height
+        self.geodetic = geodetic
         if name is not None:
             self.__name__ = name
         else:
