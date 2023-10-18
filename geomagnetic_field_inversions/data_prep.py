@@ -1,54 +1,7 @@
 import numpy as np
-import matplotlib.pyplot as plt
-from scipy.interpolate import UnivariateSpline, interp1d
 from typing import Union, Literal, Optional, Callable
 
-_IpMethods = Literal['polyfit', 'USpline', 'linear']
 _DataTypes = Literal['x', 'y', 'z', 'hor', 'inc', 'dec', 'int']
-
-
-def interpolate_data(t: Union[np.ndarray, list],
-                     y: Union[np.ndarray, list],
-                     order: int = None,
-                     smoothing: Optional[float] = None,
-                     method: _IpMethods = 'linear'
-                     ) -> Callable[[np.ndarray], np.ndarray]:
-    """
-    Interpolates data over its total timerange.
-    Required for sampling purposes in the inversion
-
-    Parameters
-    ----------
-    t
-        timevector of corresponding datavector y
-    y
-        datavector containing inclination, declination, intensity,
-        Mx, My, Mz, or horizontal magnetic component
-    order
-        order of fitting
-    smoothing
-        degree of smoothing
-    method
-        method of fitting data. either NumPy's polyfit,
-        SciPy's UnivariateSpline or interp1d (linear)
-
-    Returns
-    -------
-    linefit, unispline, linear
-        fitting function
-    """
-    if method == 'polyfit':
-        polyn = np.polyfit(t, y, order)  # order of polynome
-        linefit = np.poly1d(polyn)
-        return linefit
-    elif method == 'USpline':
-        unispline = UnivariateSpline(t, y, k=order, s=smoothing)
-        return unispline
-    elif method == 'linear':
-        linear = interp1d(t, y, kind='linear')
-        return linear
-    else:
-        raise Exception('Method %s not recognized' % method)
 
 
 def check_data(ttype: _DataTypes,
@@ -142,7 +95,6 @@ class StationData:
         # initiate empty lists
         self.data = []
         self.types = []
-        self.fit_data = None
         self.time_factor = 1
 
     def add_data(self,
@@ -183,45 +135,3 @@ class StationData:
         """
         self.data.append(check_data(ttype, data, time_factor, error))
         self.types.append(ttype)
-        self.fit_data = [None] * len(self.types)
-
-    def fitting(self,
-                ttype: str = None,
-                order: float = None,
-                smoothing: float = None,
-                method: _IpMethods = None
-                ) -> Optional[plt.Axes]:
-        """
-        Fits a function to the data, required for running the inverse at
-        values between datapoints as well. Default running this function will
-        result into a linear fit for all datatypes. Otherwise, fit per datatype
-
-        Parameters
-        ----------
-        ttype
-            which datatype to fit. if omitted, all datatype will be fitted
-            linearly
-        order
-            order of fit
-        smoothing
-            smoothing applied to fit
-        method
-            method of fitting; either linear, polyfit, or UnivariateSpline
-
-        Creates or modifies
-        -------------------
-        self.fit_data
-            function that fits and interpolates the data
-        """
-        if ttype is None:
-            for i in range(len(self.types)):
-                self.fit_data[i] = interpolate_data(self.data[i][0],
-                                                    self.data[i][1],
-                                                    method='linear')
-        else:
-            row = np.where(np.char.find(self.types, ttype) == 0)[0]
-            if len(row) == 0:
-                raise Exception('datatype not found, try again')
-            self.fit_data[row[0]] = interpolate_data(
-                self.data[row[0]][0], self.data[row[0]][1],
-                order, smoothing, method)
