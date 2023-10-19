@@ -51,6 +51,7 @@ class FieldInversion:
         # derived properties
         self._bspline = BSpline.basis_element(np.arange(self._SPL_DEGREE+2),
                                               extrapolate=False)
+        self.time_array = []
         self.data_array = []
         self.error_array = []
         self.accept_matrix = np.empty(0)
@@ -64,8 +65,6 @@ class FieldInversion:
         self.damp_matrix = np.empty(0)
         self.spat_norm = np.empty(0)
         self.temp_norm = np.empty(0)
-        self.spat_ddt = 0
-        self.temp_ddt = 0
         self.splined_gh = np.empty(0)
         self.station_frechet = np.empty(0)
         self.res_iter = np.empty(0)
@@ -151,9 +150,8 @@ class FieldInversion:
         typedict = {"x": 0, "y": 1, "z": 2, "hor": 3,
                     "int": 4, "inc": 5, "dec": 6}
         if isinstance(data_class, StationData):
-            # station counter
-            self.sc += 1
             # set up empty arrays
+            time_entry = []
             data_entry = []
             error_entry = []
             types_entry = []
@@ -177,6 +175,7 @@ class FieldInversion:
                     temp_e = np.radians(temp_e)
 
                 # add data, error, and type to arrays
+                time_entry.append(data_class.data[c][0])
                 data_entry.append(temp_d)
                 error_entry.append(temp_e)
                 # count occurrence datatype and add to list
@@ -206,43 +205,44 @@ class FieldInversion:
             if self.verbose:
                 print(f'Data of {name} is added to class')
             self.dcname.append(name)
+            self.time_array.append(time_entry)
             self.data_array.append(data_entry)
             self.error_array.append(error_entry)
             self.types.append(types_entry)  # is now one long list
             self.station_coord = np.vstack((self.station_coord, station_entry))
             self.gcgd_conv = np.vstack((self.gcgd_conv, np.array([cd, sd])))
             self.types_ready = False
+            # station counter
+            self.sc += 1
         else:
             raise Exception('data_class is not an instance of Station_Data')
 
     def prepare_inversion(self,
-                          spat_dict: dict = None,
-                          temp_dict: dict = None,
+                          spat_fac: float = 0,
+                          temp_fac: float = 0,
+                          spat_type: int = 3,
+                          temp_type: int = 7,
+                          spat_ddip: bool = False,
+                          temp_ddip: bool = True
                           ) -> None:
         """
         Function to prepare matrices for the inversion
 
         Parameters
         ----------
-        spat_dict
-            dictionary for spatial damping containing the following keywords:
-                df
-                    damping factor to be applied to the total damping matrix
-                damp_type
-                    damping type to be applied
-                ddt
-                    derivative of B-Splines to be applied
-                damp_dipole
-                    boolean indicating whether to damp dipole coefficients.
-        temp_dict
-            dictionary for temporal damping containing the same keywords as
-            spat_dict
+        spat_fac, temp_fac
+            damping factor to be applied to the total damping matrix
+        spat_type, temp_type
+            integer corresponding to applied damping type
+            defaults, respectively, to minimize Ohmic heat and acceleration
+            magnetic field, both at cmb
+        spat_ddip, temp_ddip
+            boolean indicating whether to damp dipole coefficients.
 
         Creates or modifies
         -------------------
-        self.spatddt, self.tempddt
-            indicates requested derivative of the cubic B-Spline for damping
-            (integer)
+        self.spatdamp, self.tempdamp
+            saves type of damping used
         self.station_frechet
             contains frechet matrix per location
             size= ((# stations x 3), nm_total) (floats)
@@ -260,23 +260,14 @@ class FieldInversion:
         self.types_ready
             boolean indicating if datatypes (self.types) are logically sorted
         """
-        # check data and model space
-        if spat_dict is None:
-            spat_dict = {"df": 0, "damp_type": 'Gubbins',
-                         "ddt": 0, "damp_dipole": False}
-        if temp_dict is None:
-            temp_dict = {"df": 0, "damp_type": 'Br2cmb',
-                         "ddt": 2, "damp_dipole": True}
-        self.spat_ddt, self.temp_ddt = spat_dict['ddt'], temp_dict['ddt']
         self.damp_matrix = np.zeros(
             (2 * self._SPL_DEGREE + 1, self.nr_splines * self._nm_total))
-        # print warning
-        if self._nm_total >= len(self.data_array):
-            print('The spherical order of the model is too high (variables:'
-                  f' {self._nm_total} vs data: {len(self.data_array)}), '
-                  f'decrease maxdegree to a lower value.')
+        # order data per spline?
+
+        ########################################
 
         # order datatypes in a more straightforward way
+        # TODO: Check this accordingly
         if not self.types_ready:
             self.types_sorted = []
             for nr, stat in enumerate(self.types):
@@ -301,19 +292,17 @@ class FieldInversion:
         # Prepare damping matrices
         if self.verbose:
             print('Calculating spatial damping matrix')
-        if spat_dict['df'] != 0 and self._t_step != 0:
+        if spat_fac != 0 and self._t_step != 0:
             spat_damp_diag, self.spat_fac = damping.damp_matrix(
                 self._maxdegree, self.nr_splines, self._t_step,
-                spat_dict['df'], spat_dict['damp_type'], spat_dict['ddt'],
-                damp_dipole=spat_dict['damp_dipole'])
+                spat_fac, spat_type, spat_ddip)
             self.damp_matrix += spat_damp_diag
         if self.verbose:
             print('Calculating temporal damping matrix')
-        if temp_dict['df'] != 0 and self._t_step != 0:
+        if temp_fac != 0 and self._t_step != 0:
             temp_damp_diag, self.temp_fac = damping.damp_matrix(
                 self._maxdegree, self.nr_splines, self._t_step,
-                temp_dict['df'], temp_dict['damp_type'], temp_dict['ddt'],
-                damp_dipole=temp_dict['damp_dipole'])
+                temp_fac, temp_type, temp_ddip)
             self.damp_matrix += temp_damp_diag
 
         self.matrix_ready = True

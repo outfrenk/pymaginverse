@@ -5,16 +5,17 @@ from typing import Literal, Tuple
 from .damp_types import dampingtype
 from ..tools import bsplines
 
-_DampingMethods = Literal['Uniform', 'Dissipation', 'Powerseries', 'Gubbins',
-'Horderiv2cmb', 'Br2cmb', 'Energydensity']
+# list containing the name of damping and its required time derivative
+_DList = [['Uniform', 0], ['Dissipation', 0], ['Powerseries', 0],
+          ['Gubbins', 0], ['Horderiv2cmb', 0], ['Energydensity', 0],
+          ['Br2cmb', 1], ['Br2cmb', 2]]
 
 
 def damp_matrix(max_degree: int,
                 nr_splines: int,
                 t_step: float,
                 damp_factor: float,
-                damp_type: _DampingMethods,
-                ddt: int,
+                damp_type: int,
                 damp_dipole: bool = True,
                 ) -> Tuple[np.ndarray, np.ndarray]:
     """ Creates spatial and temporal damping matrices through diagonals
@@ -30,9 +31,7 @@ def damp_matrix(max_degree: int,
     damp_factor
         damping factor to be applied to the total damping matrix (lambda)
     damp_type
-        damping type to be applied
-    ddt
-        derivative of B-Splines to be applied
+        integer of damping type to be applied (see _DList)
     damp_dipole
         boolean indicating whether to damp dipole coefficients or not.
         Default is set to False.
@@ -50,14 +49,15 @@ def damp_matrix(max_degree: int,
 
     matrix_diag = np.zeros((2 * spl_degree + 1, nr_splines * nm_total))
     if damp_factor != 0:
-        damp_diag = dampingtype(max_degree, damp_type, damp_dipole)
+        damp_diag = dampingtype(max_degree, _DList[damp_type][0], damp_dipole)
         # start combining interacting splines
         for spl1 in range(nr_splines):  # loop through splines with j
             # loop with spl2 between spl1-spl_degree and spl1+spl_degree
             for spl2 in range(max(spl1 - spl_degree, 0),
                               min(spl1 + spl_degree + 1, nr_splines)):
                 # integrate cubic B-Splines
-                spl_integral = integrator(spl1, spl2, nr_splines, t_step, ddt)
+                spl_integral = integrator(spl1, spl2, nr_splines, t_step,
+                                          _DList[damp_type][1])
                 # place damping in matrix
                 matrix_diag[spl2-spl1+spl_degree,
                             spl1*nm_total:(spl1+1)*nm_total

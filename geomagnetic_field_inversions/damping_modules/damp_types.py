@@ -23,9 +23,9 @@ def dampingtype(maxdegree: int,
                            the core mantle boundary (Gubbins et al., 1975)
         Horderiv2cmb    -> Minimization of the integral of the horizontal
                            derivative of B squared
+        Energydensity   -> External energy density
         Br2cmb          -> Minimize integral of Br squared over surface
                            at core mantle boundary
-        Energydensity   -> External energy density
     damp_dipole
         If False, damping is not applied to dipole coefficients (first 3).
         If True, dipole coefficients are also damped.
@@ -93,11 +93,11 @@ def horderiv2cmb(d: int, rbycmb: float) -> float:
     return res
 
 
-def br2cmb(d: int, rbycmb: float) -> float:
-    res = rbycmb**(2*d + 4) * (d+1)**2 / (2*d + 1)
+def energydensity(d: int, rbycmb: float) -> float:
+    res = rbycmb**(2*d + 1) * (d+1) / (2*d + 1)
     return res
 
 
-def energydensity(d: int, rbycmb: float) -> float:
-    res = rbycmb**(2*d + 1) * (d+1) / (2*d + 1)
+def br2cmb(d: int, rbycmb: float) -> float:
+    res = rbycmb**(2*d + 4) * (d+1)**2 / (2*d + 1)
     return res
