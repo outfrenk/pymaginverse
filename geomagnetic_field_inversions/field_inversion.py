@@ -111,6 +111,8 @@ class FieldInversion:
                                 " Redefine vector with same timestep. "
                                 f"Difference: {abs(step - self._t_step)}")
         self.times = len(array)
+        self.stat_ix = [[] for _ in range(self.nr_splines)]
+        self.time_ix = [[] for _ in range(self.nr_splines)]
         self.matrix_ready = False
 
     def add_data(self,
@@ -262,12 +264,24 @@ class FieldInversion:
         """
         self.damp_matrix = np.zeros(
             (2 * self._SPL_DEGREE + 1, self.nr_splines * self._nm_total))
-        # order data per spline?
-
+        # order data per spline
+        # loop through dataset
+        for index, time_array in enumerate(self.time_array):
+            # loop through individual times
+            for t_index, time in enumerate(time_array):
+                spl_0 = max((time - self.time_knots[0]) // self._t_step, 0)
+                for i in range(spl_0, min(spl_0+1+self._SPL_DEGREE,
+                                          self.nr_splines)):
+                    # TODO: revise
+                    # index corresponds to time, data, and error
+                    # add index of station
+                    self.stat_ix[i].append(index)
+                    # add index of data per station to spline
+                    self.time_ix[i].append(t_index)
         ########################################
 
         # order datatypes in a more straightforward way
-        # TODO: Check this accordingly
+        # line of types_sorted corresponds to index
         if not self.types_ready:
             self.types_sorted = []
             for nr, stat in enumerate(self.types):
