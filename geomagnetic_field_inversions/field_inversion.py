@@ -8,7 +8,7 @@ from pathlib import Path
 from tqdm import tqdm
 
 from .data_prep import StationData
-from .forward_modules import frechet, fwtools, rejection
+from .forward_modules import frechet, fwtools
 from .damping_modules import damping
 from .tools import geod2geoc as g2g
 
@@ -326,7 +326,6 @@ class FieldInversion:
     def run_inversion(self,
                       x0: np.ndarray,
                       max_iter: int = 10,
-                      rej_crits: np.ndarray = None,
                       path: Path = None,
                       ) -> None:
         """
@@ -340,12 +339,6 @@ class FieldInversion:
             (spherical_order + 1)^2 - 1 X nr_splines if changing through time
         max_iter
             maximum amount of iterations
-        rej_crits
-            Optional rejection criteria. Should be a length 7 array containing
-            rejection criteria for x, y, z, hor, int, incl, and decl
-            components. Criteria can be made time dependent by providing
-            rejection criteria for every timestep. In that case shape should
-            be (7, len(time vector))). inc/dec in radians!
         path
             path to location where to save normal_eq_splined and damp_matrix
             for calculating optional covariance and resolution matrix.
@@ -368,8 +361,6 @@ class FieldInversion:
         if not self.matrix_ready:
             raise Exception('Matrices have not been prepared. '
                             'Please run prepare_inversion first.')
-        if rej_crits is not None:
-            self.rejected = np.zeros(max_iter)
         # initiate array counting residual per type
         self.res_iter = np.zeros((max_iter+1, 8))
         # initiate splined values with starting model
@@ -386,11 +377,11 @@ class FieldInversion:
                             f' ({self.nr_splines}, {self._nm_total})')
         # initiate accept_matrix (default accept all) + diagonal damping matrix
         self.accept_matrix = np.ones((len(self.types_sorted), self.times))
-        spacing = self._nm_total*self._SPL_DEGREE
+        spacing = self._nm_total * self._SPL_DEGREE
         sparse_damp = scs.dia_matrix(
             (self.damp_matrix,
-             np.linspace(spacing, -spacing, 2*self._SPL_DEGREE+1)), shape=
-            (len(self.damp_matrix[0]), len(self.damp_matrix[0])))
+             np.linspace(spacing, -spacing, 2*self._SPL_DEGREE+1)),
+            shape=(len(self.damp_matrix[0]), len(self.damp_matrix[0])))
         for it in range(max_iter):  # start outer iteration loop
             if self.verbose:
                 print(f'Start iteration {it+1}')
@@ -417,30 +408,13 @@ class FieldInversion:
                 7*self.sc, self.times)[self.types_sorted]
             res_matrix = fwtools.residual_obs(
                 forwobs_matrixrs, self.data_array, self.types_sorted)
-            res_matrix *= self.time_cover
 
-            # reject data if inputted through accept_matrix
-            use_data_boolean = self.time_cover.copy()
-            if rej_crits is not None:
-                self.accept_matrix = rejection.reject_data(
-                    res_matrix, self.types_sorted, rej_crits)
-                rejected = len(self.accept_matrix.flatten())\
-                           - sum(self.accept_matrix.flatten())
-                self.rejected[it] = rejected
-                if self.verbose:
-                    print(f'{rejected} datapoints rejected')
-                use_data_boolean *= self.accept_matrix
-
-            # apply rejection and time constraint to matrices
-            frech_matrix *= np.repeat(use_data_boolean, self._nm_total, axis=1)
-            res_matrix *= use_data_boolean
             res_weight = res_matrix / self.error_array
             # sum residuals
             self.count_type = np.zeros(7)
             type06 = self.types_sorted % 7
             for i in range(7):
-                self.count_type[i] = np.sum(
-                    np.where(type06 == i, use_data_boolean.T, 0))
+                self.count_type[i] = np.sum(len(np.where(type06 == i)[0]))
             self.res_iter[it] = fwtools.residual_type(
                 res_weight, self.types_sorted, self.count_type)
 
@@ -509,7 +483,6 @@ class FieldInversion:
                 )[self.types_sorted]
                 res_matrix = fwtools.residual_obs(
                     forwobs_matrixrs, self.data_array, self.types_sorted)
-                res_matrix *= use_data_boolean
                 res_weight = res_matrix / self.error_array
                 # sum residuals
                 self.res_iter[it+1] = fwtools.residual_type(
@@ -553,7 +526,6 @@ class FieldInversion:
                           file_name: str = 'coeff',
                           save_iterations: bool = True,
                           save_residual: bool = False,
-                          rejection_report: bool = False,
                           ) -> None:
         """
         Save the Gauss coefficients at every timestep
@@ -570,11 +542,7 @@ class FieldInversion:
              (# iterations, len(time vector), nm_total)
         save_residual
             boolean indicating whether to save the residuals of each timestep
-        rejection_report
-            boolean indicating whether to store a rejection report showing
-            which data has been rejected.
         """
-        dict_types = ['x', 'y', 'z', 'hor', 'int', 'incl', 'decl']
         # save residual
         if save_residual:
             residual_frame = pd.DataFrame(
@@ -583,19 +551,7 @@ class FieldInversion:
                                         'res total'])
             residual_frame.to_csv(basedir / f'{file_name}_residual.csv',
                                   sep=';')
-        if rejection_report:
-            f = open(basedir / f'{file_name}_reject.txt', 'w')
-            row = 0
-            for n, name in enumerate(self.dcname):
-                f.write(f'Station {name}, {self.station_coord[n]} \n')
-                for types in self.types[n]:
-                    datarow = self.accept_matrix[row]
-                    if np.sum(datarow) != len(datarow):
-                        rejecttime = np.where(self.accept_matrix[row] == 0)[0]
-                        f.write(f'{dict_types[types]}:'
-                                f' {self._t_array[rejecttime]} \n')
-                    row += 1
-            f.close()
+
         if save_iterations:
             all_coeff = np.zeros((
                 len(self.unsplined_iter_gh), self.times, self._nm_total))
@@ -613,7 +569,6 @@ class FieldInversion:
                       spat_dict: dict = None,
                       temp_dict: dict = None,
                       max_iter: int = 10,
-                      rej_crits: np.ndarray = None,
                       basedir: Path = Path().absolute(),
                       overwrite: bool = True
                       ) -> None:
@@ -635,12 +590,6 @@ class FieldInversion:
             see prepare_inversion for more info
         max_iter
             maximum number of iterations. defaults to 5 iterations
-        rej_crits
-            Optional rejection criteria. Should be a length 7 array containing
-            rejection criteria for x, y, z, hor, int, incl, and decl
-            components. Criteria can be made time dependent by providing
-            rejection criteria for every timestep. In that case shape should
-            be (7, len(time vector))).
         basedir
             path where files will be saved
         overwrite
@@ -662,7 +611,7 @@ class FieldInversion:
                                                f'{temporal_df:.2e}t_final.npy'
                                      ).is_file():
                     self.prepare_inversion(spat_dict, temp_dict)
-                    self.run_inversion(x0, max_iter, rej_crits)
+                    self.run_inversion(x0, max_iter)
                     self.save_coefficients(
                         file_name=f'{spatial_df:.2e}s+{temporal_df:.2e}t',
                         basedir=basedir, save_iterations=False,

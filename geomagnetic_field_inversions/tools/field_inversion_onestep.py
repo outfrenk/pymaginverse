@@ -6,7 +6,7 @@ from typing import Union, Final
 from pathlib import Path
 
 from ..data_prep import StationData
-from ..forward_modules import frechet, fwtools, rejection
+from ..forward_modules import frechet, fwtools
 from ..tools import geod2geoc as g2g
 
 
@@ -245,7 +245,6 @@ class FieldInversionNoTime:
     def run_inversion(self,
                       x0: np.ndarray,
                       max_iter: int = 10,
-                      rej_crits: np.ndarray = None,
                       path: Path = None
                       ) -> None:
         """
@@ -258,10 +257,6 @@ class FieldInversionNoTime:
             (spherical_order + 1)^2 - 1
         max_iter
             maximum amount of iterations
-        rej_crits
-            Optional rejection criteria. Should be a length 7 array containing
-            rejection criteria for x, y, z, hor, int, incl, and decl
-            components. inc/dec in radians!
         path
             path to location where to save normal_eq for calculating optional
             covariance and resolution matrix.
@@ -281,8 +276,6 @@ class FieldInversionNoTime:
         if not self.matrix_ready:
             raise Exception('Matrices have not been prepared. '
                             'Please run prepare_inversion first.')
-        if rej_crits is not None:
-            self.rejected = np.zeros(max_iter)
         # initiate array counting residual per type
         self.res_iter = np.zeros((max_iter+1, 8))
         # initiate splined values with starting model
@@ -312,29 +305,12 @@ class FieldInversionNoTime:
             res_matrix = fwtools.residual_obs(
                 forwobs_matrixrs, self.data_array, self.types_sorted)
 
-            # reject data if inputted through accept_matrix
-            use_data_boolean = self.accept_matrix
-            if rej_crits is not None:
-                self.accept_matrix = rejection.reject_data(
-                    res_matrix, self.types_sorted, rej_crits)
-                rejected = len(self.accept_matrix.flatten())\
-                           - sum(self.accept_matrix.flatten())
-                self.rejected[it] = rejected
-                if self.verbose:
-                    print(f'{rejected} datapoints rejected')
-                use_data_boolean = self.accept_matrix
-
-            # apply rejection and time constraint to matrices
-            frech_matrix *= np.repeat(use_data_boolean[:, np.newaxis],
-                                      self._nm_total, axis=1)
-            res_matrix *= use_data_boolean
             res_weight = res_matrix / self.error_array
             # sum residuals
             self.count_type = np.zeros(7)
             type06 = self.types_sorted % 7
             for i in range(7):
-                self.count_type[i] = np.sum(
-                    np.where(type06 == i, use_data_boolean.T, 0))
+                self.count_type[i] = np.sum(len(np.where(type06 == i)[0]))
             self.res_iter[it] = fwtools.residual_type(
                 res_weight, self.types_sorted, self.count_type)
 
@@ -366,7 +342,6 @@ class FieldInversionNoTime:
                     )[self.types_sorted]
                 res_matrix = fwtools.residual_obs(
                     forwobs_matrixrs, self.data_array, self.types_sorted)
-                res_matrix *= use_data_boolean
                 res_weight = res_matrix / self.error_array
                 # sum residuals
                 self.res_iter[it+1] = fwtools.residual_type(
@@ -385,7 +360,6 @@ class FieldInversionNoTime:
                           file_name: str = 'coeff',
                           save_iterations: bool = True,
                           save_residual: bool = False,
-                          rejection_report: bool = False,
                           ) -> None:
         """
         Save the Gauss coefficients
@@ -406,7 +380,6 @@ class FieldInversionNoTime:
             boolean indicating whether to store a rejection report showing
             which data has been rejected.
         """
-        dict_types = ['x', 'y', 'z', 'hor', 'int', 'incl', 'decl']
         # save residual
         if save_residual:
             residual_frame = pd.DataFrame(
@@ -415,17 +388,7 @@ class FieldInversionNoTime:
                                         'res total'])
             residual_frame.to_csv(basedir / f'{file_name}_residual.csv',
                                   sep=';')
-        if rejection_report:
-            f = open(basedir / f'{file_name}_reject.txt', 'w')
-            row = 0
-            for n, name in enumerate(self.dcname):
-                f.write(f'Station {name}, {self.station_coord[n]} \n')
-                for types in self.types[n]:
-                    datarow = self.accept_matrix[row]
-                    if np.sum(datarow) != len(datarow):
-                        f.write(f'{dict_types[types]}: {self.time} \n')
-                    row += 1
-            f.close()
+
         if save_iterations:
             np.save(basedir / f'{file_name}_all.npy', self.unsplined_iter_gh)
         else:
