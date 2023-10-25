@@ -2,8 +2,7 @@ import numpy as np
 
 
 def forward_obs(coeff: np.ndarray,
-                frechxyz: np.ndarray,
-                reshape=True
+                frechxyz: np.ndarray
                 ) -> np.ndarray:
     """
     Calculates modeled observations at given locations
@@ -11,45 +10,35 @@ def forward_obs(coeff: np.ndarray,
     Parameters
     ----------
     coeff
-        Gauss coefficients. Each row contains the coefficients of one timestep
+        Gauss coefficients. Each row contains the coefficients of one datum
     frechxyz
         Frechet matrix for dx, dy, and dz components
-    reshape
-        If True restructures forward observations in such a way that the first
-        set of 7 rows corresponds to x, y, z, h, int, inc, and dec of one
-        station. Each row contains the specific datatype at every timestep. The
-        next station would have the next 7 rows.
-        If False does not restructure forward observations, but leaves it in 7
-        rows (x, y, z, h, int, inc, and dec). Where each row contains the data
-        of one station at every timestep, whereafter data starts of another
-        station in the same way.
 
     Returns
     -------
     forward_obs
-        Forward observations; see reshape parameter for discussion on shape
+        Forward observations; each row contains one type
     """
-    assert len(frechxyz) % 3 == 0, 'frechet matrix incorrect shape'
+    assert len(frechxyz[0]) == 3, 'frechet matrix incorrect shape'
     assert coeff.ndim == 2, 'Gauss coefficients have incorrect dimensions'
+    assert len(coeff) == len(frechxyz), 'coeff and frechet unequal # of rows'
+
     # nr of locations
-    locs = len(frechxyz) // 3
-    times = len(coeff)
-    # has 3 rows (xyz). per row first all times per loc
-    xyz = np.matmul(frechxyz, coeff.T).reshape(3, times*locs)
-    hor = np.linalg.norm(xyz[:2], axis=0)
-    b_int = np.linalg.norm(xyz, axis=0)
+    datums = len(coeff)
     # creates a matrix with shape (7, times * locations)
     # rows mx, my, mz, hor, int, inc, dec. per row first all times per loc
-    forwobs_matrix = np.zeros((7, times*locs))
-    forwobs_matrix[:3] = xyz
+    forwobs_matrix = np.zeros((7, datums))
+    forwobs_matrix[0] = np.sum((frechxyz[:, 0] * coeff), axis=1)
+    forwobs_matrix[1] = np.sum((frechxyz[:, 1] * coeff), axis=1)
+    forwobs_matrix[2] = np.sum((frechxyz[:, 2] * coeff), axis=1)
+    xyz = forwobs_matrix[:3]
+    hor = np.linalg.norm(xyz[:2], axis=0)
+    b_int = np.linalg.norm(xyz, axis=0)
     forwobs_matrix[3] = hor
     forwobs_matrix[4] = b_int
     forwobs_matrix[5] = np.arcsin(xyz[2] / b_int)
     forwobs_matrix[6] = np.arctan2(xyz[1], xyz[0])
 
-    if reshape:
-        forwobs_matrix = forwobs_matrix.reshape(
-            7, locs, times).swapaxes(0, 1).reshape(7*locs, times)
     return forwobs_matrix
 
 
@@ -68,13 +57,13 @@ def residual_obs(forwobs_matrix: np.ndarray,
     data_matrix
         Contains the real observations (from the data)
     types_sort
-        Tells the type of data by providing an index to every row in either
-        forwobs_matrix or data_matrix
+        Tells the type of data by providing an index to every row in both
+        forwobs_matrix and data_matrix
 
     Returns
     -------
     resid_matrix_t.T
-        Residual; size is similar to forwobs_matrix or data_matrix
+        Residual; size is similar to forwobs_matrix and data_matrix
     """
     assert forwobs_matrix.shape == data_matrix.shape, 'shapes are not similar'
     resid_matrix_t = (data_matrix - forwobs_matrix).T
