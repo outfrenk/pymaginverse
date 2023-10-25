@@ -207,9 +207,9 @@ class FieldInversion:
             if self.verbose:
                 print(f'Data of {name} is added to class')
             self.dcname.append(name)
-            self.time_array.append(time_entry)
-            self.data_array.append(data_entry)
-            self.error_array.append(error_entry)
+            self.time_array.extend(time_entry)
+            self.data_array.extend(data_entry)
+            self.error_array.extend(error_entry)
             self.types.append(types_entry)  # is now one long list
             self.station_coord = np.vstack((self.station_coord, station_entry))
             self.gcgd_conv = np.vstack((self.gcgd_conv, np.array([cd, sd])))
@@ -269,16 +269,21 @@ class FieldInversion:
         for index, time_array in enumerate(self.time_array):
             # loop through individual times
             for t_index, time in enumerate(time_array):
-                spl_0 = max((time - self.time_knots[0]) // self._t_step, 0)
-                for i in range(spl_0, min(spl_0+1+self._SPL_DEGREE,
-                                          self.nr_splines)):
-                    # TODO: revise
-                    # index corresponds to time, data, and error
-                    # add index of station
-                    self.stat_ix[i].append(index)
-                    # add index of data per station to spline
-                    self.time_ix[i].append(t_index)
+                sps = int((time - self._t_array[0]) // self._t_step)
+                spe = sps + 1 + self._SPL_DEGREE
+                if spe >= 0:
+                    for i in range(max(sps, 0), min(spe, self.nr_splines)):
+                        # TODO: revise
+                        # index corresponds to time, data, and error
+                        # add index of station
+                        self.stat_ix[i].append(index)
+                        # add index of data per station to spline
+                        self.time_ix[i].append(t_index)
         ########################################
+        # create even array with pandas then convert to numpy
+        self.data_array = pd.DataFrame(self.data_array).to_numpy()
+        self.time_array = pd.DataFrame(self.time_array).to_numpy()
+        self.error_array = pd.DataFrame(self.error_array).to_numpy()
 
         # order datatypes in a more straightforward way
         # line of types_sorted corresponds to index
@@ -297,11 +302,10 @@ class FieldInversion:
             self.station_coord, self._maxdegree)
         # geocentric correction
         dx, dz = g2g.frechet_in_geoc(
-            self.station_frechet[:self.sc],
-            self.station_frechet[2*self.sc:],
+            self.station_frechet[:, 0], self.station_frechet[:, 2],
             self.gcgd_conv[:, 0], self.gcgd_conv[:, 1])
-        self.station_frechet[:self.sc] = dx
-        self.station_frechet[2*self.sc:] = dz
+        self.station_frechet[:, 0] = dx
+        self.station_frechet[:, 2] = dz
 
         # Prepare damping matrices
         if self.verbose:
@@ -375,8 +379,7 @@ class FieldInversion:
             raise Exception(f'x0 has incorrect shape: {x0.shape}. \n'
                             f'It should have shape ({self._nm_total},) or'
                             f' ({self.nr_splines}, {self._nm_total})')
-        # initiate accept_matrix (default accept all) + diagonal damping matrix
-        self.accept_matrix = np.ones((len(self.types_sorted), self.times))
+
         spacing = self._nm_total * self._SPL_DEGREE
         sparse_damp = scs.dia_matrix(
             (self.damp_matrix,
@@ -391,135 +394,134 @@ class FieldInversion:
 
             rhs_damp = -sparse_damp.dot(self.splined_gh.flatten())
 
-            gh_tstep = BSpline(c=self.splined_gh, t=self.time_knots,
-                               k=self._SPL_DEGREE, axis=0,
-                               extrapolate=False)(self._t_array)
+            gh_splfunc = BSpline(c=self.splined_gh, t=self.time_knots,
+                                 k=self._SPL_DEGREE, axis=0, extrapolate=False)
 
             # Calculate frechet and residual matrix for all times
-            # and apply time constraint (time_cover)
             if self.verbose:
                 print('Create forward and residual observations')
-            forwobs_matrix = fwtools.forward_obs(
-                gh_tstep, self.station_frechet, reshape=False)
-            frech_matrix = frechet.frechet_types(
-                self.station_frechet, self.types_sorted, forwobs_matrix)
-            forwobs_matrixrs = forwobs_matrix.reshape(
-                7, self.sc, self.times).swapaxes(0, 1).reshape(
-                7*self.sc, self.times)[self.types_sorted]
-            res_matrix = fwtools.residual_obs(
-                forwobs_matrixrs, self.data_array, self.types_sorted)
+            for spline in range(self.nr_splines):
+                # create bspline factor using times
+                bspline = BSpline.basis_element(self.time_knots[spline:spline+self._SPL_DEGREE+2], extrapolate=False)(self.time_array[self.stat_ix[spline], self.time_ix[spline]])
+                # use stations to make frechet for spline
+                datapoints = self.types_sorted[self.stat_ix[spline]]
+                station_nr = datapoints // 7
+                # contains all observational data in 7 rows
+                forwobs_matrix = fwtools.forward_obs(gh_splfunc(self.time_array[self.stat_ix[spline], self.time_ix[spline]]), self.station_frechet[station_nr])
+                # contains location per row
+                frech_matrix = frechet.frechet_types(self.station_frechet[station_nr], datapoints, forwobs_matrix)
+                # contains one row with all residuals
+                res_matrix = fwtools.residual_obs(forwobs_matrix.flatten()[datapoints], self.data_array[self.stat_ix[spline], self.time_ix[spline]], datapoints)
+                res_weight = res_matrix / self.error_array[self.stat_ix[spline], self.time_ix[spline]]
 
-            res_weight = res_matrix / self.error_array
-            # sum residuals
-            self.count_type = np.zeros(7)
-            type06 = self.types_sorted % 7
-            for i in range(7):
-                self.count_type[i] = np.sum(len(np.where(type06 == i)[0]))
-            self.res_iter[it] = fwtools.residual_type(
-                res_weight, self.types_sorted, self.count_type)
+                # TODO: implement calculation weighted residual per datatype
+            # res_weight = res_matrix / self.error_array
+            # # sum residuals
+            # self.count_type = np.zeros(7)
+            # type06 = self.types_sorted % 7
+            # for i in range(7):
+            #     self.count_type[i] = np.sum(len(np.where(type06 == i)[0]))
+            # self.res_iter[it] = fwtools.residual_type(
+            #     res_weight, self.types_sorted, self.count_type)
+            #
 
-            # create time dependent matrix and vector
-            if self.verbose:
-                print('Start formation time dependent matrices')
-            for t in range(self.times):
-                frech = frech_matrix[:, self._nm_total*t:self._nm_total*(t+1)]
-                rhs_matrix[t] = np.matmul(
-                    frech.T / self.error_array[:, t], res_weight[:, t])
-                # Apply B-Splines straight away (much easier)
-                for j in range(self._SPL_DEGREE):
-                    for k in range(self._SPL_DEGREE):
-                        normal_eq_splined[
-                            (t+j) * self._nm_total:(t+j+1) * self._nm_total,
-                            (t+k) * self._nm_total:(t+k+1) * self._nm_total
-                        ] += np.matmul(frech.T*self._bspline(j+1)
-                                       / self.error_array[:, t]**2,
-                                       frech*self._bspline(k+1))
-            rhs_splined = np.zeros(self.nr_splines * self._nm_total)
-            for i in range(self._nm_total):
-                rhs_splined[i::self._nm_total] = np.convolve(
-                    rhs_matrix[:, i], self._bspline(np.arange(
-                        1, self._SPL_DEGREE+1)))
-
-            # solve the equations
-            if self.verbose:
-                print('Prepare and solve equations')
-            # create diagonals for quick inversion
-            diag = np.zeros(((self._SPL_DEGREE + 1) * self._nm_total * 2 - 1,
-                             len(normal_eq_splined)))
-            hdiags = int((self._SPL_DEGREE + 1) * self._nm_total - 1)
-            diag[hdiags] = np.diag(normal_eq_splined)
-            # upper to lower diagonal
-            for i in range(hdiags):
-                diag[i, hdiags-i:] = np.diagonal(normal_eq_splined, hdiags-i)
-                diag[-(i+1), :-(hdiags-i)] = np.diagonal(
-                    normal_eq_splined, -(hdiags-i))
-            # add damping to required diagonals
-            damp_diags = np.linspace(hdiags-spacing, hdiags+spacing,
-                                     2*self._SPL_DEGREE + 1, dtype=int)
-            diag[damp_diags] += self.damp_matrix
-            # add damping to the vector
-            rhs_splined += rhs_damp
-            # solve banded system
-            update = scl.solve_banded((hdiags, hdiags), diag, rhs_splined)
-
-            self.splined_gh = (self.splined_gh.flatten() + update).reshape(
-                self.nr_splines, self._nm_total)
-            # despline Gauss coefficients and form function
-            spline = BSpline(t=self.time_knots, c=self.splined_gh,
-                             k=3, axis=0, extrapolate=False)
-            self.unsplined_iter_gh.append(spline)
-
-            if self.verbose:
-                print('Residual is %.2f' % self.res_iter[it, 7])
-            # residual after last iteration
-            if it == max_iter - 1:
-                if self.verbose:
-                    print('Calculate residual last iteration')
-                gh_tstep = BSpline(c=self.splined_gh, t=self.time_knots,
-                                   k=self._SPL_DEGREE, axis=0,
-                                   extrapolate=False)(self._t_array)
-                forwobs_matrixrs = fwtools.forward_obs(
-                    gh_tstep, self.station_frechet, reshape=True
-                )[self.types_sorted]
-                res_matrix = fwtools.residual_obs(
-                    forwobs_matrixrs, self.data_array, self.types_sorted)
-                res_weight = res_matrix / self.error_array
-                # sum residuals
-                self.res_iter[it+1] = fwtools.residual_type(
-                    res_weight, self.types_sorted, self.count_type)
-                if self.verbose:
-                    print('Residual is %.2f' % self.res_iter[it+1, 7])
-                    print('Calculating spatial and temporal norms')
-                if np.any(self.spat_fac != 0):
-                    self.spat_norm = damping.damp_norm(
-                        self.spat_fac, self.splined_gh, self.spat_ddt,
-                        self._t_step)
-                if np.any(self.temp_fac != 0):
-                    self.temp_norm = damping.damp_norm(
-                        self.temp_fac, self.splined_gh, self.temp_ddt,
-                        self._t_step)
-                if path is not None:
-                    if self.verbose:
-                        print('Saving matrices')
-                    save_diag = np.zeros(
-                        ((self._SPL_DEGREE + 1) * self._nm_total * 2 - 1,
-                         len(normal_eq_splined)))
-                    save_diag[hdiags] = np.diag(normal_eq_splined)
-                    # upper to lower diagonal
-                    for i in range(hdiags):
-                        save_diag[i, hdiags - i:] = np.diagonal(
-                            normal_eq_splined, hdiags - i)
-                        save_diag[-(i + 1), :-(hdiags - i)] = np.diagonal(
-                            normal_eq_splined, -(hdiags - i))
-                    dia_matrix = scs.dia_matrix(
-                        (save_diag, np.linspace(hdiags, -hdiags, 2*hdiags + 1)
-                         ), shape=(len(self.damp_matrix[0]),
-                                   len(self.damp_matrix[0])))
-                    scs.save_npz(path / 'forward_matrix', dia_matrix)
-                    scs.save_npz(path / 'damp_matrix', sparse_damp)
-
-                if self.verbose:
-                    print('Finished inversion')
+                # create rhs vector
+                rhs_matrix[spline*self._nm_total:(spline+1)*self._nm_total] = np.matmul(frech_matrix.T / self.error_array[self.stat_ix[spline], self.time_ix[spline]], res_weight*bspline)
+                # create time dependent matrix
+                # for j in range(self._SPL_DEGREE):
+                #     for k in range(self._SPL_DEGREE):
+                #         normal_eq_splined[
+                #             (t+j) * self._nm_total:(t+j+1) * self._nm_total,
+                #             (t+k) * self._nm_total:(t+k+1) * self._nm_total
+                #         ] += np.matmul(frech.T*self._bspline(j+1)
+                #                        / self.error_array[:, t]**2,
+                #                        frech*self._bspline(k+1))
+            # rhs_splined = np.zeros(self.nr_splines * self._nm_total)
+            # for i in range(self._nm_total):
+            #     rhs_splined[i::self._nm_total] = np.convolve(
+            #         rhs_matrix[:, i], self._bspline(np.arange(
+            #             1, self._SPL_DEGREE+1)))
+            #
+            # # solve the equations
+            # if self.verbose:
+            #     print('Prepare and solve equations')
+            # # create diagonals for quick inversion
+            # diag = np.zeros(((self._SPL_DEGREE + 1) * self._nm_total * 2 - 1,
+            #                  len(normal_eq_splined)))
+            # hdiags = int((self._SPL_DEGREE + 1) * self._nm_total - 1)
+            # diag[hdiags] = np.diag(normal_eq_splined)
+            # # upper to lower diagonal
+            # for i in range(hdiags):
+            #     diag[i, hdiags-i:] = np.diagonal(normal_eq_splined, hdiags-i)
+            #     diag[-(i+1), :-(hdiags-i)] = np.diagonal(
+            #         normal_eq_splined, -(hdiags-i))
+            # # add damping to required diagonals
+            # damp_diags = np.linspace(hdiags-spacing, hdiags+spacing,
+            #                          2*self._SPL_DEGREE + 1, dtype=int)
+            # diag[damp_diags] += self.damp_matrix
+            # # add damping to the vector
+            # rhs_splined += rhs_damp
+            # # solve banded system
+            # update = scl.solve_banded((hdiags, hdiags), diag, rhs_splined)
+            #
+            # self.splined_gh = (self.splined_gh.flatten() + update).reshape(
+            #     self.nr_splines, self._nm_total)
+            # # despline Gauss coefficients and form function
+            # spline = BSpline(t=self.time_knots, c=self.splined_gh,
+            #                  k=3, axis=0, extrapolate=False)
+            # self.unsplined_iter_gh.append(spline)
+            #
+            # if self.verbose:
+            #     print('Residual is %.2f' % self.res_iter[it, 7])
+            # # residual after last iteration
+            # if it == max_iter - 1:
+            #     if self.verbose:
+            #         print('Calculate residual last iteration')
+            #     gh_tstep = BSpline(c=self.splined_gh, t=self.time_knots,
+            #                        k=self._SPL_DEGREE, axis=0,
+            #                        extrapolate=False)(self._t_array)
+            #     forwobs_matrixrs = fwtools.forward_obs(
+            #         gh_tstep, self.station_frechet, reshape=True
+            #     )[self.types_sorted]
+            #     res_matrix = fwtools.residual_obs(
+            #         forwobs_matrixrs, self.data_array, self.types_sorted)
+            #     res_weight = res_matrix / self.error_array
+            #     # sum residuals
+            #     self.res_iter[it+1] = fwtools.residual_type(
+            #         res_weight, self.types_sorted, self.count_type)
+            #     if self.verbose:
+            #         print('Residual is %.2f' % self.res_iter[it+1, 7])
+            #         print('Calculating spatial and temporal norms')
+            #     if np.any(self.spat_fac != 0):
+            #         self.spat_norm = damping.damp_norm(
+            #             self.spat_fac, self.splined_gh, self.spat_ddt,
+            #             self._t_step)
+            #     if np.any(self.temp_fac != 0):
+            #         self.temp_norm = damping.damp_norm(
+            #             self.temp_fac, self.splined_gh, self.temp_ddt,
+            #             self._t_step)
+            #     if path is not None:
+            #         if self.verbose:
+            #             print('Saving matrices')
+            #         save_diag = np.zeros(
+            #             ((self._SPL_DEGREE + 1) * self._nm_total * 2 - 1,
+            #              len(normal_eq_splined)))
+            #         save_diag[hdiags] = np.diag(normal_eq_splined)
+            #         # upper to lower diagonal
+            #         for i in range(hdiags):
+            #             save_diag[i, hdiags - i:] = np.diagonal(
+            #                 normal_eq_splined, hdiags - i)
+            #             save_diag[-(i + 1), :-(hdiags - i)] = np.diagonal(
+            #                 normal_eq_splined, -(hdiags - i))
+            #         dia_matrix = scs.dia_matrix(
+            #             (save_diag, np.linspace(hdiags, -hdiags, 2*hdiags + 1)
+            #              ), shape=(len(self.damp_matrix[0]),
+            #                        len(self.damp_matrix[0])))
+            #         scs.save_npz(path / 'forward_matrix', dia_matrix)
+            #         scs.save_npz(path / 'damp_matrix', sparse_damp)
+            #
+            #     if self.verbose:
+            #         print('Finished inversion')
 
     def save_coefficients(self,
                           basedir: Union[Path, str] = '.',
