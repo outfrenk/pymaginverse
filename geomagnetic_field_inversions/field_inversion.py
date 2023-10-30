@@ -98,7 +98,7 @@ class FieldInversion:
         self._t_array = array
         # number of temporal splines
         self.nr_splines = len(array) + self._SPL_DEGREE - 1
-        # location of timeknots
+        # location of timeknots with small deviation for correct splines
         self.time_knots = np.linspace(
             array[0] - self._SPL_DEGREE * self._t_step * (1 + 1e-12),
             array[-1] + self._SPL_DEGREE * self._t_step * (1 + 1e-12),
@@ -111,8 +111,8 @@ class FieldInversion:
                                 " Redefine vector with same timestep. "
                                 f"Difference: {abs(step - self._t_step)}")
         self.times = len(array)
-        self.stat_ix = [[] for _ in range(self.nr_splines)]
-        self.time_ix = [[] for _ in range(self.nr_splines)]
+        self.stat_ix = [[] for _ in range(len(array))]
+        self.time_ix = [[] for _ in range(len(array))]
         self.matrix_ready = False
 
     def add_data(self,
@@ -269,16 +269,14 @@ class FieldInversion:
         for index, time_array in enumerate(self.time_array):
             # loop through individual times
             for t_index, time in enumerate(time_array):
-                sps = int((time - self._t_array[0]) // self._t_step)
-                spe = sps + 1 + self._SPL_DEGREE
-                if spe >= 0:
-                    for i in range(max(sps, 0), min(spe, self.nr_splines)):
-                        # TODO: revise
-                        # index corresponds to time, data, and error
-                        # add index of station
-                        self.stat_ix[i].append(index)
-                        # add index of data per station to spline
-                        self.time_ix[i].append(t_index)
+                nleft = int((time - self._t_array[0]) // self._t_step)
+                if 0 <= nleft < len(self._t_array):
+                    # TODO: revise
+                    # index corresponds to time, data, and error
+                    # add index of station
+                    self.stat_ix[nleft].append(index)
+                    # add index of data per station to spline
+                    self.time_ix[nleft].append(t_index)
         ########################################
         # create even array with pandas then convert to numpy
         self.data_array = pd.DataFrame(self.data_array).to_numpy()
@@ -388,7 +386,7 @@ class FieldInversion:
         for it in range(max_iter):  # start outer iteration loop
             if self.verbose:
                 print(f'Start iteration {it+1}')
-            rhs_matrix = np.zeros((self.times, self._nm_total))
+            rhs_array = np.zeros(self.nr_splines * self._nm_total)
             normal_eq_splined = np.zeros((self._nm_total * self.nr_splines,
                                           self._nm_total * self.nr_splines))
 
@@ -398,21 +396,17 @@ class FieldInversion:
                                  k=self._SPL_DEGREE, axis=0, extrapolate=False)
 
             # Calculate frechet and residual matrix for all times
-            if self.verbose:
-                print('Create forward and residual observations')
-            for spline in range(self.nr_splines):
-                # create bspline factor using times
-                bspline = BSpline.basis_element(self.time_knots[spline:spline+self._SPL_DEGREE+2], extrapolate=False)(self.time_array[self.stat_ix[spline], self.time_ix[spline]])
+            for tix in range(len(self._t_array)):
                 # use stations to make frechet for spline
-                datapoints = self.types_sorted[self.stat_ix[spline]]
-                station_nr = datapoints // 7
+                datapoints = self.types_sorted[self.stat_ix[tix]]
+                station_nr = (datapoints // 7).astype(int)
                 # contains all observational data in 7 rows
-                forwobs_matrix = fwtools.forward_obs(gh_splfunc(self.time_array[self.stat_ix[spline], self.time_ix[spline]]), self.station_frechet[station_nr])
+                forwobs_matrix = fwtools.forward_obs(gh_splfunc(self.time_array[self.stat_ix[tix], self.time_ix[tix]]), self.station_frechet[station_nr])
                 # contains location per row
                 frech_matrix = frechet.frechet_types(self.station_frechet[station_nr], datapoints, forwobs_matrix)
                 # contains one row with all residuals
-                res_matrix = fwtools.residual_obs(forwobs_matrix.flatten()[datapoints], self.data_array[self.stat_ix[spline], self.time_ix[spline]], datapoints)
-                res_weight = res_matrix / self.error_array[self.stat_ix[spline], self.time_ix[spline]]
+                res_matrix = fwtools.residual_obs(forwobs_matrix.flatten()[datapoints], self.data_array[self.stat_ix[tix], self.time_ix[tix]], datapoints)
+                res_weight = res_matrix / self.error_array[self.stat_ix[tix], self.time_ix[tix]]
 
                 # TODO: implement calculation weighted residual per datatype
             # res_weight = res_matrix / self.error_array
@@ -424,69 +418,75 @@ class FieldInversion:
             # self.res_iter[it] = fwtools.residual_type(
             #     res_weight, self.types_sorted, self.count_type)
             #
-
                 # create rhs vector
-                rhs_matrix[spline*self._nm_total:(spline+1)*self._nm_total] = np.matmul(frech_matrix.T / self.error_array[self.stat_ix[spline], self.time_ix[spline]], res_weight*bspline)
-                # create time dependent matrix
-                # for j in range(self._SPL_DEGREE):
-                #     for k in range(self._SPL_DEGREE):
-                #         normal_eq_splined[
-                #             (t+j) * self._nm_total:(t+j+1) * self._nm_total,
-                #             (t+k) * self._nm_total:(t+k+1) * self._nm_total
-                #         ] += np.matmul(frech.T*self._bspline(j+1)
-                #                        / self.error_array[:, t]**2,
-                #                        frech*self._bspline(k+1))
-            # rhs_splined = np.zeros(self.nr_splines * self._nm_total)
-            # for i in range(self._nm_total):
-            #     rhs_splined[i::self._nm_total] = np.convolve(
-            #         rhs_matrix[:, i], self._bspline(np.arange(
-            #             1, self._SPL_DEGREE+1)))
-            #
-            # # solve the equations
-            # if self.verbose:
-            #     print('Prepare and solve equations')
-            # # create diagonals for quick inversion
-            # diag = np.zeros(((self._SPL_DEGREE + 1) * self._nm_total * 2 - 1,
-            #                  len(normal_eq_splined)))
-            # hdiags = int((self._SPL_DEGREE + 1) * self._nm_total - 1)
-            # diag[hdiags] = np.diag(normal_eq_splined)
-            # # upper to lower diagonal
-            # for i in range(hdiags):
-            #     diag[i, hdiags-i:] = np.diagonal(normal_eq_splined, hdiags-i)
-            #     diag[-(i+1), :-(hdiags-i)] = np.diagonal(
-            #         normal_eq_splined, -(hdiags-i))
-            # # add damping to required diagonals
-            # damp_diags = np.linspace(hdiags-spacing, hdiags+spacing,
-            #                          2*self._SPL_DEGREE + 1, dtype=int)
-            # diag[damp_diags] += self.damp_matrix
-            # # add damping to the vector
-            # rhs_splined += rhs_damp
-            # # solve banded system
-            # update = scl.solve_banded((hdiags, hdiags), diag, rhs_splined)
-            #
-            # self.splined_gh = (self.splined_gh.flatten() + update).reshape(
-            #     self.nr_splines, self._nm_total)
-            # # despline Gauss coefficients and form function
-            # spline = BSpline(t=self.time_knots, c=self.splined_gh,
-            #                  k=3, axis=0, extrapolate=False)
-            # self.unsplined_iter_gh.append(spline)
-            #
+
+                for spl1 in range(tix, min(tix+self._SPL_DEGREE+1, self.nr_splines)):
+                    # create bspline factor using times
+                    bspline1 = BSpline.basis_element(self.time_knots[spl1:spl1 + self._SPL_DEGREE + 2], extrapolate=False)(self.time_array[self.stat_ix[tix], self.time_ix[tix]])
+                    bspline1[np.isnan(bspline1)] = 0
+                    rhs_array[spl1 * self._nm_total:(spl1 + 1) * self._nm_total] += np.matmul(frech_matrix.T / self.error_array[self.stat_ix[tix], self.time_ix[tix]], res_weight * bspline1)
+                    for spl2 in range(tix, min(tix+self._SPL_DEGREE+1, self.nr_splines)):
+                        bspline2 = BSpline.basis_element(self.time_knots[spl2:spl2 + self._SPL_DEGREE + 2], extrapolate=False)(self.time_array[self.stat_ix[tix], self.time_ix[tix]])
+                        bspline2[np.isnan(bspline2)] = 0
+                        normal_eq_splined[spl1*self._nm_total:(spl1+1)*self._nm_total, spl2*self._nm_total:(spl2+1)*self._nm_total] += np.matmul(frech_matrix.T * bspline1 / self.error_array[self.stat_ix[tix], self.time_ix[tix]]**2, frech_matrix * bspline2[:, np.newaxis])
+
+            # solve the equations
+            if self.verbose:
+                print('Prepare and solve equations')
+            if np.all(normal_eq_splined[spl1*self._nm_total:(spl1+1)*self._nm_total, spl2*self._nm_total:(spl2+1)*self._nm_total] == 0):
+                raise Exception('No data in last spline, shorten time_array')
+            # create diagonals for quick inversion
+            diag = np.zeros(((self._SPL_DEGREE + 1) * self._nm_total * 2 - 1,
+                             len(normal_eq_splined)))
+            # number of upper diagonals
+            hdiags = int((self._SPL_DEGREE + 1) * self._nm_total - 1)
+            diag[hdiags] = np.diag(normal_eq_splined)
+            # upper to lower diagonal
+            for i in range(hdiags):
+                diag[i, hdiags-i:] = np.diagonal(normal_eq_splined, hdiags-i)
+                diag[-(i+1), :-(hdiags-i)] = np.diagonal(
+                    normal_eq_splined, -(hdiags-i))
+            # add damping to required diagonals
+            damp_diags = np.linspace(hdiags-spacing, hdiags+spacing,
+                                     2*self._SPL_DEGREE + 1, dtype=int)
+            diag[damp_diags] += self.damp_matrix
+            # add damping to the vector
+            rhs_array += rhs_damp
+            # solve banded system
+            update = scl.solve_banded((hdiags, hdiags), diag, rhs_array)
+
+            self.splined_gh = (self.splined_gh.flatten() + update).reshape(
+                self.nr_splines, self._nm_total)
+            # despline Gauss coefficients and form function
+            spline = BSpline(t=self.time_knots, c=self.splined_gh,
+                             k=3, axis=0, extrapolate=False)
+            self.unsplined_iter_gh.append(spline)
+
             # if self.verbose:
             #     print('Residual is %.2f' % self.res_iter[it, 7])
             # # residual after last iteration
-            # if it == max_iter - 1:
-            #     if self.verbose:
-            #         print('Calculate residual last iteration')
-            #     gh_tstep = BSpline(c=self.splined_gh, t=self.time_knots,
-            #                        k=self._SPL_DEGREE, axis=0,
-            #                        extrapolate=False)(self._t_array)
-            #     forwobs_matrixrs = fwtools.forward_obs(
-            #         gh_tstep, self.station_frechet, reshape=True
-            #     )[self.types_sorted]
-            #     res_matrix = fwtools.residual_obs(
-            #         forwobs_matrixrs, self.data_array, self.types_sorted)
-            #     res_weight = res_matrix / self.error_array
-            #     # sum residuals
+            if it == max_iter - 1:
+                if self.verbose:
+                    print('Calculate residual last iteration')
+                gh_splfunc = BSpline(c=self.splined_gh, t=self.time_knots,
+                                     k=self._SPL_DEGREE, axis=0,
+                                     extrapolate=False)(self._t_array)
+                for tix in range(len(self._t_array)):
+                    # use stations to make frechet for spline
+                    datapoints = self.types_sorted[self.stat_ix[tix]]
+                    station_nr = datapoints // 7
+                    # contains all observational data in 7 rows
+                    forwobs_matrix = fwtools.forward_obs(gh_splfunc(
+                        self.time_array[self.stat_ix[tix], self.time_ix[tix]]),
+                                                         self.station_frechet[
+                                                             station_nr])
+                    # contains one row with all residuals
+                    res_matrix = fwtools.residual_obs(forwobs_matrix.flatten()[datapoints],
+                        self.data_array[self.stat_ix[tix], self.time_ix[tix]], datapoints)
+                    res_weight = res_matrix / self.error_array[self.stat_ix[tix], self.time_ix[tix]]
+                    # TODO: make inversion quicker by combining into 4x4 matrix
+                    # TODO: Fix residuals, final iteration, and saving
+                # sum residuals
             #     self.res_iter[it+1] = fwtools.residual_type(
             #         res_weight, self.types_sorted, self.count_type)
             #     if self.verbose:
@@ -520,8 +520,8 @@ class FieldInversion:
             #         scs.save_npz(path / 'forward_matrix', dia_matrix)
             #         scs.save_npz(path / 'damp_matrix', sparse_damp)
             #
-            #     if self.verbose:
-            #         print('Finished inversion')
+                if self.verbose:
+                    print('Finished inversion')
 
     def save_coefficients(self,
                           basedir: Union[Path, str] = '.',
