@@ -122,7 +122,7 @@ def integrator(spl1: int,
 
 def damp_norm(damp_fac: np.ndarray,
               coeff: np.ndarray,
-              ddt: int,
+              damp_type: int,
               t_step: float,
               ) -> np.ndarray:
     """
@@ -134,8 +134,8 @@ def damp_norm(damp_fac: np.ndarray,
         damping diagonal as produced by damp_types
     coeff
         splined Gauss coefficients of one time per row
-    ddt
-        order of derivation used for damping, 0 - 2
+    damp_type
+        integer of damping type to be applied (see _DList)
     t_step
         dt of timevector
 
@@ -145,7 +145,7 @@ def damp_norm(damp_fac: np.ndarray,
         contains the spatial or temporal damping norm per TIME INTERVAL
     """
     spl_degree = 3
-
+    ddt = _DList[damp_type][1]
     spl = bsplines.derivatives(t_step, 1, ddt).flatten()
     norm = np.zeros(len(coeff))
     # append zero to coeff
