@@ -12,7 +12,7 @@ def forward_obs(coeff: np.ndarray,
     coeff
         Gauss coefficients. Each row contains the coefficients of one datum
     frechxyz
-        Frechet matrix for dx, dy, and dz components
+        Frechet matrix for dx, dy, and dz components (stations X 3 X nm_total)
 
     Returns
     -------
@@ -21,6 +21,11 @@ def forward_obs(coeff: np.ndarray,
     """
     assert len(frechxyz[0]) == 3, 'frechet matrix incorrect shape'
     assert coeff.ndim == 2, 'Gauss coefficients have incorrect dimensions'
+    # if only one set of Gaussian coefficients for all points
+    if len(coeff) == 1:
+        coeff = np.tile(coeff, (len(frechxyz), 1))
+    elif len(frechxyz) == 1:
+        frechxyz = np.tile(frechxyz, (len(coeff), 1, 1))
     assert len(coeff) == len(frechxyz), 'coeff and frechet unequal # of rows'
 
     # nr of locations
