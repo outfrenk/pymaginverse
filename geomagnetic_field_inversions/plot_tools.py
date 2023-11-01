@@ -8,14 +8,13 @@ import cartopy.crs as ccrs
 from .field_inversion import FieldInversion
 from .forward_modules import frechet, fwtools
 from .data_prep import StationData
-from .tools import bsplines, geod2geoc, FieldInversionNoTime
+from .tools import bsplines, FieldInversionNoTime
 
 _DataTypes = Literal['x', 'y', 'z', 'hor', 'inc', 'dec', 'int']
 
 
 def plot_station(axes: Union[list, plt.Axes],
                  dc: StationData,
-                 steps: int = 1000
                  ) -> plt.Axes:
     """ Plots input (paleo)magnetic data based on the StationData class
 
@@ -25,23 +24,18 @@ def plot_station(axes: Union[list, plt.Axes],
         List of matplotlib axis objects equal to dc.types, or one axes
     dc
         An instance of the "StationData" class. This function uses the
-        lat, loc, types, fit_data, and data attributes of this class
-    steps
-        Number of plotting steps on the time axis
+        lat, loc, types, and data attributes of this class
     """
     if len(dc.types) == 1 and type(axes) != list:
         axes = [axes]
     assert len(axes) >= len(dc.types), 'not defined enough plot axes'
     for i in range(len(dc.types)):
-        time_arr = np.linspace(dc.data[i][0][0], dc.data[i][0][-1], steps)
         axes[i].set_title('Fitting %s of data' % dc.types[i])
         if dc.types[i] == 'inc' or dc.types[i] == 'dec':
             axes[i].set_ylabel('%s (degrees)' % dc.types[i])
         else:
             axes[i].set_ylabel('%s' % dc.types[i])
         axes[i].set_xlabel('Time')
-        axes[i].plot(time_arr, dc.fit_data[i](time_arr),
-                     label='fit', color='orange')
         axes[i].scatter(dc.data[i][0], dc.data[i][1], label='data')
         axes[i].legend()
     return axes
@@ -121,7 +115,6 @@ def plot_coeff(ax: plt.Axes,
         iterations (True) or against time for the chosen iteration (False).
         Default option is set to False.
     """
-    # TODO: add uncertainty bars
     linestyles = ['solid', 'dotted', 'dashed', 'dashdot',
                   (0, (3, 5, 1, 5, 1, 5)), (0, (3, 10, 1, 10)), (0, (1, 10)),
                   (0, (3, 10, 1, 10, 1, 10))]
@@ -203,12 +196,6 @@ def plot_spectrum(axes: Tuple[plt.Axes, plt.Axes],
         depth = 6371.2 / 3485.0
     else:
         depth = 1
-    #     counter = 0
-    #     for l in range(im.maxdegree):
-    #         mult_factor = (6371.2 / 3485.0) ** (l + 1)
-    #         for m in range(l + 1):
-    #             coeff[:, counter] *= mult_factor
-    #             counter += 1
 
     spl1 = bsplines.derivatives(im._t_step, 1, derivative=1).flatten()
     spl0 = bsplines.derivatives(im._t_step, 1, derivative=0).flatten()
@@ -304,7 +291,7 @@ def plot_world(axes: Tuple[plt.Axes, plt.Axes, plt.Axes],
     contour_kw
         optional plotting parameters
     """
-    if time is None:
+    if isinstance(im, FieldInversionNoTime):
         coeff = im.unsplined_iter_gh[it][np.newaxis, :]
     else:
         coeff = im.unsplined_iter_gh[it](time)[np.newaxis, :]
@@ -322,7 +309,7 @@ def plot_world(axes: Tuple[plt.Axes, plt.Axes, plt.Axes],
     else:
         world_coord[:, 2] = 6371.2
     frechxyz = frechet.frechet_basis(world_coord, im.maxdegree)
-    forw_obs = fwtools.forward_obs(coeff, frechxyz, reshape=False)
+    forw_obs = fwtools.forward_obs(coeff, frechxyz)
     plot = np.zeros((3, len(forw_obs[0])))
     title = []
     if cmb:
@@ -423,7 +410,6 @@ def plot_place(ax: plt.Axes,
 def compare_loc(axes: list,
                 im: FieldInversion,
                 dc: StationData,
-                plot_fit: bool = False,
                 plot_kwargs: dict = None
                 ) -> list:
     """Plots the modeled magnetic field at the location of a data input class
@@ -438,8 +424,6 @@ def compare_loc(axes: list,
     dc
         An instance of the "StationData" class. This function uses the
         lat, loc, types, fit_data, and data attributes of this class
-    plot_fit
-        If True plots dc.fit_data instead of the original data
     plot_kwargs
         optional plotting keyword arguments
 
@@ -451,16 +435,10 @@ def compare_loc(axes: list,
     if len(axes) != len(dc.types):
         raise Exception('Not enough axes defined'
                         f', you need {len(dc.types)} axes.')
-    reject = np.any(im.accept_matrix == 0)
-    # find rejected data
-    if reject:
-        rej_xdata = find_rejected(dc, im)
+
     for i, item in enumerate(dc.types):
         xdata = np.array(dc.data[i][0])
-        if plot_fit:
-            ydata = np.array(dc.fit_data[i](xdata))
-        else:
-            ydata = np.array(dc.data[i][1])
+        ydata = np.array(dc.data[i][1])
 
         if item == 'inc':
             ydata = ydata % 180
@@ -475,10 +453,7 @@ def compare_loc(axes: list,
         else:
             axes[i].set_ylabel('%s' % item)
             axes[i].scatter(xdata, ydata, label='data')
-        # plot rejected data
-        if reject:
-            for rej in rej_xdata[i]:
-                axes[i].axvspan(rej[0], rej[1], alpha=0.5, color='red')
+
         mindata, maxdata = min(xdata), max(xdata)
         minmodel, maxmodel = min(im.t_array), max(im.t_array)
         axes[i].set_xlabel('Time')
@@ -546,70 +521,3 @@ def plot_sweep(axes: Tuple[plt.Axes, plt.Axes],
                     axes[p].scatter(res[j, i], modelsize[j, i], color='black',
                                     marker=marker[j % len(marker)])
     return axes
-
-
-def find_rejected(dc: StationData,
-                  im: FieldInversion
-                  ) -> list:
-    """ Find the timespan for which the data is rejected
-
-    Parameters
-    ----------
-    im
-        An instance of the `geomagnetic_field_inversion` class. This function
-        uses the station_coord, _t_step, times, types_sorted,
-        and accept_matrix attributes.
-    dc
-        An instance of the "StationData" class. This function uses the lon and
-        types attributes of this class
-    Returns
-    -------
-    rej_xdata
-        list of lists of lists containing time intervals, per row, at which
-        data was rejected. Shape: len(dc.types) X # rejections X 2
-    """
-    typedict = {"x": 0, "y": 1, "z": 2, "hor": 3,
-                "int": 4, "inc": 5, "dec": 6}
-    # find data row
-    index = np.where(im.station_coord[:, 1] == np.radians(dc.lon))[0]
-    if len(index) == 0:
-        raise Exception('No match in longitude between classes')
-    elif len(index) > 1:
-        if im.geodetic:
-            nl, he, b, c = geod2geoc.latrad_in_geoc(np.radians(dc.lat),
-                                                    dc.height)
-        else:
-            nl = np.radians(dc.lat)
-            he = 6371.2 + dc.height*1e-3
-        compare_row = (0.5*np.pi - nl, np.radians(dc.lon), he)
-        index = np.where((im.station_coord == compare_row).all(axis=1))[0]
-        if len(index) != 1:
-            raise Exception('error in matching longitude between classes: ',
-                            index)
-
-    rej_xdata = []
-    t_half1 = im._t_step * np.arange(im.times) - 0.25 * im._t_step
-    t_half2 = im._t_step * np.arange(im.times) + 0.25 * im._t_step
-    for t, types in enumerate(dc.types):
-        sorted_row = index * 7 + typedict[types]
-        row = np.where(im.types_sorted == sorted_row)[0]
-        if len(row) != 1:
-            raise Exception('incorrect length row, panic now!')
-        rej = np.where(im.accept_matrix[row] == 0)[1]
-        rej_list = []
-        if len(rej) > 0:
-            min_item = rej[0]
-            max_item = rej[0]
-            for i, item in enumerate(rej[1:]):
-                # if in order
-                if item == (rej[i] + 1):
-                    max_item = item
-                else:
-                    rej_list.append([t_half1[min_item], t_half2[max_item]])
-                    min_item = item
-                    max_item = item
-                if item == rej[-1]:
-                    rej_list.append([t_half1[min_item], t_half2[max_item]])
-        rej_xdata.append(rej_list)
-
-    return rej_xdata
