@@ -322,9 +322,9 @@ def plot_world(axes: Tuple[plt.Axes, plt.Axes, plt.Axes],
     else:
         plot[0] = forw_obs[4]
         title.append('Intensity')
-        plot[1] = forw_obs[5]
+        plot[1] = np.degrees(forw_obs[5])
         title.append('Inclination')
-        plot[2] = forw_obs[6]
+        plot[2] = np.degrees(forw_obs[6])
         title.append('Declination')
 
     default_kw = {'lvf_0': np.linspace(min(plot[0]), max(plot[0]), 10),
