@@ -64,9 +64,8 @@ def frechet_basis(loc: np.ndarray,
 
 
 def frechet_types(frechxyz: np.ndarray,
-                  types_sort: np.ndarray,
                   forwobs_matrix: np.ndarray = None,
-                  coeff:np.ndarray = None
+                  coeff: np.ndarray = None
                   ) -> np.ndarray:
     """
     Calculates the frechet matrix for a specific datatype
@@ -75,9 +74,6 @@ def frechet_types(frechxyz: np.ndarray,
     ----------
     frechxyz
         frechet matrix for dx, dy, and dz components produced by frechet_basis
-    types_sort
-        Tells the type of data by providing an index to every row in either
-        forwobs_matrix or data_matrix
     forwobs_matrix
         Contains the modeled observations. If not provided is calculated with
         forward_obs function
@@ -116,10 +112,9 @@ def frechet_types(frechxyz: np.ndarray,
     frech_matrix[4] = (thor*dhor + txyz[2]*dxyz[2]) / tb_int
     frech_matrix[5] = (thor*dxyz[2] - txyz[2]*dhor) / tb_int**2
     frech_matrix[6] = (txyz[0]*dxyz[1] - txyz[1]*dxyz[0]) / thor**2
-    # now select useful rows by data_type
     # first reshape frech_mat to correspond to datatypes
-    # meaning: one row is one datatype of station for every Gauss coefficient
-    frech_matrix = frech_matrix.reshape(
-        7, locs, nm_total).swapaxes(0, 1).reshape(locs*7, nm_total)
+    # meaning: one row is one station containing every datatype and then
+    # Gauss coefficient
+    frech_matrix = frech_matrix.reshape(7, locs, nm_total).swapaxes(0, 1)
 
-    return frech_matrix[types_sort]
+    return frech_matrix
