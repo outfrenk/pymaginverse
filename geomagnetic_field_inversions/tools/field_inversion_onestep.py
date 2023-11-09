@@ -76,6 +76,7 @@ class FieldInversionNoTime:
         self.unsplined_iter_gh = []
         self.dcname = []  # contains name of stations
         self.rejected = np.empty(0)
+        self.x0 = np.zeros(0)
 
     @property
     def maxdegree(self):
@@ -283,6 +284,7 @@ class FieldInversionNoTime:
             print('Setting up starting model')
         self.unsplined_iter_gh = np.zeros((max_iter+1, self._nm_total))
         if x0.ndim == 1 and len(x0) == self._nm_total:
+            self.x0 = x0.copy()
             self.unsplined_iter_gh[0] = x0
         else:
             raise Exception(f'x0 has incorrect shape: {x0.shape}. \n'

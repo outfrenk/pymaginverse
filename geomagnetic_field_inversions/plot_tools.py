@@ -13,9 +13,9 @@ from .tools import bsplines, FieldInversionNoTime
 _DataTypes = Literal['x', 'y', 'z', 'hor', 'inc', 'dec', 'int']
 
 
-def plot_station(axes: Union[list, plt.Axes],
-                 dc: StationData,
-                 ) -> plt.Axes:
+def plot_data(axes: Union[list, plt.Axes],
+              dc: StationData,
+              ) -> plt.Axes:
     """ Plots input (paleo)magnetic data based on the StationData class
 
     Parameters
@@ -41,6 +41,113 @@ def plot_station(axes: Union[list, plt.Axes],
     return axes
 
 
+def compare_loc(axes: list,
+                im: FieldInversion,
+                dc: StationData,
+                plot_kwargs: dict = None
+                ) -> list:
+    """Plots the modeled magnetic field at the location of a data input class
+
+    Parameters
+    ----------
+    axes
+        Matplotlib axes objects
+    im
+        An instance of the `geomagnetic_field_inversion` class. This function
+        uses the unsplined_iter_gh, t_array, and maxdegree attributes.
+    dc
+        An instance of the "StationData" class. This function uses the
+        lat, loc, types, fit_data, and data attributes of this class
+    plot_kwargs
+        optional plotting keyword arguments
+
+    This function calls plot_place for plotting of the modeled field
+    """
+    # circumvent length errors
+    if len(dc.types) == 1 and type(axes) != list:
+        axes = [axes]
+    if len(axes) != len(dc.types):
+        raise Exception('Not enough axes defined'
+                        f', you need {len(dc.types)} axes.')
+
+    for i, item in enumerate(dc.types):
+        xdata = np.array(dc.data[i][0])
+        ydata = np.array(dc.data[i][1])
+
+        if item == 'inc':
+            ydata = ydata % 180
+            ydata = np.where(ydata > 90, ydata - 180, ydata)
+            axes[i].set_ylabel('%s (degrees)' % item)
+            axes[i].scatter(xdata, ydata, label='data')
+        elif item == 'dec':
+            ydata = np.array(ydata) % 360
+            ydata = np.where(ydata > 180, ydata - 360, ydata)
+            axes[i].set_ylabel('%s (degrees)' % item)
+            axes[i].scatter(xdata, ydata, label='data')
+        else:
+            axes[i].set_ylabel('%s' % item)
+            axes[i].scatter(xdata, ydata, label='data')
+
+        mindata, maxdata = min(xdata), max(xdata)
+        minmodel, maxmodel = min(im.t_array), max(im.t_array)
+        axes[i].set_xlabel('Time')
+        axes[i] = plot_forward(axes[i], im, [dc.lat, dc.lon], item,
+                               plot_kwargs=plot_kwargs)
+        axes[i].set_xlim(max(mindata, minmodel)*0.9,
+                         min(maxdata, maxmodel)*1.1)
+        axes[i].legend()
+    return axes
+
+
+def plot_forward(ax: plt.Axes,
+                 im: FieldInversion,
+                 input_coord: Union[list, np.ndarray],
+                 datatype: _DataTypes,
+                 it: int = -1,
+                 plot_kwargs: dict = None
+                 ) -> plt.Axes:
+    """ Plots the magnetic field on Earth given Gauss coefficients
+
+    Parameters
+    ----------
+    ax
+        Matplotlib axis objects
+    im
+        An instance of the `geomagnetic_field_inversion` class. This function
+        uses the unsplined_iter_gh, t_array, and maxdegree attributes.
+    input_coord
+        3-long array of coordinates containing latitude, longitude, and radius.
+    datatype
+        type of data to be plotted; should be either: 'x', 'y', 'z', 'hor',
+        'inc' (degrees), 'dec' (degrees), or 'int'
+    it
+        Determines which iteration is used to plot powerspectrum. Defaults to
+        final iteration.
+    plot_kwargs
+        optional plotting keyword arguments
+    """
+    if plot_kwargs is None:
+        plot_kwargs = {'color': 'black', 'linestyle': 'dashed', 'marker': 'o'}
+    # translation datatypes
+    typedict = {"x": 0, "y": 1, "z": 2, "hor": 3,
+                "int": 4, "inc": 5, "dec": 6}
+    coeff = im.unsplined_iter_gh[it](im.t_array)
+    coord = np.zeros((1, 3))
+    coord[0, 0] = 0.5 * np.pi - np.radians(input_coord[0])
+    coord[0, 1] = np.radians(input_coord[1])
+    if len(input_coord) == 2:
+        coord[0, 2] = 6371.2
+    else:
+        coord[0, 2] = input_coord[2]
+    frechxyz = frechet.frechet_basis(coord, im.maxdegree)
+    forw_obs = fwtools.forward_obs(coeff, frechxyz, link=np.zeros(
+        len(im.t_array), dtype=np.int8))
+    forw_obs[5:7] = np.degrees(forw_obs[5:7])
+    ax.plot(im.t_array, forw_obs[typedict[datatype]],
+            label='model', **plot_kwargs)
+    return ax
+
+
 def plot_residuals(ax: plt.Axes,
                    im: Union[FieldInversion, FieldInversionNoTime],
                    **plt_kwargs
@@ -53,7 +160,7 @@ def plot_residuals(ax: plt.Axes,
         Matplotlib axis object
     im
         An instance of the `geomagnetic_field_inversion` class. This function
-        uses the res_iter attribute.
+        uses the res_iter and count_type attribute.
     **plt_kwargs
         optional plotting keyword arguments
     """
@@ -137,13 +244,15 @@ def plot_coeff(ax: plt.Axes,
     labels = [labels[i] for i in index]
     for i, item in enumerate(index):
         if plot_iter:
+            coeff = np.zeros(len(im.unsplined_iter_gh) + 1)
             if isinstance(im, FieldInversion):
-                coeff = np.zeros(len(im.unsplined_iter_gh))
-                for c in range(len(coeff)):
-                    coeff[c] = im.unsplined_iter_gh[c](
+                coeff[0] = im.x0[item]
+                for c in range(len(coeff)-1):
+                    coeff[c+1] = im.unsplined_iter_gh[c](
                         im.t_array[it_time])[item]
             elif isinstance(im, FieldInversionNoTime):
-                coeff = im.unsplined_iter_gh[:, item]
+                coeff[0] = im.x0[item]
+                coeff[1:] = im.unsplined_iter_gh[:, item]
             else:
                 raise Exception('Class not found')
             ax.plot(np.arange(len(coeff)), coeff,
@@ -171,7 +280,7 @@ def plot_coeff(ax: plt.Axes,
 def plot_spectrum(axes: Tuple[plt.Axes, plt.Axes],
                   im: plt.Axes,
                   time: Union[list, np.ndarray] = None,
-                  cmb: bool = False
+                  cmb: bool = True
                   ) -> Tuple[plt.Axes, plt.Axes]:
     """ Plots the powerspectrum of gaussian coefficients and its variance at
     the core mantle boundary (cmb) or earth's surface.
@@ -184,7 +293,7 @@ def plot_spectrum(axes: Tuple[plt.Axes, plt.Axes],
         An instance of the `geomagnetic_field_inversion` class. This function
         uses the splined_gh, t_array, and maxdegree attributes.
     cmb
-        If true presents results at cmb, else (default) at earth's surface
+        If True (default) presents results at cmb, else at earth's surface
     time
         List of indices used to plot powerspectrum. Defaults to using all
         timesteps
@@ -221,10 +330,12 @@ def plot_spectrum(axes: Tuple[plt.Axes, plt.Axes],
                  marker='o', label='power')
     axes[0].set_xlabel('degree')
     axes[0].set_ylabel('power')
+    axes[0].set_yscale('log')
     axes[1].plot(np.arange(1, im.maxdegree + 1), sum_coeff_sv,
                  marker='s', label='variance')
     axes[1].set_xlabel('degree')
     axes[1].set_ylabel('secular variation')
+    axes[1].set_yscale('log')
 
     return axes
 
@@ -260,14 +371,16 @@ def plot_dampnorm(ax: plt.Axes,
     return ax
 
 
-def plot_world(axes: Tuple[plt.Axes, plt.Axes, plt.Axes],
-               im: Union[FieldInversion, FieldInversionNoTime],
-               proj: ccrs,
-               time: float = None,
-               cmb: bool = False,
-               it: int = -1,
-               contour_kw: dict = None
-               ) -> Tuple[plt.Axes, plt.Axes, plt.Axes]:
+def plot_worldmag(axes: Tuple[plt.Axes, plt.Axes, plt.Axes],
+                  im: Union[FieldInversion, FieldInversionNoTime],
+                  proj: ccrs,
+                  plot_loc: bool = False,
+                  time: float = None,
+                  cmb: bool = False,
+                  it: int = -1,
+                  contour_kw: dict = None,
+                  plotloc_kw: dict = None
+                  ) -> Tuple[plt.Axes, plt.Axes, plt.Axes]:
     """ Plots the magnetic field on Earth given gaussian coefficients
 
     Parameters
@@ -280,6 +393,9 @@ def plot_world(axes: Tuple[plt.Axes, plt.Axes, plt.Axes],
     proj
         Projection type used for plotting on a world map. Should be an instance
         of cartopy.crs
+    plot_loc
+        Boolean indicating whether to plot the location of the datapoints
+        on the worldmap. Defaults to False.
     time
         Plotting time. If time is None, assuming im is an instance of
         field_inversion_onestep.FieldInversion_notime
@@ -290,6 +406,8 @@ def plot_world(axes: Tuple[plt.Axes, plt.Axes, plt.Axes],
         final iteration.
     contour_kw
         optional plotting parameters
+    plotloc_kw
+        optional plotting parameters for optional plotting locations on map
     """
     if isinstance(im, FieldInversionNoTime):
         coeff = im.unsplined_iter_gh[it][np.newaxis, :]
@@ -309,7 +427,8 @@ def plot_world(axes: Tuple[plt.Axes, plt.Axes, plt.Axes],
     else:
         world_coord[:, 2] = 6371.2
     frechxyz = frechet.frechet_basis(world_coord, im.maxdegree)
-    forw_obs = fwtools.forward_obs(coeff, frechxyz)
+    forw_obs = fwtools.forward_obs(coeff, frechxyz, link=np.zeros(
+        len(frechxyz), dtype=np.int8))
     plot = np.zeros((3, len(forw_obs[0])))
     title = []
     if cmb:
@@ -355,114 +474,39 @@ def plot_world(axes: Tuple[plt.Axes, plt.Axes, plt.Axes],
         axes[i].gridlines()
         axes[i].clabel(c, fontsize=12, inline=True, fmt='%.1f')
         axes[i].set_title(title[i])
+        if plot_loc:
+            axes[i] = plot_worldloc(axes[i], im, proj, plotloc_kw)
 
     return axes
 
 
-def plot_place(ax: plt.Axes,
-               im: FieldInversion,
-               input_coord: Union[list, np.ndarray],
-               datatype: _DataTypes,
-               it: int = -1,
-               plot_kwargs: dict = None
-               ) -> plt.Axes:
-    """ Plots the magnetic field on Earth given Gauss coefficients
+def plot_worldloc(ax: plt.Axes,
+                  im: Union[FieldInversion, FieldInversionNoTime],
+                  proj: ccrs,
+                  plot_kw: dict = None
+                  ) -> plt.Axes:
+    """ Plots datum locations on a world map
 
     Parameters
     ----------
     ax
-        Matplotlib axis objects
+        Matplotlib axis with appropriate projection
     im
         An instance of the `geomagnetic_field_inversion` class. This function
-        uses the unsplined_iter_gh, t_array, and maxdegree attributes.
-    input_coord
-        3-long array of coordinates containing latitude, longitude, and radius.
-    datatype
-        type of data to be plotted; should be either: 'x', 'y', 'z', 'hor',
-        'inc' (degrees), 'dec' (degrees), or 'int'
-    it
-        Determines which iteration is used to plot powerspectrum. Defaults to
-        final iteration.
-    plot_kwargs
-        optional plotting keyword arguments
+        uses the station_coord attributes.
+    proj
+        Projection type used for plotting on a world map. Should be an instance
+        of cartopy.crs
+    plot_kw
+        optional plotting parameters for optional plotting locations on map
     """
-    if plot_kwargs is None:
-        plot_kwargs = {'color': 'black', 'linestyle': 'dashed', 'marker': 'o'}
-    # translation datatypes
-    typedict = {"x": 0, "y": 1, "z": 2, "hor": 3,
-                "int": 4, "inc": 5, "dec": 6}
-    coeff = im.unsplined_iter_gh[it](im.t_array)
-    coord = np.zeros((1, 3))
-    coord[0, 0] = 0.5 * np.pi - np.radians(input_coord[0])
-    coord[0, 1] = np.radians(input_coord[1])
-    if len(input_coord) == 2:
-        coord[0, 2] = 6371.2
+    lat = np.degrees(0.5 * np.pi - im.station_coord[:, 0])
+    lon = np.degrees(im.station_coord[:, 1])
+    if plot_kw:
+        ax.scatter(lat, lon, transform=proj, **plot_kw)
     else:
-        coord[0, 2] = input_coord[2]
-    frechxyz = frechet.frechet_basis(coord, im.maxdegree)
-    forw_obs = fwtools.forward_obs(coeff, frechxyz)
-    forw_obs[5:7] = np.degrees(forw_obs[5:7])
-    ax.plot(im.t_array, forw_obs[typedict[datatype]],
-            label='model', **plot_kwargs)
+        ax.scatter(lat, lon, transform=proj, color='black', marker='^')
     return ax
-
-
-def compare_loc(axes: list,
-                im: FieldInversion,
-                dc: StationData,
-                plot_kwargs: dict = None
-                ) -> list:
-    """Plots the modeled magnetic field at the location of a data input class
-
-    Parameters
-    ----------
-    axes
-        Matplotlib axes objects
-    im
-        An instance of the `geomagnetic_field_inversion` class. This function
-        uses the unsplined_iter_gh, t_array, and maxdegree attributes.
-    dc
-        An instance of the "StationData" class. This function uses the
-        lat, loc, types, fit_data, and data attributes of this class
-    plot_kwargs
-        optional plotting keyword arguments
-
-    This function calls plot_place for plotting of the modeled field
-    """
-    # circumvent length errors
-    if len(dc.types) == 1 and type(axes) != list:
-        axes = [axes]
-    if len(axes) != len(dc.types):
-        raise Exception('Not enough axes defined'
-                        f', you need {len(dc.types)} axes.')
-
-    for i, item in enumerate(dc.types):
-        xdata = np.array(dc.data[i][0])
-        ydata = np.array(dc.data[i][1])
-
-        if item == 'inc':
-            ydata = ydata % 180
-            ydata = np.where(ydata > 90, ydata - 180, ydata)
-            axes[i].set_ylabel('%s (degrees)' % item)
-            axes[i].scatter(xdata, ydata, label='data')
-        elif item == 'dec':
-            ydata = np.array(ydata) % 360
-            ydata = np.where(ydata > 180, ydata - 360, ydata)
-            axes[i].set_ylabel('%s (degrees)' % item)
-            axes[i].scatter(xdata, ydata, label='data')
-        else:
-            axes[i].set_ylabel('%s' % item)
-            axes[i].scatter(xdata, ydata, label='data')
-
-        mindata, maxdata = min(xdata), max(xdata)
-        minmodel, maxmodel = min(im.t_array), max(im.t_array)
-        axes[i].set_xlabel('Time')
-        axes[i] = plot_place(axes[i], im, [dc.lat, dc.lon], item,
-                             plot_kwargs=plot_kwargs)
-        axes[i].set_xlim(max(mindata, minmodel)*0.9,
-                         min(maxdata, maxmodel)*1.1)
-        axes[i].legend()
-    return axes
 
 
 def plot_sweep(axes: Tuple[plt.Axes, plt.Axes],
@@ -488,13 +532,15 @@ def plot_sweep(axes: Tuple[plt.Axes, plt.Axes],
     marker = ['o', 'v', '^', 's', '+', '*', 'x', 'd']
     lstyle = ['solid', 'dashed', 'dotted', 'dashdot', (0, (3, 5, 1, 5, 1, 5))]
 
-    modelsize = np.zeros((len(spatial_range), len(temporal_range)))
+    spatnorm = np.zeros((len(spatial_range), len(temporal_range)))
+    tempnorm = np.zeros((len(spatial_range), len(temporal_range)))
     res = np.zeros((len(spatial_range), len(temporal_range)))
     for j, temporal_df in enumerate(temporal_range):
         for i, spatial_df in enumerate(spatial_range):
-            coeff = np.load(
-                basedir / f'{spatial_df:.2e}s+{temporal_df:.2e}t_final.npy')
-            modelsize[i, j] = np.linalg.norm(coeff)
+            filename = f'{spatial_df:.2e}s+{temporal_df:.2e}t_damp.npy'
+            with open(basedir / filename, 'rb') as f:
+                spatnorm[i, j] = np.linalg.norm(np.load(f))
+                tempnorm[i, j] = np.linalg.norm(np.load(f))
             res[i, j] = pd.read_csv(
                 basedir / f'{spatial_df:.2e}s+{temporal_df:.2e}t_residual.csv',
                 delimiter=';').to_numpy()[-1, -1]
@@ -503,10 +549,11 @@ def plot_sweep(axes: Tuple[plt.Axes, plt.Axes],
     ts = ['t', 's']
     for p in range(2):
         axes[p].set_xlabel('residual')
-        axes[p].set_ylabel('model size')
+        axes[p].set_ylabel('damping norm')
+        modelsize = spatnorm
         if p == 1:
             res = res.T
-            modelsize = modelsize.T
+            modelsize = tempnorm
         for i in range(len(tp_ranges[p])):
             axes[p].plot(res[:, i], modelsize[:, i], color='black',
                          linestyle=lstyle[i % len(lstyle)],
