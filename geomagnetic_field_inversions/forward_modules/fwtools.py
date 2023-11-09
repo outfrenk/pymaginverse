@@ -2,7 +2,8 @@ import numpy as np
 
 
 def forward_obs(coeff: np.ndarray,
-                frechxyz: np.ndarray
+                frechxyz: np.ndarray,
+                link: np.ndarray = None,
                 ) -> np.ndarray:
     """
     Calculates modeled observations at given locations
@@ -13,21 +14,30 @@ def forward_obs(coeff: np.ndarray,
         Gauss coefficients. Each row contains the coefficients of one datum
     frechxyz
         Frechet matrix for dx, dy, and dz components (stations X 3 X nm_total)
+    link
+        Array which tells how coeff and frechxyz should be combined. If it has
+        the same length as coeff if tells to which 1st dimension of frechxyz
+        each row of coeff belongs to and vice versa. Ignored if set to None
 
     Returns
     -------
     forward_obs
         Forward observations; each row contains one type
     """
-    assert len(frechxyz[0]) == 3, 'frechet matrix incorrect shape'
+    assert frechxyz.ndim == 3, 'frechet matrix should have 3 dimensions'
+    assert len(frechxyz[0]) == 3, 'frechet matrix does not contain dx, dy, dz'
     assert coeff.ndim == 2, 'Gauss coefficients have incorrect dimensions'
-    # if only one set of Gaussian coefficients for all points
-    if len(coeff) == 1:
-        coeff = np.tile(coeff, (len(frechxyz), 1))
-    elif len(frechxyz) == 1:
-        frechxyz = np.tile(frechxyz, (len(coeff), 1, 1))
-    assert len(coeff) == len(frechxyz), 'coeff and frechet unequal # of rows'
-
+    if link is not None:
+        # if only one set of Gaussian coefficients for all points
+        if len(coeff) == len(link):
+            frechxyz = frechxyz[link]
+        elif len(frechxyz) == len(link):
+            coeff = coeff[link]
+        else:
+            raise Exception(f'Link has incorrect size ({len(link)}, should be:'
+                            f' {len(coeff)}, {len(frechxyz)}, or None')
+    assert len(coeff) == len(frechxyz), 'coeff and frechet unequal # of rows:'\
+                                        f' {len(coeff)} vs {len(frechxyz)}'
     # nr of locations
     datums = len(coeff)
     # creates a matrix with shape (7, times * locations)
