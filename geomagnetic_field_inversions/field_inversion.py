@@ -432,8 +432,7 @@ class FieldInversion:
                     self.station_frechet, link=station_nr)
                 # contains location per row
                 frech_matrix = frechet.frechet_types(
-                    self.station_frechet[station_nr],
-                    datapoints, forwobs_matrix)
+                    self.station_frechet[station_nr], forwobs_matrix)
                 frech_matrix = frech_matrix[np.arange(len(datapoints)),
                                             datapoints % 7].reshape(
                     len(datapoints), self._nm_total)

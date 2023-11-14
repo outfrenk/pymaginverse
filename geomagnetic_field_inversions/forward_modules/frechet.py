@@ -64,8 +64,7 @@ def frechet_basis(loc: np.ndarray,
 
 
 def frechet_types(frechxyz: np.ndarray,
-                  forwobs_matrix: np.ndarray = None,
-                  coeff: np.ndarray = None
+                  forwobs_matrix: np.ndarray,
                   ) -> np.ndarray:
     """
     Calculates the frechet matrix for a specific datatype
@@ -75,11 +74,7 @@ def frechet_types(frechxyz: np.ndarray,
     frechxyz
         frechet matrix for dx, dy, and dz components produced by frechet_basis
     forwobs_matrix
-        Contains the modeled observations. If not provided is calculated with
-        forward_obs function
-    coeff
-        Gauss coefficients. Each row contains the coefficients of datum.
-        Has to be provided if forwobs_matrix is not inputted.
+        Contains the modeled observations.
 
     Returns
     -------
@@ -88,12 +83,6 @@ def frechet_types(frechxyz: np.ndarray,
         coefficients for the specific datatypes. Should probably be used in
         an iterative inversion scheme
     """
-    if forwobs_matrix is None:
-        if coeff is None:
-            raise Exception('Since forward observations are unknown, '
-                            'please provide Gauss coefficients')
-        else:
-            forwobs_matrix = forward_obs(coeff, frechxyz)
     locs = len(frechxyz)
     nm_total = len(frechxyz[0, 0])
     # expand arrays to cover all locations
