@@ -143,16 +143,16 @@ def damp_norm(damp_fac: np.ndarray,
     -------
     norm
         contains the spatial or temporal damping norm per TIME INTERVAL
+        NOTE: DOES NOT NORMALIZE!
     """
     spl_degree = 3
     ddt = _DList[damp_type][1]
     spl = bsplines.derivatives(t_step, 1, ddt).flatten()
-    norm = np.zeros(len(coeff))
-    # append zero to coeff
-    coeffsp = np.vstack((np.zeros((spl_degree, len(coeff[0]))), coeff))
-    for t in range(len(coeff)):  # loop through time
+    norm = np.zeros(len(coeff) - (spl_degree-1))
+    norm[0] = np.dot(damp_fac, np.matmul(spl[1:], coeff[:3])**2)
+    for t in range(1, len(coeff) - (spl_degree-1)):  # loop through time
         # calculate Gauss coefficient according to derivative spline
-        g_spl = np.matmul(spl, coeffsp[t:t+(spl_degree+1)])
+        g_spl = np.matmul(spl, coeff[t-1:t+spl_degree])
         norm[t] = np.dot(damp_fac, g_spl**2)
 
-    return norm[spl_degree-1:] / t_step
+    return norm

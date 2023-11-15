@@ -6,6 +6,7 @@ import pandas as pd
 from typing import Union, Final
 from pathlib import Path
 from tqdm import tqdm
+import json
 
 from .data_prep import StationData
 from .forward_modules import frechet, fwtools
@@ -477,8 +478,7 @@ class FieldInversion:
                 rel_err = abs(self.res_iter[it, 7] - self.res_iter[it-1, 7]
                               ) / self.res_iter[it-1, 7]
                 if stop_crit >= rel_err or it == max_iter:
-                    if self.verbose:
-                        print(f'Final iteration; relative error = {rel_err}')
+                    print(f'Final iteration; relative error = {rel_err}')
                     break
 
             # solve the equations
@@ -513,12 +513,18 @@ class FieldInversion:
         # sum residuals and finish up stuff
         if self.verbose:
             print('Calculating optional spatial and temporal norms')
+        tsp = self._t_array[-1] - self._t_array[0]
         if np.any(self.spat_fac != 0):
             self.spat_norm = damping.damp_norm(self.spat_fac, self.splined_gh,
                                                self.spat_type, self._t_step)
+            if self.verbose:
+                print(f'Spatial damping norm: {np.sum(self.spat_norm) / tsp}')
         if np.any(self.temp_fac != 0):
             self.temp_norm = damping.damp_norm(self.temp_fac, self.splined_gh,
                                                self.temp_type, self._t_step)
+            if self.verbose:
+                print(f'Temporal damping norm: {np.sum(self.spat_norm) / tsp}')
+
         if path is not None:
             if self.verbose:
                 print('Saving matrices')
@@ -584,9 +590,10 @@ class FieldInversion:
             gh_time = self.unsplined_iter_gh[-1](self._t_array)
             np.save(basedir / f'{file_name}_final.npy', gh_time)
         if save_dampnorm:
-            with open(basedir / f'{file_name}_damp.npy', 'wb') as f:
-                np.save(f, self.spat_norm)
-                np.save(f, self.temp_norm)
+            np.savez(basedir / f'{file_name}_damp.npy',
+                     spat_norm=self.spat_norm,
+                     temp_norm=self.temp_norm,
+                     time_array=self._t_array)
 
     def sweep_damping(self,
                       x0: Union[list, np.ndarray],

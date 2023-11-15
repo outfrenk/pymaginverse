@@ -538,9 +538,11 @@ def plot_sweep(axes: Tuple[plt.Axes, plt.Axes],
     for j, temporal_df in enumerate(temporal_range):
         for i, spatial_df in enumerate(spatial_range):
             filename = f'{spatial_df:.2e}s+{temporal_df:.2e}t_damp.npy'
-            with open(basedir / filename, 'rb') as f:
-                spatnorm[i, j] = np.linalg.norm(np.load(f))
-                tempnorm[i, j] = np.linalg.norm(np.load(f))
+            data = np.load(basedir / filename)
+            time = data['time_array']
+            trange = time[-1] - time[0]
+            spatnorm[i, j] = np.sum(data['spat_norm']) / trange
+            tempnorm[i, j] = np.sum(data['temp_norm']) / trange
             res[i, j] = pd.read_csv(
                 basedir / f'{spatial_df:.2e}s+{temporal_df:.2e}t_residual.csv',
                 delimiter=';').to_numpy()[-1, -1]
