@@ -543,7 +543,7 @@ def plot_sweep(axes: Tuple[plt.Axes, plt.Axes],
     res = np.zeros((len(spatial_range), len(temporal_range)))
     for j, temporal_df in enumerate(temporal_range):
         for i, spatial_df in enumerate(spatial_range):
-            filename = f'{spatial_df:.2e}s+{temporal_df:.2e}t_damp.npy'
+            filename = f'{spatial_df:.2e}s+{temporal_df:.2e}t_damp.npz'
             data = np.load(basedir / filename)
             time = data['time_array']
             trange = time[-1] - time[0]
@@ -561,7 +561,7 @@ def plot_sweep(axes: Tuple[plt.Axes, plt.Axes],
         modelsize = spatnorm
         if p == 1:
             res = res.T
-            modelsize = tempnorm
+            modelsize = tempnorm.T
         for i in range(len(tp_ranges[p])):
             axes[p].plot(res[:, i], modelsize[:, i], color='black',
                          linestyle=lstyle[i % len(lstyle)],

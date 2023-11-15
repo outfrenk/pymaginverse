@@ -478,7 +478,8 @@ class FieldInversion:
                 rel_err = abs(self.res_iter[it, 7] - self.res_iter[it-1, 7]
                               ) / self.res_iter[it-1, 7]
                 if stop_crit >= rel_err or it == max_iter:
-                    print(f'Final iteration; relative error = {rel_err}')
+                    if self.verbose:
+                        print(f'Final iteration; relative error = {rel_err}')
                     break
 
             # solve the equations
@@ -590,7 +591,7 @@ class FieldInversion:
             gh_time = self.unsplined_iter_gh[-1](self._t_array)
             np.save(basedir / f'{file_name}_final.npy', gh_time)
         if save_dampnorm:
-            np.savez(basedir / f'{file_name}_damp.npy',
+            np.savez(basedir / f'{file_name}_damp.npz',
                      spat_norm=self.spat_norm,
                      temp_norm=self.temp_norm,
                      time_array=self._t_array)
