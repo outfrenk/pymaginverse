@@ -44,6 +44,7 @@ def plot_data(axes: Union[list, plt.Axes],
 def compare_loc(axes: list,
                 im: FieldInversion,
                 dc: StationData,
+                xlim: list = None,
                 plot_kwargs: dict = None
                 ) -> list:
     """Plots the modeled magnetic field at the location of a data input class
@@ -58,6 +59,8 @@ def compare_loc(axes: list,
     dc
         An instance of the "StationData" class. This function uses the
         lat, loc, types, fit_data, and data attributes of this class
+    xlim
+        Optional list of two elements containing begin and end plotting time.
     plot_kwargs
         optional plotting keyword arguments
 
@@ -93,8 +96,11 @@ def compare_loc(axes: list,
         axes[i].set_xlabel('Time')
         axes[i] = plot_forward(axes[i], im, [dc.lat, dc.lon], item,
                                plot_kwargs=plot_kwargs)
-        axes[i].set_xlim(max(mindata, minmodel)*0.9,
-                         min(maxdata, maxmodel)*1.1)
+        if xlim is not None:
+            axes[i].set_xlim(xlim[0], xlim[1])
+        else:
+            axes[i].set_xlim(max(mindata, minmodel)*0.9,
+                             min(maxdata, maxmodel)*1.1)
         axes[i].legend()
     return axes
 
