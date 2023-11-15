@@ -523,7 +523,7 @@ class FieldInversion:
             self.temp_norm = damping.damp_norm(self.temp_fac, self.splined_gh,
                                                self.temp_type, self._t_step)
             if self.verbose:
-                print(f'Temporal damping norm: {np.sum(self.spat_norm) / tsp}')
+                print(f'Temporal damping norm: {np.sum(self.temp_norm) / tsp}')
 
         if path is not None:
             if self.verbose:
