@@ -107,7 +107,8 @@ def read_geomagia(path: Path,
         name of file
     read_int
         Either string indicating which columns to read for intensity data
-        or np.ndarray containing the intensity data in the right shape.
+        or np.ndarray containing the intensity data in the right shape
+        (2, len(data)), first row contains data, second row contains errors.
         If None (default), no intensity data is added.
     time_factor
         time factor of the time array, defaults to 1. If timearray is given in
@@ -127,19 +128,21 @@ def read_geomagia(path: Path,
     nr = len(data['Lat[deg.]'].to_numpy())
     data_array = np.zeros((nr, 9))
     try:
-        data_array[:, 0] = data['Age[yr.BP]'].to_numpy() * -1
+        data_array[:, 0] = data['Age[yr.BP]'].to_numpy() * -1 + 1950
     except KeyError:
         data_array[:, 0] = data['Age[yr.AD]'].to_numpy()
     data_array[:, 1:7] = data[['Lat[deg.]', 'Lon[deg.]', 'Dec[deg.]',
                                'SigmaDec[deg.]', 'Inc[deg.]', 'SigmaInc[deg.]'
                                ]].to_numpy()
-
+    print(data_array[:, 0])
     data_types = ['dec', 'inc']
     if type(read_int) is list and len(read_int) == 2:
         data_array[:, 7] = data[read_int[0]].to_numpy()
         data_array[:, 8] = data[read_int[1]].to_numpy()
         data_types.append('int')
-    elif type(read_int) is np.ndarray and read_int.shape == (2, nr):
+    elif type(read_int) is np.ndarray:
+        assert read_int.shape == (2, nr), 'incorrect shape intensity data,' \
+                                          f'should be (2, {nr})'
         data_array[:, 7:] = read_int
         data_types.append('int')
     else:
