@@ -123,6 +123,7 @@ def plot_forward(ax: plt.Axes,
         uses the unsplined_iter_gh, t_array, and maxdegree attributes.
     input_coord
         3-long array of coordinates containing latitude, longitude, and radius.
+        degrees!
     datatype
         type of data to be plotted; should be either: 'x', 'y', 'z', 'hor',
         'inc' (degrees), 'dec' (degrees), or 'int'
@@ -149,8 +150,8 @@ def plot_forward(ax: plt.Axes,
     forw_obs = fwtools.forward_obs(coeff, frechxyz, link=np.zeros(
         len(im.t_array), dtype=np.int8))
     forw_obs[5:7] = np.degrees(forw_obs[5:7])
-    ax.plot(im.t_array, forw_obs[typedict[datatype]],
-            label='model', **plot_kwargs)
+    ax.scatter(im.t_array, forw_obs[typedict[datatype]],
+               label='model', **plot_kwargs)
     return ax
 
 

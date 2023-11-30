@@ -1,7 +1,9 @@
 import numpy as np
 from pathlib import Path
 import os
-
+import pandas as pd
+from typing import Union
+from ..data_prep import StationData
 
 def read_write(path: Path,
                datafile: str,
@@ -82,5 +84,84 @@ def read_data(path: Path,
                 data_type[:, 0].argsort()]  # order through time
         stations[i] = data_per_type
     # remove file
-    os.remove(path / outputfile)
+    try:
+        os.remove(path / outputfile)
+    except FileNotFoundError:
+        pass
     return unique_coords, stations
+
+
+def read_geomagia(path: Path,
+                  datafile: str,
+                  read_int: Union[list, np.ndarray] = None,
+                  time_factor: int = 1,
+                  input_error: np.ndarray = np.array([1, 1, 100])
+                  ) -> list:
+    """ Reads processed sedimentary data in geomagia format
+
+    Parameters
+    ----------
+    path
+        Path to file
+    datafile
+        name of file
+    read_int
+        Either string indicating which columns to read for intensity data
+        or np.ndarray containing the intensity data in the right shape.
+        If None (default), no intensity data is added.
+    time_factor
+        time factor of the time array, defaults to 1. If timearray is given in
+        kiloyear tf should be 1000
+    input_error
+        Error of declination, inclination, and intensity when not provided
+        by file
+
+    Returns
+    -------
+    stat_list
+        list containing the different stations. Ready to be used for the
+        geomagnetic field inversion
+    """
+    data = pd.read_csv(path / datafile, skiprows=1, index_col=False,
+                       low_memory=False)
+    nr = len(data['Lat[deg.]'].to_numpy())
+    data_array = np.zeros((nr, 9))
+    try:
+        data_array[:, 0] = data['Age[yr.BP]'].to_numpy() * -1
+    except KeyError:
+        data_array[:, 0] = data['Age[yr.AD]'].to_numpy()
+    data_array[:, 1:7] = data[['Lat[deg.]', 'Lon[deg.]', 'Dec[deg.]',
+                               'SigmaDec[deg.]', 'Inc[deg.]', 'SigmaInc[deg.]'
+                               ]].to_numpy()
+
+    data_types = ['dec', 'inc']
+    if type(read_int) is list and len(read_int) == 2:
+        data_array[:, 7] = data[read_int[0]].to_numpy()
+        data_array[:, 8] = data[read_int[1]].to_numpy()
+        data_types.append('int')
+    elif type(read_int) is np.ndarray and read_int.shape == (2, nr):
+        data_array[:, 7:] = read_int
+        data_types.append('int')
+    else:
+        print('No intensity added')
+
+    # sort per latitude/longitude pair
+    slatlon, ind = np.unique(data_array[:, 1:3], return_inverse=True, axis=0)
+    stat_list = []
+    # loop through locations
+    for i, ll in enumerate(slatlon):
+        rows = np.argwhere(ind == i).flatten()
+        station = StationData(ll[0], ll[1], name=f'Station_{i+1}')
+        for j, dtype in enumerate(data_types):
+            # first put data in array
+            dat = data_array[rows][:, [0, 3+2*j, 4+2*j]]
+            # find nonsense input data
+            arg = np.argwhere(abs(dat[:, 1]) < 800).flatten()
+            # find nonsense sigmas
+            err = np.where(abs(dat[:, 2]) < 800, dat[:, 2], input_error[j])
+            # add data to station
+            station.add_data(dtype, dat[arg, :2].T, time_factor=time_factor,
+                             error=err[arg])
+        stat_list.append(station)
+
+    return stat_list
