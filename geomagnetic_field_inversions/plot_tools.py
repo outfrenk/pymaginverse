@@ -490,6 +490,7 @@ def plot_worldmag(axes: Tuple[plt.Axes, plt.Axes, plt.Axes],
 def plot_worldloc(ax: plt.Axes,
                   im: Union[FieldInversion, FieldInversionNoTime],
                   proj: ccrs,
+                  plot_world: bool = False,
                   plot_kw: dict = None
                   ) -> plt.Axes:
     """ Plots datum locations on a world map
@@ -504,15 +505,21 @@ def plot_worldloc(ax: plt.Axes,
     proj
         Projection type used for plotting on a world map. Should be an instance
         of cartopy.crs
+    plot_world
+        Boolean indicating whether to plot a worldmap, defaults to False.
     plot_kw
         optional plotting parameters for optional plotting locations on map
     """
     lat = np.degrees(0.5 * np.pi - im.station_coord[:, 0])
     lon = np.degrees(im.station_coord[:, 1])
+    if plot_world:
+        ax.set_global()
+        ax.coastlines()
+        ax.gridlines()
     if plot_kw:
-        ax.scatter(lat, lon, transform=proj, **plot_kw)
+        ax.scatter(lon, lat, transform=proj, **plot_kw)
     else:
-        ax.scatter(lat, lon, transform=proj, color='black', marker='^')
+        ax.scatter(lon, lat, transform=proj, color='black', marker='^', s=200)
     return ax
 
 
