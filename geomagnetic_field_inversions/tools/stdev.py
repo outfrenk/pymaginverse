@@ -31,7 +31,7 @@ def get_stdev(path: Path,
         normal_eq = np.load(path / 'normal_eq.npy')
     else:
         normal_eq = scs.load_npz(path / 'forward_matrix.npz')
-        damp = scs.load_npz(path / 'sparse_damp.npz')
+        damp = scs.load_npz(path / 'damp_matrix.npz')
         if save_res:
             print('Calculating resolution matrix')
             res_mat = np.linalg.solve((normal_eq+damp).todense(),
