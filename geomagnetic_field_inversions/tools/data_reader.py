@@ -5,10 +5,11 @@ import pandas as pd
 from typing import Union
 from ..data_prep import StationData
 
-def read_write(path: Path,
-               datafile: str,
-               outputfile: str,
-               ) -> None:
+
+def read_write_korte(path: Path,
+                     datafile: str,
+                     outputfile: str,
+                     ) -> None:
     """ Reads Korte et al. -like data and converts it
 
     Parameters
@@ -41,9 +42,9 @@ def read_write(path: Path,
     f.close()
 
 
-def read_data(path: Path,
-              datafile: str,
-              ) -> (np.ndarray, np.ndarray):
+def read_kortedata(path: Path,
+                   datafile: str,
+                   ) -> (np.ndarray, np.ndarray):
     """ Prepares data using the format of Korte et al.
 
     Parameters
@@ -55,15 +56,12 @@ def read_data(path: Path,
 
     Returns
     -------
-    unique_coords
-        coordinate list of the different location.
-        Sorted lat (degrees), lon (degrees), and height (m) above geoid
-    stations
-        per row (one location): list of lists per datatype through time:
-        Each list (length time) contains time, data, error, type
+    stat_list
+        list containing the different stations. Ready to be used for the
+        geomagnetic field inversion
     """
     outputfile = 'OUTPUTFILE.txt'
-    read_write(path, datafile, outputfile)
+    read_write_korte(path, datafile, outputfile)
 
     data = np.loadtxt(path / outputfile, delimiter=',')
     # lat, long, height (m) above geoid
@@ -88,7 +86,21 @@ def read_data(path: Path,
         os.remove(path / outputfile)
     except FileNotFoundError:
         pass
-    return unique_coords, stations
+
+    # create stationlist and add data to class
+    typedict = [None, 'x', 'y', 'z', 'hor', 'int', 'inc', 'dec']
+    stat_list = []
+    for i, station in enumerate(stations):
+        name = f'Station {i}'  # we give the stations a name
+        # initiate class with latitude, longitude, height, and name
+        stat = StationData(lat=unique_coords[i, 0], lon=unique_coords[i, 1],
+                           height=unique_coords[i, 2], name=name)
+        # add types one by one
+        for types in station:
+            stat.add_data(typedict[int(types[0, 3])], data=types[:, :2].T,
+                          time_factor=1, error=types[:, 2].flatten())
+        stat_list.append(stat)
+    return stat_list
 
 
 _timecolumn = {'Age[yr.AD]': (lambda t: t),
