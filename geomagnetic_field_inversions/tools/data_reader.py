@@ -91,11 +91,29 @@ def read_data(path: Path,
     return unique_coords, stations
 
 
+_timecolumn = {'Age[yr.AD]': (lambda t: t),
+               'Age[yr.BP]': (lambda t: -1 * t + 1950),
+               'Age[yr.CE]': (lambda t: t),
+               'Age[yr.BCE]': (lambda t: -1 * t)}
+_deccolumn = {'DecAdj[deg.]': (lambda d: d), 'Dec[deg.]': (lambda d: d)}
+_sdeccolumn = {'SigmaDec[deg.]': (lambda sd: sd)}
+_inccolumn = {'IncAdj[deg.]': (lambda c: c), 'Inc[deg.]': (lambda c: c)}
+_sinccolumn = {'SigmaInc[deg.]': (lambda sc: sc)}
+_intcolumn = {'Ba[microT]': (lambda iy: iy)}
+_sintcolumn = {'SigmaBa[microT]': (lambda siy: siy)}
+
+
 def read_geomagia(path: Path,
                   datafile: str,
-                  read_int: Union[list, np.ndarray] = None,
                   time_factor: int = 1,
-                  input_error: np.ndarray = np.array([1, 1, 100])
+                  input_error: np.ndarray = np.array([1, 1, 100]),
+                  read_time: Union[dict, np.ndarray] = _timecolumn,
+                  read_dec: Union[dict, np.ndarray] = _deccolumn,
+                  read_sdec: Union[dict, np.ndarray] = _sdeccolumn,
+                  read_inc: Union[dict, np.ndarray] = _inccolumn,
+                  read_sinc: Union[dict, np.ndarray] = _sinccolumn,
+                  read_int: Union[dict, np.ndarray] = _intcolumn,
+                  read_sint: Union[dict, np.ndarray] = _sintcolumn,
                   ) -> list:
     """ Reads processed sedimentary data in geomagia format
 
@@ -105,17 +123,28 @@ def read_geomagia(path: Path,
         Path to file
     datafile
         name of file
-    read_int
-        Either string indicating which columns to read for intensity data
-        or np.ndarray containing the intensity data in the right shape
-        (2, len(data)), first row contains data, second row contains errors.
-        If None (default), no intensity data is added.
     time_factor
         time factor of the time array, defaults to 1. If timearray is given in
         kiloyear tf should be 1000
     input_error
         Error of declination, inclination, and intensity when not provided
         by file
+    read_time
+        Either dictionary indicating which columns to read for time array
+         + which function to apply to data read. We adopt CE terminology
+        or np.ndarray containing relevant time in the right shape: len(data)
+        If nothing passed in, default options are searched.
+         When match is found search stops!
+    read_dec, read_inc, read_int
+        Either dictionary indicating which columns to read for relevant data
+         + which function to apply to data read
+        or np.ndarray containing relevant data in the right shape: len(data)
+        If nothing passed in, default options are searched.
+        If no match, no data of that type is added
+         When match is found search stops!
+    read_sdec, read_sinc, read_sint
+        Simular to read_dec, read_inc, read_int,
+         but then for standard deviations
 
     Returns
     -------
@@ -123,48 +152,81 @@ def read_geomagia(path: Path,
         list containing the different stations. Ready to be used for the
         geomagnetic field inversion
     """
+    itemlist = [[read_dec, read_sdec],
+                [read_inc, read_sinc],
+                [read_int, read_sint]]
+    datatypes = ['dec', 'inc', 'int']
+    # read csv file
     data = pd.read_csv(path / datafile, skiprows=1, index_col=False,
                        low_memory=False)
-    nr = len(data['Lat[deg.]'].to_numpy())
-    data_array = np.zeros((nr, 9))
-    try:
-        data_array[:, 0] = data['Age[yr.BP]'].to_numpy() * -1 + 1950
-    except KeyError:
-        data_array[:, 0] = data['Age[yr.AD]'].to_numpy()
-    data_array[:, 1:7] = data[['Lat[deg.]', 'Lon[deg.]', 'Dec[deg.]',
-                               'SigmaDec[deg.]', 'Inc[deg.]', 'SigmaInc[deg.]'
-                               ]].to_numpy()
-    print(data_array[:, 0])
-    data_types = ['dec', 'inc']
-    if type(read_int) is list and len(read_int) == 2:
-        data_array[:, 7] = data[read_int[0]].to_numpy()
-        data_array[:, 8] = data[read_int[1]].to_numpy()
-        data_types.append('int')
-    elif type(read_int) is np.ndarray:
-        assert read_int.shape == (2, nr), 'incorrect shape intensity data,' \
-                                          f'should be (2, {nr})'
-        data_array[:, 7:] = read_int
-        data_types.append('int')
+    # read latitude and longitude and time
+    try:  # sediment data
+        nr = len(data['Lat[deg.]'].to_numpy())
+        data_array = np.zeros((nr, 9))
+        data_array[:, 0] = data['Lat[deg.]'].to_numpy()
+        data_array[:, 1] = data['Lon[deg.]'].to_numpy()
+    except KeyError:  # archeomagnetic/lava data
+        nr = len(data['SiteLat[deg.]'].to_numpy())
+        data_array = np.zeros((nr, 9))
+        data_array[:, 0] = data['SiteLat[deg.]'].to_numpy()
+        data_array[:, 1] = data['SiteLon[deg.]'].to_numpy()
+
+    temp_time = read_col(data, read_time)
+    # check time
+    if temp_time is None:
+        raise Exception('Incorrect columnname: time not read')
     else:
-        print('No intensity added')
+        data_array[:, 2] = temp_time
+
+    # loop to scan through all possible datatypes using function
+    for nr, read_item in enumerate(itemlist):
+        data_temp = read_col(data, read_item[0])
+        if data_temp is not None:
+            data_array[:, 3 + 2 * nr] = data_temp
+            sdata = read_col(data, read_item[1])
+            if sdata is None:
+                data_array[:, 4 + 2 * nr] = input_error[nr]
+            else:
+                data_array[:, 4 + 2 * nr] = sdata
 
     # sort per latitude/longitude pair
-    slatlon, ind = np.unique(data_array[:, 1:3], return_inverse=True, axis=0)
+    slatlon, ind = np.unique(data_array[:, :2], return_inverse=True, axis=0)
     stat_list = []
     # loop through locations
     for i, ll in enumerate(slatlon):
         rows = np.argwhere(ind == i).flatten()
         station = StationData(ll[0], ll[1], name=f'Station_{i+1}')
-        for j, dtype in enumerate(data_types):
+        errorcount = 0
+        for j, dtype in enumerate(datatypes):
+            if j == 2:
+                print(ll, data_array[rows][:, [2, 3+2*j, 4+2*j]])
             # first put data in array
-            dat = data_array[rows][:, [0, 3+2*j, 4+2*j]]
-            # find nonsense input data
-            arg = np.argwhere(abs(dat[:, 1]) < 800).flatten()
-            # find nonsense sigmas
-            err = np.where(abs(dat[:, 2]) < 800, dat[:, 2], input_error[j])
-            # add data to station
-            station.add_data(dtype, dat[arg, :2].T, time_factor=time_factor,
-                             error=err[arg])
-        stat_list.append(station)
-
+            dat = data_array[rows][:, [2, 3+2*j, 4+2*j]]
+            # find nonsense input data (equal to either -999 or +999)
+            arg = np.argwhere(abs(dat[:, 1]) < 998).flatten()
+            # check if not only zeros
+            if np.any(dat[:, 1]) and np.any(arg):
+                # find nonsense sigmas
+                err = np.where(abs(dat[:, 2]) < 998, dat[:, 2], input_error[j])
+                # add data to station
+                station.add_data(dtype, dat[arg, :2].T,
+                                 time_factor=time_factor, error=err[arg])
+            else:
+                print(f'No {dtype}-data added for Station_{i+1}')
+                errorcount += 1
+        # if station contains no data, do not add to list
+        if errorcount < 3:
+            stat_list.append(station)
+        else:
+            print(f"Station_{i+1} not added to list")
     return stat_list
+
+
+def read_col(data, item):
+    """ Reads data form csv file using dictionary or returns np.ndarray"""
+    if type(item) is dict:
+        for option in item:
+            if option in data:
+                return item[option](data[option].to_numpy())
+    elif type(item) is np.ndarray:
+        return item
