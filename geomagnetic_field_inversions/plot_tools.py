@@ -6,9 +6,9 @@ import pandas as pd
 import cartopy.crs as ccrs
 
 from .field_inversion import FieldInversion
-from .forward_modules import frechet, fwtools
 from .data_prep import StationData
-from .tools import bsplines, FieldInversionNoTime
+from .tools.field_inversion_onestep import FieldInversionNoTime
+from .tools.core import calc_forw, calc_spectra
 
 _DataTypes = Literal['x', 'y', 'z', 'hor', 'inc', 'dec', 'int']
 
@@ -107,7 +107,7 @@ def compare_loc(axes: list,
 
 def plot_forward(ax: plt.Axes,
                  im: FieldInversion,
-                 input_coord: Union[list, np.ndarray],
+                 input_coord: np.ndarray,
                  datatype: _DataTypes,
                  it: int = -1,
                  plot_kwargs: dict = None
@@ -146,10 +146,8 @@ def plot_forward(ax: plt.Axes,
         coord[0, 2] = 6371.2
     else:
         coord[0, 2] = input_coord[2]
-    frechxyz = frechet.frechet_basis(coord, im.maxdegree)
-    forw_obs = fwtools.forward_obs(coeff, frechxyz, link=np.zeros(
-        len(im.t_array), dtype=np.int8))
-    forw_obs[5:7] = np.degrees(forw_obs[5:7])
+    forw_obs = calc_forw(im.maxdegree, coord, coeff,
+                         link=np.zeros(len(im.t_array), dtype=np.int8))
     ax.scatter(im.t_array, forw_obs[typedict[datatype]],
                label='model', **plot_kwargs)
     return ax
@@ -223,7 +221,7 @@ def plot_coeff(ax: plt.Axes,
         to plot. Defaults to final time.
     std
         Array containing the standard deviations of the Gauss coefficients. As
-        produced by stdev.py.
+        produced by calc_stdev in core.py.
     plot_iter
         Boolean indicating whether to plot Gauss coefficients against inversion
         iterations (True) or against time for the chosen iteration (False).
@@ -286,7 +284,6 @@ def plot_coeff(ax: plt.Axes,
 
 def plot_spectrum(axes: Tuple[plt.Axes, plt.Axes],
                   im: plt.Axes,
-                  time: Union[list, np.ndarray] = None,
                   cmb: bool = True
                   ) -> Tuple[plt.Axes, plt.Axes]:
     """ Plots the powerspectrum of gaussian coefficients and its variance at
@@ -301,37 +298,9 @@ def plot_spectrum(axes: Tuple[plt.Axes, plt.Axes],
         uses the splined_gh, t_array, and maxdegree attributes.
     cmb
         If True (default) presents results at cmb, else at earth's surface
-    time
-        List of indices used to plot powerspectrum. Defaults to using all
-        timesteps
     """
-    if time is None:
-        time = np.arange(im.times - 1)
-    coeff = im.splined_gh
-    if cmb:
-        depth = 6371.2 / 3485.0
-    else:
-        depth = 1
-
-    spl1 = bsplines.derivatives(im._t_step, 1, derivative=1).flatten()
-    spl0 = bsplines.derivatives(im._t_step, 1, derivative=0).flatten()
-    coeff_big = np.vstack((np.zeros((im._SPL_DEGREE, im._nm_total)), coeff))
-    coeff_sv = np.zeros((len(coeff), im._nm_total))
-    coeff_pow = np.zeros((len(coeff), im._nm_total))
-    for t in range(len(coeff)):
-        # calculate Gauss coefficient according to derivative spline
-        coeff_pow[t] = np.matmul(spl0, coeff_big[t:t + im._SPL_DEGREE+1])**2
-        coeff_sv[t] = np.matmul(spl1, coeff_big[t:t + im._SPL_DEGREE+1])**2
-    coeff_pow = np.sum(coeff_pow[im._SPL_DEGREE-1:], axis=0) / len(time)
-    coeff_sv = np.sum(coeff_sv[im._SPL_DEGREE-1:], axis=0) / len(time)
-    counter = 0
-    sum_coeff_pow = np.zeros(im.maxdegree)
-    sum_coeff_sv = np.zeros(im.maxdegree)
-    for l in range(im.maxdegree):
-        for m in range(2*l + 1):
-            sum_coeff_pow[l] += coeff_pow[counter] * (l+2) * depth**(2*(l+1)+4)
-            sum_coeff_sv[l] += coeff_sv[counter] * (l+2) * depth**(2*(l+1)+4)
-            counter += 1
+    sum_coeff_pow, sum_coeff_sv = calc_spectra(
+        im.splined_gh, im.maxdegree, im._t_step, cmb)
 
     axes[0].plot(np.arange(1, im.maxdegree + 1), sum_coeff_pow,
                  marker='o', label='power')
@@ -433,9 +402,8 @@ def plot_worldmag(axes: Tuple[plt.Axes, plt.Axes, plt.Axes],
         world_coord[:, 2] = 3485.0
     else:
         world_coord[:, 2] = 6371.2
-    frechxyz = frechet.frechet_basis(world_coord, im.maxdegree)
-    forw_obs = fwtools.forward_obs(coeff, frechxyz, link=np.zeros(
-        len(frechxyz), dtype=np.int8))
+    forw_obs = calc_forw(im.maxdegree, world_coord, coeff,
+                         link=np.zeros(len(world_coord), dtype=np.int8))
     plot = np.zeros((3, len(forw_obs[0])))
     title = []
     if cmb:
@@ -448,9 +416,9 @@ def plot_worldmag(axes: Tuple[plt.Axes, plt.Axes, plt.Axes],
     else:
         plot[0] = forw_obs[4]
         title.append('Intensity')
-        plot[1] = np.degrees(forw_obs[5])
+        plot[1] = forw_obs[5]
         title.append('Inclination')
-        plot[2] = np.degrees(forw_obs[6])
+        plot[2] = forw_obs[6]
         title.append('Declination')
 
     default_kw = {'lvf_0': np.linspace(min(plot[0]), max(plot[0]), 10),

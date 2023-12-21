@@ -7,7 +7,7 @@ from pathlib import Path
 
 from ..data_prep import StationData
 from ..forward_modules import frechet, fwtools
-from ..tools import geod2geoc as g2g
+from ..tools.core import latrad_in_geoc, frechet_in_geoc
 
 
 class FieldInversionNoTime:
@@ -166,7 +166,7 @@ class FieldInversionNoTime:
                 if self.verbose:
                     print(f'Coordinates are geodetic,'
                           ' translating to geocentric coordinates.')
-                lat_geoc, r_geoc, cd, sd = g2g.latrad_in_geoc(
+                lat_geoc, r_geoc, cd, sd = latrad_in_geoc(
                     np.radians(data_class.lat), data_class.height)
                 station_entry = np.array([0.5*np.pi - lat_geoc,
                                           np.radians(data_class.lon),
@@ -232,7 +232,7 @@ class FieldInversionNoTime:
         self.station_frechet = frechet.frechet_basis(
             self.station_coord, self._maxdegree)
         # geocentric correction
-        dx, dz = g2g.frechet_in_geoc(
+        dx, dz = frechet_in_geoc(
             self.station_frechet[:self.sc],
             self.station_frechet[2*self.sc:],
             self.gcgd_conv[:, 0], self.gcgd_conv[:, 1])
@@ -261,7 +261,7 @@ class FieldInversionNoTime:
         path
             path to location where to save normal_eq for calculating optional
             covariance and resolution matrix.
-            If not provided, matrix are not saved. See tools/stdev.py
+            If not provided, matrix are not saved. See calc_stdev in tools/core
 
         Creates or modifies
         -------------------

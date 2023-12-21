@@ -3,7 +3,7 @@ from scipy.integrate import newton_cotes
 from typing import Literal, Tuple
 
 from .damp_types import dampingtype
-from ..tools import bsplines
+from ..tools.core import bspline_deriv
 
 # list containing the name of damping and its required time derivative
 _DList = [['Uniform', 0], ['Dissipation', 0], ['Powerseries', 0],
@@ -106,7 +106,7 @@ def integrator(spl1: int,
     dt = t_step / nc_order
 
     # create all BSpline derivatives for integration
-    spl = bsplines.derivatives(t_step, nc_order + 1, ddt)
+    spl = bspline_deriv(t_step, nc_order + 1, ddt)
 
     # integrate created splines over time using newton-cotes algorithm
     int_prod = 0
@@ -147,7 +147,7 @@ def damp_norm(damp_fac: np.ndarray,
     """
     spl_degree = 3
     ddt = _DList[damp_type][1]
-    spl = bsplines.derivatives(t_step, 1, ddt).flatten()
+    spl = bspline_deriv(t_step, 1, ddt).flatten()
     norm = np.zeros(len(coeff) - (spl_degree-1))
     norm[0] = np.dot(damp_fac, np.matmul(spl[1:], coeff[:3])**2)
     for t in range(1, len(coeff) - (spl_degree-1)):  # loop through time

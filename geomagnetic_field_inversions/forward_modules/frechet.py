@@ -1,6 +1,5 @@
 import numpy as np
 import pyshtools as pysh
-from .fwtools import forward_obs
 
 
 def frechet_basis(loc: np.ndarray,
