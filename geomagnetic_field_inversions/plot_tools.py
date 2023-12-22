@@ -7,7 +7,6 @@ import cartopy.crs as ccrs
 
 from .field_inversion import FieldInversion
 from .data_prep import StationData
-from .tools.field_inversion_onestep import FieldInversionNoTime
 from .tools.core import calc_forw, calc_spectra
 
 _DataTypes = Literal['x', 'y', 'z', 'hor', 'inc', 'dec', 'int']
@@ -154,7 +153,7 @@ def plot_forward(ax: plt.Axes,
 
 
 def plot_residuals(ax: plt.Axes,
-                   im: Union[FieldInversion, FieldInversionNoTime],
+                   im: FieldInversion,
                    **plt_kwargs
                    ) -> plt.Axes:
     """ Plots the residuals of the geomagnetic field inversion per iteration
@@ -192,7 +191,7 @@ def plot_residuals(ax: plt.Axes,
 
 
 def plot_coeff(ax: plt.Axes,
-               im: Union[FieldInversion, FieldInversionNoTime],
+               im: FieldInversion,
                degree: int = None,
                index: list = None,
                it_time: int = -1,
@@ -255,9 +254,6 @@ def plot_coeff(ax: plt.Axes,
                 for c in range(len(coeff)-1):
                     coeff[c+1] = im.unsplined_iter_gh[c](
                         im.t_array[it_time])[item]
-            elif isinstance(im, FieldInversionNoTime):
-                coeff[0] = im.x0[item]
-                coeff[1:] = im.unsplined_iter_gh[:, item]
             else:
                 raise Exception('Class not found')
             ax.plot(np.arange(len(coeff)), coeff,
@@ -348,7 +344,7 @@ def plot_dampnorm(ax: plt.Axes,
 
 
 def plot_worldmag(axes: Tuple[plt.Axes, plt.Axes, plt.Axes],
-                  im: Union[FieldInversion, FieldInversionNoTime],
+                  im: FieldInversion,
                   proj: ccrs,
                   plot_loc: bool = False,
                   time: float = None,
@@ -385,10 +381,7 @@ def plot_worldmag(axes: Tuple[plt.Axes, plt.Axes, plt.Axes],
     plotloc_kw
         optional plotting parameters for optional plotting locations on map
     """
-    if isinstance(im, FieldInversionNoTime):
-        coeff = im.unsplined_iter_gh[it][np.newaxis, :]
-    else:
-        coeff = im.unsplined_iter_gh[it](time)[np.newaxis, :]
+    coeff = im.unsplined_iter_gh[it](time)[np.newaxis, :]
     # make a grid of coordinates and apply forward model
     forwlat = np.arange(-89, 89, 1)
     forwlon = np.arange(0, 360, 1)
@@ -456,7 +449,7 @@ def plot_worldmag(axes: Tuple[plt.Axes, plt.Axes, plt.Axes],
 
 
 def plot_worldloc(ax: plt.Axes,
-                  im: Union[FieldInversion, FieldInversionNoTime],
+                  im: FieldInversion,
                   proj: ccrs,
                   plot_world: bool = False,
                   plot_kw: dict = None
