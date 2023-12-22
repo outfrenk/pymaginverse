@@ -1,10 +1,11 @@
 import numpy as np
 from scipy.integrate import newton_cotes
-from typing import Literal, Tuple
+from scipy.interpolate import BSpline
+from typing import Tuple
 
 from .damp_types import dampingtype
-from ..tools.core import bspline_deriv
 
+SPL_DEGREE = 3
 # list containing the name of damping and its required time derivative
 _DList = [['Uniform', 0], ['Dissipation', 0], ['Powerseries', 0],
           ['Gubbins', 0], ['Horderiv2cmb', 0], ['Energydensity', 0],
@@ -43,24 +44,23 @@ def damp_matrix(max_degree: int,
     damp_diag
         damping parameters per degree (and order)
     """
-    spl_degree = 3
     nm_total = (max_degree + 1) ** 2 - 1
     damp_diag = np.zeros(nm_total)
 
-    matrix_diag = np.zeros((2 * spl_degree + 1, nr_splines * nm_total))
+    matrix_diag = np.zeros((2 * SPL_DEGREE + 1, nr_splines * nm_total))
     if damp_factor != 0:
         damp_diag = dampingtype(max_degree, _DList[damp_type][0], damp_dipole)
         # start combining interacting splines
         for spl1 in range(nr_splines):  # loop through splines with j
             # loop with spl2 between spl1-spl_degree and spl1+spl_degree
-            for spl2 in range(max(spl1 - spl_degree, 0),
-                              min(spl1 + spl_degree + 1, nr_splines)):
+            for spl2 in range(max(spl1 - SPL_DEGREE, 0),
+                              min(spl1 + SPL_DEGREE + 1, nr_splines)):
                 # integrate cubic B-Splines
                 spl_integral = integrator(spl1, spl2, nr_splines, t_step,
                                           _DList[damp_type][1])
                 # place damping in matrix
-                matrix_diag[spl2-spl1+spl_degree,
-                            spl1*nm_total:(spl1+1)*nm_total
+                matrix_diag[spl2 - spl1 + SPL_DEGREE,
+                            spl1 * nm_total:(spl1 + 1) * nm_total
                             ] = damp_factor * spl_integral * damp_diag
     return matrix_diag, damp_diag
 
@@ -92,30 +92,28 @@ def integrator(spl1: int,
     int_prod
         integration product of inputted splines or spline derivatives
     """
-    spl_degree = 3
-
     # order of spline after taking derivative
-    temp_degree = spl_degree - ddt
+    temp_degree = SPL_DEGREE - ddt
     # order of Newton-Cotes integration, depends on spline degree and ddt
     nc_order = 2 * temp_degree
     newcot, error = newton_cotes(nc_order)  # get the weigh factor
     # integration boundaries
-    low = int(max(spl1, spl2, spl_degree))
-    high = int(min(spl1 + spl_degree, spl2 + spl_degree, nr_splines - 1))
+    low = int(max(spl1, spl2, SPL_DEGREE))
+    high = int(min(spl1 + SPL_DEGREE, spl2 + SPL_DEGREE, nr_splines - 1))
     # necessary to get sum = 1 for weigh factors
     dt = t_step / nc_order
 
-    # create all BSpline derivatives for integration
-    spl = bspline_deriv(t_step, nc_order + 1, ddt)
+    # create all cubic BSpline (derivatives) for integration
+    bspline = BSpline.basis_element(np.arange(SPL_DEGREE+2) * t_step,
+                                    extrapolate=False).derivative(ddt)
 
     # integrate created splines over time using newton-cotes algorithm
     int_prod = 0
     for t in range(low, high + 1):
-        iint_prod = 0
-        # go stepwise through the complete integration of one timestep
-        for stp in range(nc_order + 1):
-            iint_prod += newcot[stp] * spl[t - spl1, stp] * spl[t - spl2, stp]
-        int_prod += iint_prod * dt
+        # go through the complete integration of one timestep
+        int_prod += np.sum(newcot * bspline(
+            np.linspace(t-spl1, t-spl1+1, nc_order+1) * t_step) * bspline(
+            np.linspace(t-spl2, t-spl2+1, nc_order+1) * t_step)) * dt
 
     return int_prod
 
@@ -145,14 +143,15 @@ def damp_norm(damp_fac: np.ndarray,
         contains the spatial or temporal damping norm per TIME INTERVAL
         NOTE: DOES NOT NORMALIZE!
     """
-    spl_degree = 3
     ddt = _DList[damp_type][1]
-    spl = bspline_deriv(t_step, 1, ddt).flatten()
-    norm = np.zeros(len(coeff) - (spl_degree-1))
+    spl = BSpline.basis_element(np.arange(SPL_DEGREE+2) * t_step,
+                                extrapolate=False).derivative(ddt)(
+          np.arange(0, SPL_DEGREE+1) * t_step)
+    norm = np.zeros(len(coeff) - (SPL_DEGREE-1))
     norm[0] = np.dot(damp_fac, np.matmul(spl[1:], coeff[:3])**2)
-    for t in range(1, len(coeff) - (spl_degree-1)):  # loop through time
+    for t in range(1, len(coeff) - (SPL_DEGREE-1)):  # loop through time
         # calculate Gauss coefficient according to derivative spline
-        g_spl = np.matmul(spl, coeff[t-1:t+spl_degree])
+        g_spl = np.matmul(spl, coeff[t-1:t+SPL_DEGREE])
         norm[t] = np.dot(damp_fac, g_spl**2)
 
     return norm

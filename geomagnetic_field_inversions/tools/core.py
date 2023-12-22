@@ -8,54 +8,6 @@ from ..forward_modules import frechet, fwtools
 SPL_DEGREE = 3
 
 
-def bspline_deriv(t_step: float,
-                  steps: int,
-                  derivative: int
-                  ) -> np.ndarray:
-    """ Takes up to 2nd derivative of a cubic B-Spline
-
-    Parameters
-    ----------
-    t_step
-        times step between the knot points of the spline. Should be constant
-    steps
-        number of splines during each t_step. depends on order of integration
-    derivative
-        requested derivative of the cubic B-Spline. Should be between 0 and 2
-
-    Returns
-    -------
-    spl
-        0th, 1st, or 2nd derivative of the cubic B-Spline
-    """
-    temp_degree = SPL_DEGREE - derivative
-    bsp = BSpline.basis_element(np.arange(temp_degree + 2), extrapolate=False)
-    bspline = np.zeros((temp_degree + 1, steps))
-    for i in range(temp_degree + 1):
-        bspline[i] = bsp(np.linspace(i, i+1, steps))
-    spl = np.zeros((4, steps))
-    if derivative == 0:
-        spl[0] = bspline[0]
-        spl[1] = bspline[1]
-        spl[2] = bspline[2]
-        spl[3] = bspline[3]
-    elif derivative == 1:
-        coef = [1 / t_step, -1 / t_step]
-        spl[0] = coef[0] * bspline[0]
-        spl[1] = coef[0] * bspline[1] + coef[1] * bspline[0]
-        spl[2] = coef[0] * bspline[2] + coef[1] * bspline[1]
-        spl[3] = coef[1] * bspline[2]
-    elif derivative == 2:
-        coef = [1 / t_step**2, -2 / t_step**2, 1 / t_step**2]
-        spl[0] = coef[0] * bspline[0]
-        spl[1] = coef[0] * bspline[1] + coef[1] * bspline[0]
-        spl[2] = coef[1] * bspline[1] + coef[2] * bspline[0]
-        spl[3] = coef[2] * bspline[1]
-    else:
-        raise Exception('This function only implements up to 2nd derivatives')
-    return spl
-
-
 def latrad_in_geoc(lat: float,
                    h: float = 0.
                    ) -> Tuple[float, float, float, float]:
@@ -168,7 +120,9 @@ def calc_stdev(path: Path,
     covar_spl = np.sqrt(np.diag(covar)).reshape(-1, nm_total)
     coeff_big = np.vstack((np.zeros((SPL_DEGREE, nm_total)), covar_spl))
     std = np.zeros((len(covar_spl), nm_total))
-    spl0 = bspline_deriv(1, 1, derivative=0).flatten()
+    spl0 = BSpline.basis_element(np.arange(SPL_DEGREE + 2),
+                                 extrapolate=False).derivative(0)(
+           np.arange(0, SPL_DEGREE+1))
     for t in range(len(covar_spl)):
         std[t] = np.matmul(spl0, coeff_big[t:t + SPL_DEGREE + 1])
     print('start saving')
@@ -237,8 +191,12 @@ def calc_spectra(coeff: np.ndarray,
     else:
         depth = 1
 
-    spl1 = bspline_deriv(t_step, 1, derivative=1).flatten()
-    spl0 = bspline_deriv(t_step, 1, derivative=0).flatten()
+    spl1 = BSpline.basis_element(np.arange(SPL_DEGREE+2) * t_step,
+                                 extrapolate=False).derivative(1)(
+           np.arange(0, SPL_DEGREE+1) * t_step)
+    spl0 = BSpline.basis_element(np.arange(SPL_DEGREE+2) * t_step,
+                                 extrapolate=False).derivative(0)(
+           np.arange(0, SPL_DEGREE+1) * t_step)
     coeff_big = np.vstack((np.zeros((SPL_DEGREE, len(coeff[0]))), coeff))
     coeff_sv = np.zeros_like(coeff)
     coeff_pow = np.zeros_like(coeff)
