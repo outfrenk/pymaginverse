@@ -484,6 +484,60 @@ def plot_worldloc(ax: plt.Axes,
     return ax
 
 
+def plot_cmblontime(ax: plt.Axes,
+                    im: FieldInversion,
+                    lat: float,
+                    time: np.ndarray = None,
+                    cmap: str = 'RdBu',
+                    plot_kw: dict = None):
+    """ Plots magnetic field at the cmb in a longitude-time plot
+
+    Parameters
+    ----------
+    ax
+        Matplotlib axis
+    im
+        An instance of the `geomagnetic_field_inversion` class. This function
+        uses the station_coord attributes.
+    lat
+        latitude (in degrees) used for field plotting
+    time
+        timeframe to plot, defaults to all time
+    cmap
+        colormap used for plotting, default to RdBu
+    plot_kw
+        optional plotting keywords.
+
+    Returns
+    -------
+    ax
+        Matplotlib axis
+    """
+    if time is None:
+        time = im._t_array
+    coeff = im.unsplined_iter_gh[-1](time)
+    # create longitude-time grid
+    forwlon = np.arange(0, 360, 1)
+    longrid, timegrid = np.meshgrid(forwlon, time)
+    longrid = longrid.flatten()
+    # make coordinates and link to gauss coefficients
+    world_coord = np.zeros((len(longrid), 3))
+    world_coord[:, 0] = np.radians(90 - lat)
+    world_coord[:, 1] = np.radians(longrid)
+    world_coord[:, 2] = 3485.0
+    link = np.tile(np.arange(len(time), dtype=np.int64), (len(forwlon), 1)
+                   ).T.flatten()
+    # perform forward operation
+    forw_obs = calc_forw(im.maxdegree, world_coord, coeff, link=link)
+    if plot_kw is None:
+        c = ax.imshow(-1 * forw_obs[2].reshape(len(time), len(forwlon)),
+                      origin='lower', cmap=cmap)
+    else:
+        c = ax.imshow(-1 * forw_obs[2].reshape(len(time), len(forwlon)),
+                      cmap=cmap, **plot_kw)
+    return c, ax
+
+
 def plot_sweep(axes: Tuple[plt.Axes, plt.Axes],
                spatial_range: Union[list, np.ndarray],
                temporal_range: Union[list, np.ndarray],
