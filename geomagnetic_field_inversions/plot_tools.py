@@ -498,7 +498,7 @@ def plot_cmblontime(ax: plt.Axes,
         Matplotlib axis
     im
         An instance of the `geomagnetic_field_inversion` class. This function
-        uses the station_coord attributes.
+        uses the _t_array, unsplined_iter_gh, and maxdegree attributes.
     lat
         latitude (in degrees) used for field plotting
     time
