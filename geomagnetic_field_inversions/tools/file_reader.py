@@ -197,8 +197,6 @@ def read_geomagia(path: Path,
         station = StationData(ll[0], ll[1], name=f'Station_{i+1}')
         errorcount = 0
         for j, dtype in enumerate(datatypes):
-            if j == 2:
-                print(ll, data_array[rows][:, [2, 3+2*j, 4+2*j]])
             # first put data in array
             dat = data_array[rows][:, [2, 3+2*j, 4+2*j]]
             # find nonsense input data (equal to either -999 or +999)
@@ -222,7 +220,7 @@ def read_geomagia(path: Path,
 
 
 def read_col(data, item):
-    """ Reads data form csv file using dictionary or returns np.ndarray"""
+    """ Reads data from csv file using dictionary or returns np.ndarray"""
     if type(item) is dict:
         for option in item:
             if option in data:
