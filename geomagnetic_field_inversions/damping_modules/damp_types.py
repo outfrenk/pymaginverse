@@ -99,5 +99,6 @@ def energydensity(d: int, rbycmb: float) -> float:
 
 
 def br2cmb(d: int, rbycmb: float) -> float:
+    # XXX 4 pi is missing!
     res = rbycmb**(2*d + 4) * (d+1)**2 / (2*d + 1)
     return res
