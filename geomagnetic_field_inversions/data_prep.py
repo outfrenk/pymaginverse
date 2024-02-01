@@ -45,7 +45,8 @@ class InputData(object):
                   drop_duplicates: bool = False,
                   x_err=10, y_err=10, z_err=10,
                   h_err=10, f_err=10, a95=10,
-                  force_error_d: float = None):
+                  force_error_d: float = None
+                  ) -> None:
         """ Reads Pandas DataFrame(s) and stores in class
 
         Parameters
@@ -142,7 +143,8 @@ class InputData(object):
 
     def compile_data(self,
                      drop_duplicates: bool = True,
-                     verbose: bool = False):
+                     verbose: bool = False
+                     ) -> None:
         """ Compiles data ready for quick use in geomagnetic field inversions
 
         Parameters
@@ -208,7 +210,30 @@ class InputData(object):
 def read_geomagia(fnames: Union[list, str, Path],
                   id_attr: InputData = None,
                   return_df: bool = False,
-                  **kw_args):
+                  **kw_args
+                  ) -> Union[InputData, pd.DataFrame]:
+    """ Reads geomagia csv-file(s) format
+
+    Parameters
+    ----------
+    fnames
+        (list of) string or Path-object of geomagia formatted file to read
+    id_attr
+        Instance of InputData-class. If not inputted, will create an instance
+    return_df
+        If False (default), function returns instance of InputData-class
+        If True, function returns pandas DataFrame
+    kw_args
+        optional keyword argument(s) used for reading DataFrame with
+        Input_data.read_data()
+
+    Returns
+    -------
+    if return_df is False: id_attr
+        Instance of DataInput-class with inputted geomagia data added
+    if return_df is True: dats
+        Pandas DataFrame of inputted geomagia data
+    """
     if id_attr is None:
         id_attr = InputData()
     dats = pd.DataFrame(columns=id_attr.data.columns)
