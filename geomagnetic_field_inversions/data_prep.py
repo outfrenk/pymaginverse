@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from warnings import warn
-from typing import Union
+from typing import Union, Optional
 
 
 class InputData(object):
@@ -15,8 +15,12 @@ class InputData(object):
         The DataFrame containing all data.
     n_inp : int
         The number of inputs, i.e. rows of the DataFrame
-    inputs : array
-        The inputs (colat, lon, radius, time)
+    loc : array
+        The unique inputs of data locations (colat, lon, radius)
+    loc_idx: array
+        The array connecting index loc to data input
+    time: array
+        The array containing dated time of magnetic record
     idx_X, idx_Y, idx_Z, idx_H, idx_D, idx_I, idx_F : index
         The indices of X, Y, Z, H, dec, inc, and int records in the DataFrame.
     n_out : int
@@ -33,10 +37,13 @@ class InputData(object):
             columns=['lat', 'lon', 'rad', 't', 'colat', 'X', 'dX', 'Y', 'dY',
                      'Z', 'dZ', 'H', 'dH', 'D', 'dD', 'I', 'dI', 'F', 'dF',
                      'alpha95', 'geoc'])
-        self.inputs, self.n_inp = 0, 0
-        self.idx_X,  self.idx_Y, self.idx_Z, self.idx_H = 0, 0, 0, 0
-        self.idx_D,  self.idx_I, self.idx_F = 0, 0, 0
-        self.n_out = 0
+        self.n_inp, self.n_out = 0, 0
+        self.loc = np.zeros((0, 3))
+        self.loc_idx, self.time = np.zeros(0), np.zeros(0)
+        self.idx_X,  self.idx_Y = np.zeros(0), np.zeros(0)
+        self.idx_Z, self.idx_H = np.zeros(0), np.zeros(0)
+        self.idx_D,  self.idx_I = np.zeros(0), np.zeros(0)
+        self.idx_F = np.zeros(0)
         self.outputs, self.errs = np.zeros(0), np.zeros(0)
         self.compiled = False
 
@@ -150,23 +157,29 @@ class InputData(object):
         Parameters
         ----------
         drop_duplicates
-            if True, drops duplicate rows, i.e. rows are exactly the same
+            if True, drops duplicate rows, i.e. rows that are exactly the same
         verbose
             if True, returns status report of number of data points
 
-        Method updates data, inputs, n_inp, idx_..., n_out, outputs, and errs
+        Method updates data, loc_idx, loc, time, n_inp, idx_..., n_out,
+        outputs, and errs
         """
+        self.compiled = False
         # obtain index lists pointing to data quickly
         data = self.data
         # check for duplicates
         if drop_duplicates:
             data.drop_duplicates(inplace=True)
         data.reset_index(inplace=True)
-        # for quick access
-        self.inputs = np.asfortranarray(
-            data[['colat', 'lon', 'rad', 't']].to_numpy().T)
+        # for quick access to stations
+        uniq_loc, indices = np.unique(data[['colat', 'lon', 'rad']
+                                           ].to_numpy().astype('float'),
+                                      return_inverse=True, axis=0)
+        self.loc_idx = indices
+        self.loc = uniq_loc
+        self.time = data['t'].to_numpy().astype('float')
         # DataFrame indices for D, I and F records
-        self.n_inp = len(data)
+        self.n_inp = len(uniq_loc)
         self.idx_X = data.query('X==X').index
         self.idx_Y = data.query('Y==Y').index
         self.idx_Z = data.query('Z==Z').index
@@ -196,8 +209,7 @@ class InputData(object):
         self.errs = std_out**2
         self.compiled = True
         if verbose:
-            print(f'Data from t={min(self.inputs[3])} to '
-                  f't={max(self.inputs[3])}\n'
+            print(f'Data from t={min(self.time)} to t={max(self.time)}\n'
                   f'This dataset contains {self.n_out} records from '
                   f'{self.n_inp} locations.\n'
                   f'It consists of {self.idx_D.size} declinations, '
@@ -211,7 +223,7 @@ def read_geomagia(fnames: Union[list, str, Path],
                   id_attr: InputData = None,
                   return_df: bool = False,
                   **kw_args
-                  ) -> Union[InputData, pd.DataFrame]:
+                  ) -> Optional[InputData]:
     """ Reads geomagia csv-file(s) format
 
     Parameters
@@ -287,4 +299,3 @@ def read_geomagia(fnames: Union[list, str, Path],
         return dats
     else:
         id_attr.read_data(dats, **kw_args)
-        return id_attr
