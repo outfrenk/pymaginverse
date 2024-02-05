@@ -15,12 +15,8 @@ class InputData(object):
         The DataFrame containing all data.
     n_inp : int
         The number of inputs, i.e. rows of the DataFrame
-    loc : array
-        The unique inputs of data locations (colat, lon, radius)
-    loc_idx: array
-        The array connecting index loc to data input
-    time: array
-        The array containing dated time of magnetic record
+    inputs : array
+        The inputs of data locations (colat, lon, radius, time)
     idx_X, idx_Y, idx_Z, idx_H, idx_D, idx_I, idx_F : index
         The indices of X, Y, Z, H, dec, inc, and int records in the DataFrame.
     n_out : int
@@ -38,8 +34,7 @@ class InputData(object):
                      'Z', 'dZ', 'H', 'dH', 'D', 'dD', 'I', 'dI', 'F', 'dF',
                      'alpha95', 'geoc'])
         self.n_inp, self.n_out = 0, 0
-        self.loc = np.zeros((0, 3))
-        self.loc_idx, self.time = np.zeros(0), np.zeros(0)
+        self.inputs = np.zeros((0, 3))
         self.idx_X,  self.idx_Y = np.zeros(0), np.zeros(0)
         self.idx_Z, self.idx_H = np.zeros(0), np.zeros(0)
         self.idx_D,  self.idx_I = np.zeros(0), np.zeros(0)
@@ -161,8 +156,8 @@ class InputData(object):
         verbose
             if True, returns status report of number of data points
 
-        Method updates data, loc_idx, loc, time, n_inp, idx_..., n_out,
-        outputs, and errs
+        Method updates data, inputs, n_inp, idx_..., n_out, outputs, errs,
+        and compiled-switch
         """
         self.compiled = False
         # obtain index lists pointing to data quickly
@@ -171,15 +166,14 @@ class InputData(object):
         if drop_duplicates:
             data.drop_duplicates(inplace=True)
         data.reset_index(inplace=True)
-        # for quick access to stations
-        uniq_loc, indices = np.unique(data[['colat', 'lon', 'rad']
-                                           ].to_numpy().astype('float'),
-                                      return_inverse=True, axis=0)
-        self.loc_idx = indices
-        self.loc = uniq_loc
-        self.time = data['t'].to_numpy().astype('float')
+        # for quick access to stations + time
+        self.inputs = np.asfortranarray(data[[
+                    'colat',
+                    'lon',
+                    'rad',
+                    't']].to_numpy().T)
         # DataFrame indices for D, I and F records
-        self.n_inp = len(uniq_loc)
+        self.n_inp = len(data)
         self.idx_X = data.query('X==X').index
         self.idx_Y = data.query('Y==Y').index
         self.idx_Z = data.query('Z==Z').index
@@ -188,8 +182,8 @@ class InputData(object):
         self.idx_I = data.query('I==I').index
         self.idx_F = data.query('F==F').index
         self.n_out = self.idx_X.size + self.idx_Y.size + self.idx_Z.size\
-                     + self.idx_H.size + self.idx_D.size + self.idx_I.size\
-                     + self.idx_F.size
+            + self.idx_H.size + self.idx_D.size + self.idx_I.size\
+            + self.idx_F.size
         # vector of data
         self.outputs = np.concatenate((data['X'].loc[self.idx_X],
                                        data['Y'].loc[self.idx_Y],
@@ -209,7 +203,8 @@ class InputData(object):
         self.errs = std_out**2
         self.compiled = True
         if verbose:
-            print(f'Data from t={min(self.time)} to t={max(self.time)}\n'
+            print(f'Data from t={min(self.inputs[3])} to '
+                  f't={max(self.inputs[3])}\n'
                   f'This dataset contains {self.n_out} records from '
                   f'{self.n_inp} locations.\n'
                   f'It consists of {self.idx_D.size} declinations, '
