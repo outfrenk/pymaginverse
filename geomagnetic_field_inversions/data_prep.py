@@ -3,6 +3,7 @@ import pandas as pd
 from pathlib import Path
 from warnings import warn
 from typing import Union, Optional
+from .tools.core import latrad_in_geoc
 
 
 class InputData(object):
@@ -16,7 +17,7 @@ class InputData(object):
     n_inp : int
         The number of inputs, i.e. rows of the DataFrame
     loc : array
-        The unique inputs of data locations (colat, lon, radius)
+        The unique inputs of data locations (lat, lon, radius, cd, and sd)
     loc_idx: array
         The array connecting index loc to data input
     time: array
@@ -27,24 +28,24 @@ class InputData(object):
         The number of outputs, i.e. the total number of individual data points.
     outputs : array
         The outputs (order is X, Y, Z, H, dec, inc, int)
-    errs : array
+    std_out : array
         The output-errors.
     compiled : boolean
         Whether indices for data have been compiled
     """
     def __init__(self):
         self.data = pd.DataFrame(
-            columns=['lat', 'lon', 'rad', 't', 'colat', 'X', 'dX', 'Y', 'dY',
-                     'Z', 'dZ', 'H', 'dH', 'D', 'dD', 'I', 'dI', 'F', 'dF',
-                     'alpha95', 'geoc'])
+            columns=['lat', 'lon', 'h', 't', 'X', 'dX', 'Y', 'dY', 'Z', 'dZ',
+                     'H', 'dH', 'D', 'dD', 'I', 'dI', 'F', 'dF',
+                     'alpha95', 'geoc', 'geoc_colat', 'geoc_rad', 'cd', 'sd'])
         self.n_inp, self.n_out = 0, 0
-        self.loc = np.zeros((0, 3))
+        self.loc = np.zeros((0, 5))
         self.loc_idx, self.time = np.zeros(0), np.zeros(0)
         self.idx_X,  self.idx_Y = np.zeros(0), np.zeros(0)
         self.idx_Z, self.idx_H = np.zeros(0), np.zeros(0)
         self.idx_D,  self.idx_I = np.zeros(0), np.zeros(0)
-        self.idx_F = np.zeros(0)
-        self.outputs, self.errs = np.zeros(0), np.zeros(0)
+        self.idx_F, self.idx_out = np.zeros(0), np.zeros(0)
+        self.outputs, self.std_out = np.zeros(0), np.zeros(0)
         self.compiled = False
 
     def read_data(self,
@@ -62,9 +63,9 @@ class InputData(object):
             (list with instances of) Pandas DataFrame. Contains data + error
              on either X/Y/Z/(H) component or inc/dec/int components or both.
             Header should be:
-             'lat' (latitude), 'lon' (longitude), 'rad' (optional: radius),
-             't' (time), 'X'/'Y'/'Z'/'H' (x/y/z/h), 'I'/'D'/'F' (inc/dec/int),
-             'dX'/'dY'/'dZ'/'dH' (x/y/z/h-error),
+             'lat' (latitude), 'lon' (longitude), 'h' (optional: height above
+              geoid in m), 't' (time), 'X'/'Y'/'Z'/'H' (x/y/z/h),
+             'I'/'D'/'F' (inc/dec/int), 'dX'/'dY'/'dZ'/'dH' (x/y/z/h-error),
              'dD'/'dI'/'dF' (dec/inc/int error),
              'alpha95' (a95 error for both dec and inc error)
              'geoc' (only set to 1 if data is obtained in geocentric dataframe)
@@ -101,8 +102,25 @@ class InputData(object):
                                 f"latitude or longitude out of range. \n"
                                 f"Change before proceeding!")
             df['lon'].where(df['lon'] <= 180, df['lon'] - 360, inplace=True)
-            df['colat'] = 90 - df['lat']
-            df['rad'].where(df['rad'].notna(), other=6371.2, inplace=True)
+            df['h'].where(df['h'].notna(), other=0, inplace=True)
+
+            # indicate geodetic (0) or geocentric (1)
+            df['geoc'].where(df['geoc'].notna(), other=0, inplace=True)
+            df['geoc_colat'] = 90 - df['lat']
+            df['geoc_rad'] = 6371.2 + df['h'] * 1e-3
+            df['cd'] = 1
+            df['sd'] = 0
+            # apply geocentric correction
+            temp, rad, cd, sd = latrad_in_geoc(
+                np.radians(df['lat'].to_numpy()),
+                df['h'].to_numpy().astype('float'))
+            colat = 90 - np.degrees(temp)
+            # only replace geodetic values
+            gd_cond = df['geoc'] != 0
+            df['geoc_colat'].where(gd_cond, other=colat, inplace=True)
+            df['geoc_rad'].where(gd_cond, other=rad, inplace=True)
+            df['cd'].where(gd_cond, other=cd, inplace=True)
+            df['sd'].where(gd_cond, other=sd, inplace=True)
 
             # change zero error values to default if no data
             for i, dstr in enumerate(['X', 'Y', 'Z', 'H', 'F']):
@@ -138,7 +156,6 @@ class InputData(object):
             df['dD'].where(df['dD'].notna(),
                            other=df['alpha95'] * 57.3 / 140. / np.abs(
                                np.cos(np.deg2rad(df['I']))), inplace=True)
-
             # check if data already occurs and drop duplicates if wished so:
             if drop_duplicates:
                 df.drop_duplicates(subset=['lat', 'lon', 'rad', 't'],
@@ -172,41 +189,51 @@ class InputData(object):
             data.drop_duplicates(inplace=True)
         data.reset_index(inplace=True)
         # for quick access to stations
-        uniq_loc, indices = np.unique(data[['colat', 'lon', 'rad']
-                                           ].to_numpy().astype('float'),
+        uniq_loc, indices = np.unique(data[['geoc_colat', 'lon', 'geoc_rad',
+                                            'cd', 'sd'
+                                            ]].to_numpy().astype('float'),
                                       return_inverse=True, axis=0)
-        self.loc_idx = indices
-        self.loc = uniq_loc
-        self.time = data['t'].to_numpy().astype('float')
+        # check geodetic/geocentric discrepancies
+        uniq_loc_check = np.unique(data[['lat', 'lon', 'h']
+                                        ].to_numpy().astype('float'), axis=0)
+        if not (len(uniq_loc) == len(uniq_loc_check)):
+            raise Exception('Location has both geocentric and geodetic data!')
+
         # DataFrame indices for D, I and F records
         self.n_inp = len(uniq_loc)
         self.idx_X = data.query('X==X').index
         self.idx_Y = data.query('Y==Y').index
         self.idx_Z = data.query('Z==Z').index
         self.idx_H = data.query('H==H').index
-        self.idx_D = data.query('D==D').index
-        self.idx_I = data.query('I==I').index
         self.idx_F = data.query('F==F').index
-        self.n_out = self.idx_X.size + self.idx_Y.size + self.idx_Z.size\
-                     + self.idx_H.size + self.idx_D.size + self.idx_I.size\
-                     + self.idx_F.size
+        self.idx_I = data.query('I==I').index
+        self.idx_D = data.query('D==D').index
+        self.idx_out = np.concatenate((self.idx_X, self.idx_Y, self.idx_Z,
+                                       self.idx_H, self.idx_F, self.idx_I,
+                                       self.idx_D)).flatten()
+        self.n_out = len(self.idx_out)
+        # get same order as outputs
+        self.loc = uniq_loc
+        self.loc_idx = indices[self.idx_out]
+        self.time = data['t'].loc[self.idx_out].to_numpy()
         # vector of data
         self.outputs = np.concatenate((data['X'].loc[self.idx_X],
                                        data['Y'].loc[self.idx_Y],
                                        data['Z'].loc[self.idx_Z],
                                        data['H'].loc[self.idx_H],
-                                       data['D'].loc[self.idx_D],
+                                       data['F'].loc[self.idx_F],
                                        data['I'].loc[self.idx_I],
-                                       data['F'].loc[self.idx_F]))
+                                       data['D'].loc[self.idx_D])
+                                      ).astype(float)
         # vector of errors
-        std_out = np.concatenate((data['X'].loc[self.idx_X],
-                                  data['Y'].loc[self.idx_Y],
-                                  data['Z'].loc[self.idx_Z],
-                                  data['H'].loc[self.idx_H],
-                                  data['D'].loc[self.idx_D],
-                                  data['I'].loc[self.idx_I],
-                                  data['F'].loc[self.idx_F]))
-        self.errs = std_out**2
+        self.std_out = np.concatenate((data['dX'].loc[self.idx_X],
+                                       data['dY'].loc[self.idx_Y],
+                                       data['dZ'].loc[self.idx_Z],
+                                       data['dH'].loc[self.idx_H],
+                                       data['dF'].loc[self.idx_F],
+                                       data['dI'].loc[self.idx_I],
+                                       data['dD'].loc[self.idx_D])
+                                      ).astype(float)
         self.compiled = True
         if verbose:
             print(f'Data from t={min(self.time)} to t={max(self.time)}\n'
