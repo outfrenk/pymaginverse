@@ -57,36 +57,37 @@ def forward_obs(coeff: np.ndarray,
     return forwobs_matrix
 
 
-def residual_obs(forwobs_matrix: np.ndarray,
-                 data_matrix: np.ndarray,
-                 types_sort: np.ndarray
-                 ) -> np.ndarray:
-    """
-    Calculates the residual by subtracting forward observation from data.
-    Applies angular correction to decl/incl data
-
-    Parameters
-    ----------
-    forwobs_matrix
-        Contains the modeled observations
-    data_matrix
-        Contains the real observations (from the data)
-    types_sort
-        Tells the type of data by providing an index to every row in both
-        forwobs_matrix and data_matrix
-
-    Returns
-    -------
-    resid_matrix_t.T
-        Residual; size is similar to forwobs_matrix and data_matrix
-    """
-    assert forwobs_matrix.shape == data_matrix.shape, 'shapes are not similar'
-    resid_matrix_t = (data_matrix - forwobs_matrix).T
-    type06 = types_sort % 7
-    # inc and dec check
-    resid_matrix_t = np.where((type06 == 5) | (type06 == 6), np.arctan2(
-        np.sin(resid_matrix_t), np.cos(resid_matrix_t)), resid_matrix_t)
-    return resid_matrix_t.T
+# def residual_obs(forwobs_matrix: np.ndarray,
+#                  data_matrix: np.ndarray,
+#                  type06: np.ndarray
+#                  ) -> np.ndarray:
+#     """
+#     Calculates the residual by subtracting forward observation from data.
+#     Applies angular correction to decl/incl data
+#
+#     Parameters
+#     ----------
+#     forwobs_matrix
+#         Contains the modeled observations
+#     data_matrix
+#         Contains the real observations (from the data)
+#     type06
+#         Tells the type of data by providing an index to every row in both
+#         forwobs_matrix and data_matrix
+#
+#     Returns
+#     -------
+#     resid_matrix_t.T
+#         Residual; size is similar to forwobs_matrix and data_matrix
+#     """
+#     assert forwobs_matrix.shape == data_matrix.shape, 'shapes are not similar'
+#     resid_matrix_t = (data_matrix - forwobs_matrix).T
+#     # inc and dec check
+#     print(forwobs_matrix, data_matrix)
+#     print(resid_matrix_t, type06)
+#     resid_matrix_t = np.where((type06 == 5) | (type06 == 6), np.arctan2(
+#         np.sin(resid_matrix_t), np.cos(resid_matrix_t)), resid_matrix_t)
+#     return resid_matrix_t.T
 
 
 def residual_type(residual_weighted: np.ndarray,

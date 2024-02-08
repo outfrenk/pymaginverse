@@ -6,7 +6,7 @@ import pandas as pd
 import cartopy.crs as ccrs
 
 from .field_inversion import FieldInversion
-from .data_prep import StationData
+from .data_prep import InputData as StationData
 from .tools.core import calc_forw, calc_spectra
 
 _DataTypes = Literal['x', 'y', 'z', 'hor', 'inc', 'dec', 'int']
