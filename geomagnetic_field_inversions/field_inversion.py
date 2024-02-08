@@ -429,6 +429,8 @@ class FieldInversion:
                 res = forwobs_matrix[tidx, np.arange(l_idx)] - self.data[didx]
                 res_matrix = (np.where(tidx > 4, np.arctan2(np.sin(res.T), np.cos(res.T)), res.T)).T
                 res_weight = res_matrix / std
+                print(res_weight)
+                print(frech_matrix)
                 for i in range(7):
                     index = np.where(tidx == i)[0]
                     res_iter[i] += sum(res_weight[index]**2)
