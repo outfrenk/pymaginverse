@@ -266,7 +266,7 @@ class FieldInversion:
         # calculate frechet dx, dy, dz for all stations
         if self.verbose:
             print('Calculating Schmidt polynomials and Fréchet coefficients')
-        station_coord = d_inst.loc[:, :3]
+        station_coord = d_inst.loc[:, :3].copy()
         station_coord[:, :2] = np.radians(d_inst.loc[:, :2])
         # find location with geodetic coordinates
         self.station_frechet = frechet.frechet_basis(station_coord[:, :3],
@@ -426,11 +426,12 @@ class FieldInversion:
                     self.station_frechet[lidx], forwobs_matrix
                 )[np.arange(l_idx), tidx].reshape(l_idx, self._nm_total)
                 # contains one row with all residuals
-                res = forwobs_matrix[tidx, np.arange(l_idx)] - self.data[didx]
+                res = self.data[didx] - forwobs_matrix[tidx, np.arange(l_idx)]
                 res_matrix = (np.where(tidx > 4, np.arctan2(np.sin(res.T), np.cos(res.T)), res.T)).T
                 res_weight = res_matrix / std
-                print(res_weight)
-                print(frech_matrix)
+                print(self.data[didx])
+                print(forwobs_matrix[tidx, np.arange(l_idx)])
+                break
                 for i in range(7):
                     index = np.where(tidx == i)[0]
                     res_iter[i] += sum(res_weight[index]**2)
