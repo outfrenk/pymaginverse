@@ -39,13 +39,17 @@ def read_gauss(coeff: np.ndarray,
     if not splined:
         assert len(coeff) == len(time_array), \
             f'length time/knot array and # gauss coeff ({len(coeff)}) do not match'
-        model = FieldInversion(time_array, maxdegree)
+        model = FieldInversion(t_min=min(time_array), t_max=max(time_array),
+                               t_step=time_array[1]-time_array[0],
+                               maxdegree=maxdegree)
         model.unsplined_iter_gh = [
             CubicSpline(x=time_array, y=coeff, axis=0, extrapolate=False)]
     else:
         assert len(coeff) == (len(time_array) - 4), \
             f'length time/knot array and # gauss coeff ({len(coeff)}) do not match'
-        model = FieldInversion(time_array[3:-3], maxdegree)
+        model = FieldInversion(t_min=min(time_array), t_max=max(time_array),
+                               t_step=time_array[1]-time_array[0],
+                               maxdegree=maxdegree)
         model.splined_gh = coeff
         model.unsplined_iter_gh = [
             BSpline(t=time_array, c=coeff, k=3, axis=0, extrapolate=False)]
