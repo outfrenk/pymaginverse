@@ -15,7 +15,6 @@ _DList = [['Uniform', 0], ['Dissipation', 0], ['Powerseries', 0],
 def damp_matrix(max_degree: int,
                 nr_splines: int,
                 t_step: float,
-                damp_factor: float,
                 damp_type: int,
                 damp_dipole: bool = True,
                 ) -> Tuple[np.ndarray, np.ndarray]:
@@ -29,8 +28,6 @@ def damp_matrix(max_degree: int,
         amount of splines, at least length(time array) + degree B-Splines - 1
     t_step
         time step of time array
-    damp_factor
-        damping factor to be applied to the total damping matrix (lambda)
     damp_type
         integer of damping type to be applied (see _DList)
     damp_dipole
@@ -48,20 +45,19 @@ def damp_matrix(max_degree: int,
     damp_diag = np.zeros(nm_total)
 
     matrix_diag = np.zeros((2 * SPL_DEGREE + 1, nr_splines * nm_total))
-    if damp_factor != 0:
-        damp_diag = dampingtype(max_degree, _DList[damp_type][0], damp_dipole)
-        # start combining interacting splines
-        for spl1 in range(nr_splines):  # loop through splines with j
-            # loop with spl2 between spl1-spl_degree and spl1+spl_degree
-            for spl2 in range(max(spl1 - SPL_DEGREE, 0),
-                              min(spl1 + SPL_DEGREE + 1, nr_splines)):
-                # integrate cubic B-Splines
-                spl_integral = integrator(spl1, spl2, nr_splines, t_step,
-                                          _DList[damp_type][1])
-                # place damping in matrix
-                matrix_diag[spl2 - spl1 + SPL_DEGREE,
-                            spl1 * nm_total:(spl1 + 1) * nm_total
-                            ] = damp_factor * spl_integral * damp_diag
+    damp_diag = dampingtype(max_degree, _DList[damp_type][0], damp_dipole)
+    # start combining interacting splines
+    for spl1 in range(nr_splines):  # loop through splines with j
+        # loop with spl2 between spl1-spl_degree and spl1+spl_degree
+        for spl2 in range(max(spl1 - SPL_DEGREE, 0),
+                          min(spl1 + SPL_DEGREE + 1, nr_splines)):
+            # integrate cubic B-Splines
+            spl_integral = integrator(spl1, spl2, nr_splines, t_step,
+                                      _DList[damp_type][1])
+            # place damping in matrix
+            matrix_diag[spl2 - spl1 + SPL_DEGREE,
+                        spl1 * nm_total:(spl1 + 1) * nm_total
+                        ] = spl_integral * damp_diag
     return matrix_diag, damp_diag
 
 

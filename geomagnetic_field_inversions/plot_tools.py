@@ -6,102 +6,102 @@ import pandas as pd
 import cartopy.crs as ccrs
 
 from .field_inversion import FieldInversion
-from .data_prep import StationData
+# from .data_prep import InputData
 from .tools.core import calc_forw, calc_spectra
 
 _DataTypes = Literal['x', 'y', 'z', 'hor', 'inc', 'dec', 'int']
 
 
-def plot_data(axes: Union[list, plt.Axes],
-              dc: StationData,
-              ) -> plt.Axes:
-    """ Plots input (paleo)magnetic data based on the StationData class
+# def plot_data(axes: Union[list, plt.Axes],
+#               dc: StationData,
+#               ) -> plt.Axes:
+#     """ Plots input (paleo)magnetic data based on the StationData class
+#
+#     Parameters
+#     ----------
+#     axes
+#         List of matplotlib axis objects equal to dc.types, or one axes
+#     dc
+#         An instance of the "StationData" class. This function uses the
+#         lat, loc, types, and data attributes of this class
+#     """
+#     if len(dc.types) == 1 and type(axes) != list:
+#         axes = [axes]
+#     assert len(axes) >= len(dc.types), 'not defined enough plot axes'
+#     for i in range(len(dc.types)):
+#         axes[i].set_title('Fitting %s of data' % dc.types[i])
+#         if dc.types[i] == 'inc' or dc.types[i] == 'dec':
+#             axes[i].set_ylabel('%s (degrees)' % dc.types[i])
+#         else:
+#             axes[i].set_ylabel('%s' % dc.types[i])
+#         axes[i].set_xlabel('Time')
+#         axes[i].scatter(dc.data[i][0], dc.data[i][1], label='data')
+#         axes[i].legend()
+#     return axes
 
-    Parameters
-    ----------
-    axes
-        List of matplotlib axis objects equal to dc.types, or one axes
-    dc
-        An instance of the "StationData" class. This function uses the
-        lat, loc, types, and data attributes of this class
-    """
-    if len(dc.types) == 1 and type(axes) != list:
-        axes = [axes]
-    assert len(axes) >= len(dc.types), 'not defined enough plot axes'
-    for i in range(len(dc.types)):
-        axes[i].set_title('Fitting %s of data' % dc.types[i])
-        if dc.types[i] == 'inc' or dc.types[i] == 'dec':
-            axes[i].set_ylabel('%s (degrees)' % dc.types[i])
-        else:
-            axes[i].set_ylabel('%s' % dc.types[i])
-        axes[i].set_xlabel('Time')
-        axes[i].scatter(dc.data[i][0], dc.data[i][1], label='data')
-        axes[i].legend()
-    return axes
 
-
-def compare_loc(axes: list,
-                im: FieldInversion,
-                dc: StationData,
-                xlim: list = None,
-                plot_kwargs: dict = None
-                ) -> list:
-    """Plots the modeled magnetic field at the location of a data input class
-
-    Parameters
-    ----------
-    axes
-        Matplotlib axes objects
-    im
-        An instance of the `geomagnetic_field_inversion` class. This function
-        uses the unsplined_iter_gh, t_array, and maxdegree attributes.
-    dc
-        An instance of the "StationData" class. This function uses the
-        lat, loc, types, fit_data, and data attributes of this class
-    xlim
-        Optional list of two elements containing begin and end plotting time.
-    plot_kwargs
-        optional plotting keyword arguments
-
-    This function calls plot_place for plotting of the modeled field
-    """
-    # circumvent length errors
-    if len(dc.types) == 1 and type(axes) != list:
-        axes = [axes]
-    if len(axes) != len(dc.types):
-        raise Exception('Not enough axes defined'
-                        f', you need {len(dc.types)} axes.')
-
-    for i, item in enumerate(dc.types):
-        xdata = np.array(dc.data[i][0])
-        ydata = np.array(dc.data[i][1])
-
-        if item == 'inc':
-            ydata = ydata % 180
-            ydata = np.where(ydata > 90, ydata - 180, ydata)
-            axes[i].set_ylabel('%s (degrees)' % item)
-            axes[i].scatter(xdata, ydata, label='data')
-        elif item == 'dec':
-            ydata = np.array(ydata) % 360
-            ydata = np.where(ydata > 180, ydata - 360, ydata)
-            axes[i].set_ylabel('%s (degrees)' % item)
-            axes[i].scatter(xdata, ydata, label='data')
-        else:
-            axes[i].set_ylabel('%s' % item)
-            axes[i].scatter(xdata, ydata, label='data')
-
-        mindata, maxdata = min(xdata), max(xdata)
-        minmodel, maxmodel = min(im.t_array), max(im.t_array)
-        axes[i].set_xlabel('Time')
-        axes[i] = plot_forward(axes[i], im, [dc.lat, dc.lon], item,
-                               plot_kwargs=plot_kwargs)
-        if xlim is not None:
-            axes[i].set_xlim(xlim[0], xlim[1])
-        else:
-            axes[i].set_xlim(max(mindata, minmodel)*0.9,
-                             min(maxdata, maxmodel)*1.1)
-        axes[i].legend()
-    return axes
+# def compare_loc(axes: list,
+#                 im: FieldInversion,
+#                 dc: StationData,
+#                 xlim: list = None,
+#                 plot_kwargs: dict = None
+#                 ) -> list:
+#     """Plots the modeled magnetic field at the location of a data input class
+#
+#     Parameters
+#     ----------
+#     axes
+#         Matplotlib axes objects
+#     im
+#         An instance of the `geomagnetic_field_inversion` class. This function
+#         uses the unsplined_iter_gh, t_array, and maxdegree attributes.
+#     dc
+#         An instance of the "StationData" class. This function uses the
+#         lat, loc, types, fit_data, and data attributes of this class
+#     xlim
+#         Optional list of two elements containing begin and end plotting time.
+#     plot_kwargs
+#         optional plotting keyword arguments
+#
+#     This function calls plot_place for plotting of the modeled field
+#     """
+#     # circumvent length errors
+#     if len(dc.types) == 1 and type(axes) != list:
+#         axes = [axes]
+#     if len(axes) != len(dc.types):
+#         raise Exception('Not enough axes defined'
+#                         f', you need {len(dc.types)} axes.')
+#
+#     for i, item in enumerate(dc.types):
+#         xdata = np.array(dc.data[i][0])
+#         ydata = np.array(dc.data[i][1])
+#
+#         if item == 'inc':
+#             ydata = ydata % 180
+#             ydata = np.where(ydata > 90, ydata - 180, ydata)
+#             axes[i].set_ylabel('%s (degrees)' % item)
+#             axes[i].scatter(xdata, ydata, label='data')
+#         elif item == 'dec':
+#             ydata = np.array(ydata) % 360
+#             ydata = np.where(ydata > 180, ydata - 360, ydata)
+#             axes[i].set_ylabel('%s (degrees)' % item)
+#             axes[i].scatter(xdata, ydata, label='data')
+#         else:
+#             axes[i].set_ylabel('%s' % item)
+#             axes[i].scatter(xdata, ydata, label='data')
+#
+#         mindata, maxdata = min(xdata), max(xdata)
+#         minmodel, maxmodel = min(im.t_array), max(im.t_array)
+#         axes[i].set_xlabel('Time')
+#         axes[i] = plot_forward(axes[i], im, [dc.lat, dc.lon], item,
+#                                plot_kwargs=plot_kwargs)
+#         if xlim is not None:
+#             axes[i].set_xlim(xlim[0], xlim[1])
+#         else:
+#             axes[i].set_xlim(max(mindata, minmodel)*0.9,
+#                              min(maxdata, maxmodel)*1.1)
+#         axes[i].legend()
+#     return axes
 
 
 def plot_forward(ax: plt.Axes,
@@ -296,7 +296,7 @@ def plot_spectrum(axes: Tuple[plt.Axes, plt.Axes],
         If True (default) presents results at cmb, else at earth's surface
     """
     sum_coeff_pow, sum_coeff_sv = calc_spectra(
-        im.splined_gh, im.maxdegree, im._t_step, cmb)
+        im.splined_gh, im.maxdegree, im.t_step, cmb)
 
     axes[0].plot(np.arange(1, im.maxdegree + 1), sum_coeff_pow,
                  marker='o', label='power')
@@ -334,10 +334,10 @@ def plot_dampnorm(ax: plt.Axes,
     """
     ax.set_xlabel('Centre of time interval')
     if spatial:
-        ax.plot(im._t_array, im.spat_norm, label='spatial', **plt_kwargs)
+        ax.plot(im.t_array, im.spat_norm, label='spatial', **plt_kwargs)
         ax.set_ylabel('spatial damping')
     else:
-        ax.plot(im._t_array, im.temp_norm, label='temporal', **plt_kwargs)
+        ax.plot(im.t_array, im.temp_norm, label='temporal', **plt_kwargs)
         ax.set_ylabel('temporal damping')
 
     return ax
@@ -514,7 +514,7 @@ def plot_cmblontime(ax: plt.Axes,
         Matplotlib axis
     """
     if time is None:
-        time = im._t_array
+        time = im.t_array
     coeff = im.unsplined_iter_gh[-1](time)
     # create longitude-time grid
     forwlon = np.arange(0, 360, 1)
