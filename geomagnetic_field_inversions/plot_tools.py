@@ -5,15 +5,14 @@ from typing import Union, Literal, Tuple
 import pandas as pd
 import cartopy.crs as ccrs
 
-from .field_inversion import FieldInversion
-# from .data_prep import InputData
-from .tools.core import calc_forw, calc_spectra
+from .tools import calc_spectra
+from .forward_modules import calc_forw
 
 _DataTypes = Literal['x', 'y', 'z', 'hor', 'inc', 'dec', 'int']
 
 
-# def plot_data(axes: Union[list, plt.Axes],
-#               dc: StationData,
+# def plot_data(axes,
+#               dc,
 #               ) -> plt.Axes:
 #     """ Plots input (paleo)magnetic data based on the StationData class
 #
@@ -40,9 +39,9 @@ _DataTypes = Literal['x', 'y', 'z', 'hor', 'inc', 'dec', 'int']
 #     return axes
 
 
-# def compare_loc(axes: list,
-#                 im: FieldInversion,
-#                 dc: StationData,
+# def compare_loc(axes,
+#                 im,
+#                 dc,
 #                 xlim: list = None,
 #                 plot_kwargs: dict = None
 #                 ) -> list:
@@ -104,8 +103,8 @@ _DataTypes = Literal['x', 'y', 'z', 'hor', 'inc', 'dec', 'int']
 #     return axes
 
 
-def plot_forward(ax: plt.Axes,
-                 im: FieldInversion,
+def plot_forward(ax,
+                 im,
                  input_coord: np.ndarray,
                  datatype: _DataTypes,
                  it: int = -1,
@@ -152,8 +151,8 @@ def plot_forward(ax: plt.Axes,
     return ax
 
 
-def plot_residuals(ax: plt.Axes,
-                   im: FieldInversion,
+def plot_residuals(ax,
+                   im,
                    **plt_kwargs
                    ) -> plt.Axes:
     """ Plots the residuals of the geomagnetic field inversion per iteration
@@ -190,8 +189,8 @@ def plot_residuals(ax: plt.Axes,
     return ax
 
 
-def plot_coeff(ax: plt.Axes,
-               im: FieldInversion,
+def plot_coeff(ax,
+               im,
                degree: int = None,
                index: list = None,
                it_time: int = -1,
@@ -249,13 +248,10 @@ def plot_coeff(ax: plt.Axes,
     for i, item in enumerate(index):
         if plot_iter:
             coeff = np.zeros(len(im.unsplined_iter_gh) + 1)
-            if isinstance(im, FieldInversion):
-                coeff[0] = im.x0[item]
-                for c in range(len(coeff)-1):
-                    coeff[c+1] = im.unsplined_iter_gh[c](
-                        im.t_array[it_time])[item]
-            else:
-                raise Exception('Class not found')
+            coeff[0] = im.x0[item]
+            for c in range(len(coeff)-1):
+                coeff[c+1] = im.unsplined_iter_gh[c](
+                    im.t_array[it_time])[item]
             ax.plot(np.arange(len(coeff)), coeff,
                     linestyle=linestyles[i % len(linestyles)],
                     marker=markerstyles[i % len(markerstyles)],
@@ -278,8 +274,8 @@ def plot_coeff(ax: plt.Axes,
     return ax
 
 
-def plot_spectrum(axes: Tuple[plt.Axes, plt.Axes],
-                  im: plt.Axes,
+def plot_spectrum(axes,
+                  im,
                   cmb: bool = True
                   ) -> Tuple[plt.Axes, plt.Axes]:
     """ Plots the powerspectrum of gaussian coefficients and its variance at
@@ -312,8 +308,8 @@ def plot_spectrum(axes: Tuple[plt.Axes, plt.Axes],
     return axes
 
 
-def plot_dampnorm(ax: plt.Axes,
-                  im: FieldInversion,
+def plot_dampnorm(ax,
+                  im,
                   spatial: bool = True,
                   **plt_kwargs
                   ) -> plt.Axes:
@@ -343,8 +339,8 @@ def plot_dampnorm(ax: plt.Axes,
     return ax
 
 
-def plot_worldmag(axes: Tuple[plt.Axes, plt.Axes, plt.Axes],
-                  im: FieldInversion,
+def plot_worldmag(axes,
+                  im,
                   proj: ccrs,
                   plot_loc: bool = False,
                   time: float = None,
@@ -448,8 +444,8 @@ def plot_worldmag(axes: Tuple[plt.Axes, plt.Axes, plt.Axes],
     return axes
 
 
-def plot_worldloc(ax: plt.Axes,
-                  im: FieldInversion,
+def plot_worldloc(ax,
+                  im,
                   proj: ccrs,
                   plot_world: bool = False,
                   plot_kw: dict = None
@@ -484,8 +480,8 @@ def plot_worldloc(ax: plt.Axes,
     return ax
 
 
-def plot_cmblontime(ax: plt.Axes,
-                    im: FieldInversion,
+def plot_cmblontime(ax,
+                    im,
                     lat: float,
                     time: np.ndarray = None,
                     cmap: str = 'RdBu',
@@ -538,7 +534,7 @@ def plot_cmblontime(ax: plt.Axes,
     return c, ax
 
 
-def plot_sweep(axes: Tuple[plt.Axes, plt.Axes],
+def plot_sweep(axes,
                spatial_range: Union[list, np.ndarray],
                temporal_range: Union[list, np.ndarray],
                basedir: Union[str, Path] = '.',

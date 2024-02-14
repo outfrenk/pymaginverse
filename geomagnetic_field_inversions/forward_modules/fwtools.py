@@ -88,3 +88,32 @@ def residual_type(residual_weighted: np.ndarray,
                 residual_weighted[type06 == i]**2) / count_type[i])
     res_iter[7] = np.sqrt(np.sum(residual_weighted**2) / sum(count_type))
     return res_iter
+
+
+def calc_forw(maxdegree: int,
+              coord: np.ndarray,
+              coeff: np.ndarray,
+              link: np.ndarray = None):
+    """ Calculate the modeled geomagnetic field
+
+    Parameters
+    ----------
+    maxdegree
+        Spherical degree of modeled field
+    coord
+        coordinates of the locations where to calculate field
+    coeff
+        Gauss coefficients, each row containing the Gauss coefficients per
+        spline
+    link
+        array that indicates how coordinates are linked to coeff
+
+    Returns
+    -------
+    forw_obs
+        calculated field observations
+    """
+    frechxyz = frechet_basis(coord, maxdegree)
+    forw_obs = forward_obs(coeff, frechxyz, link=link)
+    forw_obs[5:7] = np.degrees(forw_obs[5:7])
+    return forw_obs

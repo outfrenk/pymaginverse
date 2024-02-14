@@ -7,13 +7,12 @@ from typing import Union, Final
 from pathlib import Path
 from tqdm import tqdm
 
-from .data_prep import InputData
-from .forward_modules import frechet, fwtools
-from .damping_modules import damping
-from .tools.core import frechet_in_geoc
+from .forward_modules import frechet_types, frechet_basis, forward_obs
+from .damping_modules import damp_matrix, damp_norm
+from .tools import frechet_in_geoc
 
 
-class FieldInversion:
+class FieldInversion(object):
     """
     Calculates geomagnetic field coefficients based on inputted data and
     damping parameters using the approach of Korte et al.
@@ -95,9 +94,9 @@ class FieldInversion:
         self.matrix_ready = False
 
     def prepare_inversion(self,
-                          d_inst: InputData,
-                          spat_type: int = None,
-                          temp_type: int = None,
+                          d_inst,
+                          spat_type: str = None,
+                          temp_type: str = None,
                           spat_ddip: bool = False,
                           temp_ddip: bool = True
                           ) -> None:
@@ -109,7 +108,10 @@ class FieldInversion:
         d_inst
             InputData attribute containing geomagnetic data
         spat_type, temp_type
-            integer corresponding to applied damping type
+            string corresponding to the to be applied damping type
+            options spatial: uniform, energy_diss, powerseries, ohmic_heating,
+            smooth_core, min_ext_energy
+            options temporal: min_vel, min_acc
             defaults to no damping
         spat_ddip, temp_ddip
             boolean indicating whether to damp dipole coefficients for spatial
@@ -142,8 +144,6 @@ class FieldInversion:
         self.matrix_ready
             indicates whether all matrices have been formed (boolean)
         """
-        if not isinstance(d_inst, InputData):
-            raise Exception('d_inst is not an instance of InputData')
         if not d_inst.compiled:
             print('Compiling data now with default options')
             d_inst.compile_data()
@@ -156,8 +156,10 @@ class FieldInversion:
         type_arr = np.repeat(np.arange(7), self.count_type)
         self.idx_out = d_inst.idx_out
         self.time = d_inst.time
-        self.data = np.where(type_arr < 5, d_inst.outputs, np.radians(d_inst.outputs))
-        self.std = np.where(type_arr < 5, d_inst.std_out, np.radians(d_inst.std_out))
+        self.data = np.where(type_arr < 5, d_inst.outputs,
+                             np.radians(d_inst.outputs))
+        self.std = np.where(type_arr < 5, d_inst.std_out,
+                            np.radians(d_inst.std_out))
 
         # calculate frechet dx, dy, dz for all stations
         if self.verbose:
@@ -165,8 +167,8 @@ class FieldInversion:
         station_coord = d_inst.loc[:, :3].copy()
         station_coord[:, :2] = np.radians(d_inst.loc[:, :2])
         # find location with geodetic coordinates
-        self.station_frechet = frechet.frechet_basis(station_coord[:, :3],
-                                                     self._maxdegree)
+        self.station_frechet = frechet_basis(station_coord[:, :3],
+                                             self._maxdegree)
         # geocentric correction
         cd, sd = d_inst.loc[:, 3], d_inst.loc[:, 4]
         dx, dz = frechet_in_geoc(
@@ -205,17 +207,17 @@ class FieldInversion:
         if spat_type is not None:
             if self.verbose:
                 print('Calculating spatial damping matrix')
-            self.spat_type = spat_type
-            self.sdamp_diag, self.spat_fac = damping.damp_matrix(
-                self._maxdegree, self.nr_splines, self.t_step, spat_type,
+            self.spat_type = f's_{spat_type}'
+            self.sdamp_diag, self.spat_fac = damp_matrix(
+                self._maxdegree, self.nr_splines, self.t_step, self.spat_type,
                 spat_ddip)
 
         if temp_type is not None:
             if self.verbose:
                 print('Calculating temporal damping matrix')
-            self.temp_type = temp_type
-            self.tdamp_diag, self.temp_fac = damping.damp_matrix(
-                self._maxdegree, self.nr_splines, self.t_step, temp_type,
+            self.temp_type = f't_{temp_type}'
+            self.tdamp_diag, self.temp_fac = damp_matrix(
+                self._maxdegree, self.nr_splines, self.t_step, self.temp_type,
                 temp_ddip)
 
         self.matrix_ready = True
@@ -318,10 +320,10 @@ class FieldInversion:
                 std = self.std[didx]
 
                 # contains all observational data in 7 rows
-                forwobs_matrix = fwtools.forward_obs(gh_splfunc(
+                forwobs_matrix = forward_obs(gh_splfunc(
                     self.time[didx]), self.station_frechet[lidx])
                 # contains location per row
-                frech_matrix = frechet.frechet_types(
+                frech_matrix = frechet_types(
                     self.station_frechet[lidx], forwobs_matrix
                 )[np.arange(l_idx), tidx].reshape(l_idx, self._nm_total)
                 # contains one row with all residuals
@@ -397,13 +399,13 @@ class FieldInversion:
             print('Calculating optional spatial and temporal norms')
         tsp = self.t_array[-1] - self.t_array[0]
         if spat_damp != 0:
-            self.spat_norm = damping.damp_norm(self.spat_fac, self.splined_gh,
-                                               self.spat_type, self.t_step)
+            self.spat_norm = damp_norm(self.spat_fac, self.splined_gh,
+                                       self.spat_type, self.t_step)
             if self.verbose:
                 print(f'Spatial damping norm: {np.sum(self.spat_norm) / tsp}')
         if temp_damp != 0:
-            self.temp_norm = damping.damp_norm(self.temp_fac, self.splined_gh,
-                                               self.temp_type, self.t_step)
+            self.temp_norm = damp_norm(self.temp_fac, self.splined_gh,
+                                       self.temp_type, self.t_step)
             if self.verbose:
                 print(f'Temporal damping norm: {np.sum(self.temp_norm) / tsp}')
 

@@ -3,7 +3,6 @@ import scipy.sparse as scs
 from scipy.interpolate import BSpline
 from pathlib import Path
 from typing import Tuple
-from ..forward_modules import frechet, fwtools
 
 SPL_DEGREE = 3
 
@@ -130,35 +129,6 @@ def calc_stdev(path: Path,
     if save_covar:
         np.save(path / 'covar', covar)
     print('saving finished')
-
-
-def calc_forw(maxdegree: int,
-              coord: np.ndarray,
-              coeff: np.ndarray,
-              link: np.ndarray = None):
-    """ Calculate the modeled geomagnetic field
-
-    Parameters
-    ----------
-    maxdegree
-        Spherical degree of modeled field
-    coord
-        coordinates of the locations where to calculate field
-    coeff
-        Gauss coefficients, each row containing the Gauss coefficients per
-        spline
-    link
-        array that indicates how coordinates are linked to coeff
-
-    Returns
-    -------
-    forw_obs
-        calculated field observations
-    """
-    frechxyz = frechet.frechet_basis(coord, maxdegree)
-    forw_obs = fwtools.forward_obs(coeff, frechxyz, link=link)
-    forw_obs[5:7] = np.degrees(forw_obs[5:7])
-    return forw_obs
 
 
 def calc_spectra(coeff: np.ndarray,

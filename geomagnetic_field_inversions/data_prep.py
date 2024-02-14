@@ -3,7 +3,7 @@ import pandas as pd
 from pathlib import Path
 from warnings import warn
 from typing import Union, Optional
-from .tools.core import latrad_in_geoc
+from .tools import latrad_in_geoc
 
 
 class InputData(object):
