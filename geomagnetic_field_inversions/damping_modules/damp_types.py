@@ -14,18 +14,19 @@ def dampingtype(maxdegree: int,
         maximum order for spherical harmonics model
     damp_type
         style of damping according. Options are:
-        Uniform         -> Set all damping to one
-        Dissipation     -> Minimize dissipation by minimizing
-                           the 2nd norm of Br at the cmb
-        Powerseries     -> Minimization condition on power of series used
-                           by Löwes
-        Gubbins         -> Spatial damping of heat flow at
-                           the core mantle boundary (Gubbins et al., 1975)
-        Horderiv2cmb    -> Minimization of the integral of the horizontal
-                           derivative of B squared
-        Energydensity   -> External energy density
-        Br2cmb          -> Minimize integral of Br squared over surface
-                           at core mantle boundary
+        s_uniform         -> Set all damping to one
+        s_energy_diss     -> Minimize dissipation by minimizing
+                             the 2nd norm of Br at the cmb
+        s_powerseries     -> Minimization condition on power of series used
+                             by Löwes
+        s_ohmic_heating   -> Spatial damping of heat flow at
+                             the core mantle boundary (Gubbins et al., 1975)
+        s_smooth_core     -> Minimization of the integral of the horizontal
+                             derivative of B squared
+        s_min_ext_energy  -> Minimize external energy density
+        t_min_vel         -> Minimize integral of Br velocity or acceleration
+        t_min_acc            squared over surface at core mantle boundary
+
     damp_dipole
         If False, damping is not applied to dipole coefficients (first 3).
         If True, dipole coefficients are also damped.
@@ -38,17 +39,23 @@ def dampingtype(maxdegree: int,
         contains damping value for gaussian coefficients. Essentially
         diagonal values of the damping matrix
 
+    Examples
+    --------
+    >>> dampingtype(2, 's_uniform', True)
+    array([1., 1., 1., 1., 1., 1., 1., 1.])
+    >>> dampingtype(2, 't_min_acc', False, 1)
+    array([0. , 0. , 0. , 1.8, 1.8, 1.8, 1.8, 1.8])
     """
-    func_mapping = {'Uniform': uniform, 'Dissipation': dissipation,
-                    'Powerseries': powerseries, 'Gubbins': gubbins,
-                    'Horderiv2cmb': horderiv2cmb, 'Br2cmb': br2cmb,
-                    'Energydensity': energydensity}
-    if damp_type not in func_mapping:
+    func_dict = {'s_uniform': uniform, 's_ohmic_heating': ohmic_heating,
+                 's_powerseries': powerseries, 's_energy_diss': energy_diss,
+                 's_smooth_core': smooth_core, 't_min_vel': min_vel_acc,
+                 't_min_acc': min_vel_acc, 's_min_ext_energy': min_ext_energy}
+    if damp_type not in func_dict:
         raise Exception(f'Damping type {damp_type} not found. Exiting...')
 
     damp_array = np.zeros((maxdegree+1)**2 - 1)
     # allocate the appropriate damping function
-    damp_func = func_mapping[damp_type]
+    damp_func = func_dict[damp_type]
     # radius earth divided by radius cmb
     rbycmb = 1. / damp_depth
     # fill the damping array per degree according to damping type
@@ -70,7 +77,7 @@ def uniform(d: int, rbycmb: float) -> float:
     return 1.
 
 
-def dissipation(d: int, rbycmb: float) -> float:
+def energy_diss(d: int, rbycmb: float) -> float:
     # according to gubbins and bloxham 1985, bloxham 1987:
     # res = 4*np.pi * (d+1)**2 * (2-d*(d+1)) / ((2*d + 1) * rbycmb**(2*d+4))
     # to be combined with one spline integral (ddt=1)
@@ -83,21 +90,21 @@ def powerseries(d: int, rbycmb: float) -> float:
     return res
 
 
-def gubbins(d: int, rbycmb: float) -> float:
+def ohmic_heating(d: int, rbycmb: float) -> float:
     res = rbycmb**(2*d + 3) * 4*np.pi * (d+1) * (2*d + 1) * (2*d + 3) / d
     return res
 
 
-def horderiv2cmb(d: int, rbycmb: float) -> float:
+def smooth_core(d: int, rbycmb: float) -> float:
     res = rbycmb**(2*d + 6) * d * (d+1)**3 / (2*d + 1)
     return res
 
 
-def energydensity(d: int, rbycmb: float) -> float:
+def min_ext_energy(d: int, rbycmb: float) -> float:
     res = rbycmb**(2*d + 1) * (d+1) / (2*d + 1)
     return res
 
 
-def br2cmb(d: int, rbycmb: float) -> float:
+def min_vel_acc(d: int, rbycmb: float) -> float:
     res = rbycmb**(2*d + 4) * (d+1)**2 / (2*d + 1)
     return res

@@ -7,15 +7,15 @@ from .damp_types import dampingtype
 
 SPL_DEGREE = 3
 # list containing the name of damping and its required time derivative
-_DList = [['Uniform', 0], ['Dissipation', 0], ['Powerseries', 0],
-          ['Gubbins', 0], ['Horderiv2cmb', 0], ['Energydensity', 0],
-          ['Br2cmb', 1], ['Br2cmb', 2]]
+_Dampdict = {'s_uniform': 0, 's_energy_diss': 0, 's_powerseries': 0,
+             's_ohmic_heating': 0, 's_smooth_core': 0, 's_min_ext_energy': 0,
+             't_min_vel': 1, 't_min_acc': 2}
 
 
 def damp_matrix(max_degree: int,
                 nr_splines: int,
                 t_step: float,
-                damp_type: int,
+                damp_type: str,
                 damp_dipole: bool = True,
                 ) -> Tuple[np.ndarray, np.ndarray]:
     """ Creates spatial and temporal damping matrices through diagonals
@@ -29,23 +29,24 @@ def damp_matrix(max_degree: int,
     t_step
         time step of time array
     damp_type
-        integer of damping type to be applied (see _DList)
+        name of damping type to be applied (see _Dampdict)
     damp_dipole
         boolean indicating whether to damp dipole coefficients or not.
         Default is set to False.
 
     Returns
     -------
-    matrix
-        damping matrix
+    matrix_diag
+        damping matrix containing diagonals from top to bottom
     damp_diag
         damping parameters per degree (and order)
     """
-    nm_total = (max_degree + 1) ** 2 - 1
-    damp_diag = np.zeros(nm_total)
+    if damp_type not in _Dampdict:
+        raise Exception(f'Damping type {damp_type} not found. Exiting...')
 
+    nm_total = (max_degree + 1) ** 2 - 1
     matrix_diag = np.zeros((2 * SPL_DEGREE + 1, nr_splines * nm_total))
-    damp_diag = dampingtype(max_degree, _DList[damp_type][0], damp_dipole)
+    damp_diag = dampingtype(max_degree, damp_type, damp_dipole)
     # start combining interacting splines
     for spl1 in range(nr_splines):  # loop through splines with j
         # loop with spl2 between spl1-spl_degree and spl1+spl_degree
@@ -53,7 +54,7 @@ def damp_matrix(max_degree: int,
                           min(spl1 + SPL_DEGREE + 1, nr_splines)):
             # integrate cubic B-Splines
             spl_integral = integrator(spl1, spl2, nr_splines, t_step,
-                                      _DList[damp_type][1])
+                                      _Dampdict[damp_type])
             # place damping in matrix
             matrix_diag[spl2 - spl1 + SPL_DEGREE,
                         spl1 * nm_total:(spl1 + 1) * nm_total
@@ -87,6 +88,13 @@ def integrator(spl1: int,
     -------
     int_prod
         integration product of inputted splines or spline derivatives
+
+    Examples
+    --------
+    >>> integrator(4, 5, 10, 1, 2)
+    -1.5
+    >>> integrator(1, 7, 10, 1, 0)
+    0
     """
     # order of spline after taking derivative
     temp_degree = SPL_DEGREE - ddt
@@ -116,7 +124,7 @@ def integrator(spl1: int,
 
 def damp_norm(damp_fac: np.ndarray,
               coeff: np.ndarray,
-              damp_type: int,
+              damp_type: str,
               t_step: float,
               ) -> np.ndarray:
     """
@@ -129,7 +137,7 @@ def damp_norm(damp_fac: np.ndarray,
     coeff
         splined Gauss coefficients of one time per row
     damp_type
-        integer of damping type to be applied (see _DList)
+        damping type to be applied (see _Dampdict)
     t_step
         dt of timevector
 
@@ -139,7 +147,7 @@ def damp_norm(damp_fac: np.ndarray,
         contains the spatial or temporal damping norm per TIME INTERVAL
         NOTE: DOES NOT NORMALIZE!
     """
-    ddt = _DList[damp_type][1]
+    ddt = _Dampdict[damp_type]
     spl = BSpline.basis_element(np.arange(SPL_DEGREE+2) * t_step,
                                 extrapolate=False).derivative(ddt)(
           np.arange(0, SPL_DEGREE+1) * t_step)
