@@ -329,11 +329,12 @@ def plot_dampnorm(ax,
         optional plotting keyword arguments
     """
     ax.set_xlabel('Centre of time interval')
+    t_s = len(im.t_array)
     if spatial:
-        ax.plot(im.t_array, im.spat_norm, label='spatial', **plt_kwargs)
+        ax.plot(im.t_array, im.spat_norm[:t_s], label='spatial', **plt_kwargs)
         ax.set_ylabel('spatial damping')
     else:
-        ax.plot(im.t_array, im.temp_norm, label='temporal', **plt_kwargs)
+        ax.plot(im.t_array, im.temp_norm[:t_s], label='temporal', **plt_kwargs)
         ax.set_ylabel('temporal damping')
 
     return ax

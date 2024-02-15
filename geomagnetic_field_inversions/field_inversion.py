@@ -44,14 +44,17 @@ class FieldInversion(object):
 
         # input parameters
         self.t_min = t_min
-        self.t_max = t_max
         self.t_step = t_step
         self.t_array = np.arange(t_min, t_max + t_step, t_step)
+        if t_max != self.t_array[-1] and verbose:
+            print(f't_max changed from {t_max} to {self.t_array[-1]}')
+        self.t_max = self.t_array[-1]
         # temporal knots
-        self.knots = np.arange(t_min - self._SPL_DEGREE * t_step,
-                               t_max + (self._SPL_DEGREE + 1) * t_step, t_step)
+        self.knots = np.arange(t_min - self._SPL_DEGREE * t_step - 1e-12,
+                               self.t_max + (self._SPL_DEGREE + 1) * t_step,
+                               t_step)
         # number of temporal splines
-        self.nr_splines = len(self.t_array) + self._SPL_DEGREE - 1
+        self.nr_splines = len(self.knots) - self._SPL_DEGREE - 1
 
         self.maxdegree = maxdegree
         self.r_model = r_model
@@ -273,7 +276,7 @@ class FieldInversion(object):
         if not self.matrix_ready:
             raise Exception('Matrices have not been prepared. '
                             'Please run prepare_inversion first.')
-        damp_matrix = spat_damp * self.sdamp_diag + temp_damp * self.tdamp_diag
+        d_matrix = spat_damp * self.sdamp_diag + temp_damp * self.tdamp_diag
         # initiate array counting residual per type
         self.res_iter = np.zeros((max_iter+1, 8))
         # initiate splined values with starting model
@@ -290,9 +293,8 @@ class FieldInversion(object):
 
         spacing = self._nm_total * self._SPL_DEGREE
         sparse_damp = scs.dia_matrix(
-            (damp_matrix,
-             np.linspace(spacing, -spacing, 2*self._SPL_DEGREE+1)),
-            shape=(len(damp_matrix[0]), len(damp_matrix[0])))
+            (d_matrix, np.linspace(spacing, -spacing, 2*self._SPL_DEGREE+1)),
+            shape=(len(d_matrix[0]), len(d_matrix[0])))
         for it in range(max_iter+1):  # start outer iteration loop
             res_iter = np.zeros(7)
             if self.verbose:
@@ -382,7 +384,7 @@ class FieldInversion(object):
             # add damping to required diagonals
             damp_diags = np.linspace(hdiags-spacing, hdiags+spacing,
                                      2*self._SPL_DEGREE + 1, dtype=int)
-            diag[damp_diags] += damp_matrix
+            diag[damp_diags] += d_matrix
             # add damping to the vector
             rhs_array += rhs_damp
             # solve banded system
@@ -423,7 +425,7 @@ class FieldInversion(object):
                     normal_eq_splined, -(hdiags - i))
             dia_matrix = scs.dia_matrix(
                 (save_diag, np.linspace(hdiags, -hdiags, 2*hdiags + 1)),
-                shape=(len(damp_matrix[0]), len(damp_matrix[0])))
+                shape=(len(d_matrix[0]), len(d_matrix[0])))
             scs.save_npz(path / 'forward_matrix', dia_matrix)
             scs.save_npz(path / 'damp_matrix', sparse_damp)
 
