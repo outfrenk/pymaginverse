@@ -236,14 +236,22 @@ class InputData(object):
                                       ).astype(float)
         self.compiled = True
         if verbose:
-            print(f'Data from t={min(self.time)} to t={max(self.time)}\n'
-                  f'This dataset contains {self.n_out} records from '
-                  f'{self.n_inp} locations.\n'
-                  f'It consists of {self.idx_D.size} declinations, '
-                  f'{self.idx_I.size} inclinations and {self.idx_F.size} '
-                  f'intensities, {self.idx_X.size} x-data, '
-                  f'{self.idx_Y.size} y-data, {self.idx_Z.size} z-data, and '
-                  f'{self.idx_H.size} h-data.')
+            print(self)
+
+    def __repr__(self):
+        if self.n_out:
+            return (
+                f'Data from t={min(self.time)} to t={max(self.time)}\n'
+                f'This dataset contains {self.n_out} records from '
+                f'{self.n_inp} locations.\n'
+                f'It consists of {self.idx_D.size} declinations, '
+                f'{self.idx_I.size} inclinations and {self.idx_F.size} '
+                f'intensities, {self.idx_X.size} x-data, '
+                f'{self.idx_Y.size} y-data, {self.idx_Z.size} z-data, and '
+                f'{self.idx_H.size} h-data.'
+            )
+        else:
+            return 'This object does not contain any data.'
 
 
 def read_geomagia(fnames: Union[list, str, Path],
