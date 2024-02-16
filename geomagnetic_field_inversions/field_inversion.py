@@ -51,7 +51,7 @@ class FieldInversion(object):
         self.t_max = self.t_array[-1]
         # temporal knots
         self.knots = np.arange(t_min - self._SPL_DEGREE * t_step - 1e-12,
-                               self.t_max + (self._SPL_DEGREE + 1) * t_step,
+                               self.t_max + (self._SPL_DEGREE + 1) * t_step + 1e-12,
                                t_step)
         # number of temporal splines
         self.nr_splines = len(self.knots) - self._SPL_DEGREE - 1
@@ -322,8 +322,8 @@ class FieldInversion(object):
                 std = self.std[didx]
 
                 # contains all observational data in 7 rows
-                forwobs_matrix = forward_obs(gh_splfunc(
-                    self.time[didx]), self.station_frechet[lidx])
+                forwobs_matrix = forward_obs(gh_splfunc(time),
+                                             self.station_frechet[lidx])
                 # contains location per row
                 frech_matrix = frechet_types(
                     self.station_frechet[lidx], forwobs_matrix
