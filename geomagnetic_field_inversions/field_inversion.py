@@ -27,7 +27,7 @@ class FieldInversion:
                  ) -> None:
         """
         Initializes the Field Inversion class
-        
+
         Parameters
         ----------
         time_array
@@ -474,6 +474,7 @@ class FieldInversion:
             if self.verbose:
                 print('Residual is %.2f' % self.res_iter[it, 7])
             # check if final conditions have been met
+            # XXX: This leads to 2 iterations, even if maxiter = 1
             if it > 0:
                 rel_err = abs(self.res_iter[it, 7] - self.res_iter[it-1, 7]
                               ) / self.res_iter[it-1, 7]
