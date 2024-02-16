@@ -4,7 +4,8 @@ from pathlib import Path
 import numpy as np
 from pandas import read_csv
 
-from geomagnetic_field_inversions import StationData, FieldInversion
+from geomagnetic_field_inversions.data_prep import InputData
+from geomagnetic_field_inversions import FieldInversion
 
 path = Path(__file__).parent
 
@@ -32,6 +33,10 @@ raw_data.loc[:, 'dD'] /= 10
 raw_data.loc[:, 'I'] /= 10
 raw_data.loc[:, 'dI'] /= 10
 
+iData = InputData()
+iData.read_data(raw_data)
+iData.compile_data()
+
 
 class Test_inversion(unittest.TestCase):
     def test_single_inversion(self):
@@ -39,46 +44,25 @@ class Test_inversion(unittest.TestCase):
         lambda_t = 1.0e-3
 
         fInv = FieldInversion(
-            time_array=knots[3:-3],
+            t_min=t_min, t_max=t_max, t_step=knots[1]-knots[0],
             maxdegree=10,
             verbose=False,
         )
-        for it, row in raw_data.iterrows():
-            _station = StationData(
-                row['lat'],
-                row['lon'],
-            )
-            if not np.isnan(row['D']):
-                _station.add_data(
-                    'dec',
-                    [[row['t']], [row['D']]],
-                    1,  # time_factor
-                    error=[row['dD']],
-                )
-            if not np.isnan(row['I']):
-                _station.add_data(
-                    'inc',
-                    [[row['t']], [row['I']]],
-                    1,  # time_factor
-                    error=[row['dI']],
-                )
-            if not np.isnan(row['F']):
-                _station.add_data(
-                    'int',
-                    [[row['t']], [row['F']]],
-                    1,  # time_factor
-                    error=[row['dF']],
-                )
-            fInv.add_data(_station)
 
         fInv.prepare_inversion(
-            spat_fac=lambda_s,
-            temp_fac=lambda_t,
+            iData,
+            spat_type="ohmic_heating",
+            temp_type="min_acc",
         )
 
         x0 = np.zeros(fInv._nm_total)
         x0[0] = -30000
-        fInv.run_inversion(x0, max_iter=0)
+        fInv.run_inversion(
+            x0,
+            max_iter=0,
+            spat_damp=lambda_s,
+            temp_damp=lambda_t,
+        )
 
         res_coeffs = fInv.unsplined_iter_gh[0].c
 
