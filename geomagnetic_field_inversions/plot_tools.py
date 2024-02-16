@@ -5,107 +5,106 @@ from typing import Union, Literal, Tuple
 import pandas as pd
 import cartopy.crs as ccrs
 
-from .field_inversion import FieldInversion
-from .data_prep import StationData
-from .tools.core import calc_forw, calc_spectra
+from .tools import calc_spectra
+from .forward_modules import calc_forw
 
 _DataTypes = Literal['x', 'y', 'z', 'hor', 'inc', 'dec', 'int']
 
 
-def plot_data(axes: Union[list, plt.Axes],
-              dc: StationData,
-              ) -> plt.Axes:
-    """ Plots input (paleo)magnetic data based on the StationData class
-
-    Parameters
-    ----------
-    axes
-        List of matplotlib axis objects equal to dc.types, or one axes
-    dc
-        An instance of the "StationData" class. This function uses the
-        lat, loc, types, and data attributes of this class
-    """
-    if len(dc.types) == 1 and type(axes) != list:
-        axes = [axes]
-    assert len(axes) >= len(dc.types), 'not defined enough plot axes'
-    for i in range(len(dc.types)):
-        axes[i].set_title('Fitting %s of data' % dc.types[i])
-        if dc.types[i] == 'inc' or dc.types[i] == 'dec':
-            axes[i].set_ylabel('%s (degrees)' % dc.types[i])
-        else:
-            axes[i].set_ylabel('%s' % dc.types[i])
-        axes[i].set_xlabel('Time')
-        axes[i].scatter(dc.data[i][0], dc.data[i][1], label='data')
-        axes[i].legend()
-    return axes
-
-
-def compare_loc(axes: list,
-                im: FieldInversion,
-                dc: StationData,
-                xlim: list = None,
-                plot_kwargs: dict = None
-                ) -> list:
-    """Plots the modeled magnetic field at the location of a data input class
-
-    Parameters
-    ----------
-    axes
-        Matplotlib axes objects
-    im
-        An instance of the `geomagnetic_field_inversion` class. This function
-        uses the unsplined_iter_gh, t_array, and maxdegree attributes.
-    dc
-        An instance of the "StationData" class. This function uses the
-        lat, loc, types, fit_data, and data attributes of this class
-    xlim
-        Optional list of two elements containing begin and end plotting time.
-    plot_kwargs
-        optional plotting keyword arguments
-
-    This function calls plot_place for plotting of the modeled field
-    """
-    # circumvent length errors
-    if len(dc.types) == 1 and type(axes) != list:
-        axes = [axes]
-    if len(axes) != len(dc.types):
-        raise Exception('Not enough axes defined'
-                        f', you need {len(dc.types)} axes.')
-
-    for i, item in enumerate(dc.types):
-        xdata = np.array(dc.data[i][0])
-        ydata = np.array(dc.data[i][1])
-
-        if item == 'inc':
-            ydata = ydata % 180
-            ydata = np.where(ydata > 90, ydata - 180, ydata)
-            axes[i].set_ylabel('%s (degrees)' % item)
-            axes[i].scatter(xdata, ydata, label='data')
-        elif item == 'dec':
-            ydata = np.array(ydata) % 360
-            ydata = np.where(ydata > 180, ydata - 360, ydata)
-            axes[i].set_ylabel('%s (degrees)' % item)
-            axes[i].scatter(xdata, ydata, label='data')
-        else:
-            axes[i].set_ylabel('%s' % item)
-            axes[i].scatter(xdata, ydata, label='data')
-
-        mindata, maxdata = min(xdata), max(xdata)
-        minmodel, maxmodel = min(im.t_array), max(im.t_array)
-        axes[i].set_xlabel('Time')
-        axes[i] = plot_forward(axes[i], im, [dc.lat, dc.lon], item,
-                               plot_kwargs=plot_kwargs)
-        if xlim is not None:
-            axes[i].set_xlim(xlim[0], xlim[1])
-        else:
-            axes[i].set_xlim(max(mindata, minmodel)*0.9,
-                             min(maxdata, maxmodel)*1.1)
-        axes[i].legend()
-    return axes
+# def plot_data(axes,
+#               dc,
+#               ) -> plt.Axes:
+#     """ Plots input (paleo)magnetic data based on the StationData class
+#
+#     Parameters
+#     ----------
+#     axes
+#         List of matplotlib axis objects equal to dc.types, or one axes
+#     dc
+#         An instance of the "StationData" class. This function uses the
+#         lat, loc, types, and data attributes of this class
+#     """
+#     if len(dc.types) == 1 and type(axes) != list:
+#         axes = [axes]
+#     assert len(axes) >= len(dc.types), 'not defined enough plot axes'
+#     for i in range(len(dc.types)):
+#         axes[i].set_title('Fitting %s of data' % dc.types[i])
+#         if dc.types[i] == 'inc' or dc.types[i] == 'dec':
+#             axes[i].set_ylabel('%s (degrees)' % dc.types[i])
+#         else:
+#             axes[i].set_ylabel('%s' % dc.types[i])
+#         axes[i].set_xlabel('Time')
+#         axes[i].scatter(dc.data[i][0], dc.data[i][1], label='data')
+#         axes[i].legend()
+#     return axes
 
 
-def plot_forward(ax: plt.Axes,
-                 im: FieldInversion,
+# def compare_loc(axes,
+#                 im,
+#                 dc,
+#                 xlim: list = None,
+#                 plot_kwargs: dict = None
+#                 ) -> list:
+#     """Plots the modeled magnetic field at the location of a data input class
+#
+#     Parameters
+#     ----------
+#     axes
+#         Matplotlib axes objects
+#     im
+#         An instance of the `geomagnetic_field_inversion` class. This function
+#         uses the unsplined_iter_gh, t_array, and maxdegree attributes.
+#     dc
+#         An instance of the "StationData" class. This function uses the
+#         lat, loc, types, fit_data, and data attributes of this class
+#     xlim
+#         Optional list of two elements containing begin and end plotting time.
+#     plot_kwargs
+#         optional plotting keyword arguments
+#
+#     This function calls plot_place for plotting of the modeled field
+#     """
+#     # circumvent length errors
+#     if len(dc.types) == 1 and type(axes) != list:
+#         axes = [axes]
+#     if len(axes) != len(dc.types):
+#         raise Exception('Not enough axes defined'
+#                         f', you need {len(dc.types)} axes.')
+#
+#     for i, item in enumerate(dc.types):
+#         xdata = np.array(dc.data[i][0])
+#         ydata = np.array(dc.data[i][1])
+#
+#         if item == 'inc':
+#             ydata = ydata % 180
+#             ydata = np.where(ydata > 90, ydata - 180, ydata)
+#             axes[i].set_ylabel('%s (degrees)' % item)
+#             axes[i].scatter(xdata, ydata, label='data')
+#         elif item == 'dec':
+#             ydata = np.array(ydata) % 360
+#             ydata = np.where(ydata > 180, ydata - 360, ydata)
+#             axes[i].set_ylabel('%s (degrees)' % item)
+#             axes[i].scatter(xdata, ydata, label='data')
+#         else:
+#             axes[i].set_ylabel('%s' % item)
+#             axes[i].scatter(xdata, ydata, label='data')
+#
+#         mindata, maxdata = min(xdata), max(xdata)
+#         minmodel, maxmodel = min(im.t_array), max(im.t_array)
+#         axes[i].set_xlabel('Time')
+#         axes[i] = plot_forward(axes[i], im, [dc.lat, dc.lon], item,
+#                                plot_kwargs=plot_kwargs)
+#         if xlim is not None:
+#             axes[i].set_xlim(xlim[0], xlim[1])
+#         else:
+#             axes[i].set_xlim(max(mindata, minmodel)*0.9,
+#                              min(maxdata, maxmodel)*1.1)
+#         axes[i].legend()
+#     return axes
+
+
+def plot_forward(ax,
+                 im,
                  input_coord: np.ndarray,
                  datatype: _DataTypes,
                  it: int = -1,
@@ -152,8 +151,8 @@ def plot_forward(ax: plt.Axes,
     return ax
 
 
-def plot_residuals(ax: plt.Axes,
-                   im: FieldInversion,
+def plot_residuals(ax,
+                   im,
                    **plt_kwargs
                    ) -> plt.Axes:
     """ Plots the residuals of the geomagnetic field inversion per iteration
@@ -190,8 +189,8 @@ def plot_residuals(ax: plt.Axes,
     return ax
 
 
-def plot_coeff(ax: plt.Axes,
-               im: FieldInversion,
+def plot_coeff(ax,
+               im,
                degree: int = None,
                index: list = None,
                it_time: int = -1,
@@ -249,13 +248,10 @@ def plot_coeff(ax: plt.Axes,
     for i, item in enumerate(index):
         if plot_iter:
             coeff = np.zeros(len(im.unsplined_iter_gh) + 1)
-            if isinstance(im, FieldInversion):
-                coeff[0] = im.x0[item]
-                for c in range(len(coeff)-1):
-                    coeff[c+1] = im.unsplined_iter_gh[c](
-                        im.t_array[it_time])[item]
-            else:
-                raise Exception('Class not found')
+            coeff[0] = im.x0[item]
+            for c in range(len(coeff)-1):
+                coeff[c+1] = im.unsplined_iter_gh[c](
+                    im.t_array[it_time])[item]
             ax.plot(np.arange(len(coeff)), coeff,
                     linestyle=linestyles[i % len(linestyles)],
                     marker=markerstyles[i % len(markerstyles)],
@@ -278,8 +274,8 @@ def plot_coeff(ax: plt.Axes,
     return ax
 
 
-def plot_spectrum(axes: Tuple[plt.Axes, plt.Axes],
-                  im: plt.Axes,
+def plot_spectrum(axes,
+                  im,
                   cmb: bool = True
                   ) -> Tuple[plt.Axes, plt.Axes]:
     """ Plots the powerspectrum of gaussian coefficients and its variance at
@@ -296,7 +292,7 @@ def plot_spectrum(axes: Tuple[plt.Axes, plt.Axes],
         If True (default) presents results at cmb, else at earth's surface
     """
     sum_coeff_pow, sum_coeff_sv = calc_spectra(
-        im.splined_gh, im.maxdegree, im._t_step, cmb)
+        im.splined_gh, im.maxdegree, im.t_step, cmb)
 
     axes[0].plot(np.arange(1, im.maxdegree + 1), sum_coeff_pow,
                  marker='o', label='power')
@@ -312,8 +308,8 @@ def plot_spectrum(axes: Tuple[plt.Axes, plt.Axes],
     return axes
 
 
-def plot_dampnorm(ax: plt.Axes,
-                  im: FieldInversion,
+def plot_dampnorm(ax,
+                  im,
                   spatial: bool = True,
                   **plt_kwargs
                   ) -> plt.Axes:
@@ -333,18 +329,19 @@ def plot_dampnorm(ax: plt.Axes,
         optional plotting keyword arguments
     """
     ax.set_xlabel('Centre of time interval')
+    t_s = len(im.t_array)
     if spatial:
-        ax.plot(im._t_array, im.spat_norm, label='spatial', **plt_kwargs)
+        ax.plot(im.t_array, im.spat_norm[:t_s], label='spatial', **plt_kwargs)
         ax.set_ylabel('spatial damping')
     else:
-        ax.plot(im._t_array, im.temp_norm, label='temporal', **plt_kwargs)
+        ax.plot(im.t_array, im.temp_norm[:t_s], label='temporal', **plt_kwargs)
         ax.set_ylabel('temporal damping')
 
     return ax
 
 
-def plot_worldmag(axes: Tuple[plt.Axes, plt.Axes, plt.Axes],
-                  im: FieldInversion,
+def plot_worldmag(axes,
+                  im,
                   proj: ccrs,
                   plot_loc: bool = False,
                   time: float = None,
@@ -448,8 +445,8 @@ def plot_worldmag(axes: Tuple[plt.Axes, plt.Axes, plt.Axes],
     return axes
 
 
-def plot_worldloc(ax: plt.Axes,
-                  im: FieldInversion,
+def plot_worldloc(ax,
+                  im,
                   proj: ccrs,
                   plot_world: bool = False,
                   plot_kw: dict = None
@@ -484,8 +481,8 @@ def plot_worldloc(ax: plt.Axes,
     return ax
 
 
-def plot_cmblontime(ax: plt.Axes,
-                    im: FieldInversion,
+def plot_cmblontime(ax,
+                    im,
                     lat: float,
                     time: np.ndarray = None,
                     cmap: str = 'RdBu',
@@ -514,7 +511,7 @@ def plot_cmblontime(ax: plt.Axes,
         Matplotlib axis
     """
     if time is None:
-        time = im._t_array
+        time = im.t_array
     coeff = im.unsplined_iter_gh[-1](time)
     # create longitude-time grid
     forwlon = np.arange(0, 360, 1)
@@ -538,7 +535,7 @@ def plot_cmblontime(ax: plt.Axes,
     return c, ax
 
 
-def plot_sweep(axes: Tuple[plt.Axes, plt.Axes],
+def plot_sweep(axes,
                spatial_range: Union[list, np.ndarray],
                temporal_range: Union[list, np.ndarray],
                basedir: Union[str, Path] = '.',

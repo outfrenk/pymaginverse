@@ -57,38 +57,6 @@ def forward_obs(coeff: np.ndarray,
     return forwobs_matrix
 
 
-def residual_obs(forwobs_matrix: np.ndarray,
-                 data_matrix: np.ndarray,
-                 types_sort: np.ndarray
-                 ) -> np.ndarray:
-    """
-    Calculates the residual by subtracting forward observation from data.
-    Applies angular correction to decl/incl data
-
-    Parameters
-    ----------
-    forwobs_matrix
-        Contains the modeled observations
-    data_matrix
-        Contains the real observations (from the data)
-    types_sort
-        Tells the type of data by providing an index to every row in both
-        forwobs_matrix and data_matrix
-
-    Returns
-    -------
-    resid_matrix_t.T
-        Residual; size is similar to forwobs_matrix and data_matrix
-    """
-    assert forwobs_matrix.shape == data_matrix.shape, 'shapes are not similar'
-    resid_matrix_t = (data_matrix - forwobs_matrix).T
-    type06 = types_sort % 7
-    # inc and dec check
-    resid_matrix_t = np.where((type06 == 5) | (type06 == 6), np.arctan2(
-        np.sin(resid_matrix_t), np.cos(resid_matrix_t)), resid_matrix_t)
-    return resid_matrix_t.T
-
-
 def residual_type(residual_weighted: np.ndarray,
                   types_sort: np.ndarray,
                   count_type: np.ndarray
@@ -120,3 +88,32 @@ def residual_type(residual_weighted: np.ndarray,
                 residual_weighted[type06 == i]**2) / count_type[i])
     res_iter[7] = np.sqrt(np.sum(residual_weighted**2) / sum(count_type))
     return res_iter
+
+
+def calc_forw(maxdegree: int,
+              coord: np.ndarray,
+              coeff: np.ndarray,
+              link: np.ndarray = None):
+    """ Calculate the modeled geomagnetic field
+
+    Parameters
+    ----------
+    maxdegree
+        Spherical degree of modeled field
+    coord
+        coordinates of the locations where to calculate field
+    coeff
+        Gauss coefficients, each row containing the Gauss coefficients per
+        spline
+    link
+        array that indicates how coordinates are linked to coeff
+
+    Returns
+    -------
+    forw_obs
+        calculated field observations
+    """
+    frechxyz = frechet_basis(coord, maxdegree)
+    forw_obs = forward_obs(coeff, frechxyz, link=link)
+    forw_obs[5:7] = np.degrees(forw_obs[5:7])
+    return forw_obs
