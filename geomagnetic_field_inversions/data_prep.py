@@ -106,10 +106,10 @@ class InputData(object):
 
             # indicate geodetic (0) or geocentric (1)
             df['geoc'].where(df['geoc'].notna(), other=0, inplace=True)
-            df['geoc_colat'] = 90 - df['lat']
+            df['geoc_colat'] = 90. - df['lat']
             df['geoc_rad'] = 6371.2 + df['h'] * 1e-3
-            df['cd'] = 1
-            df['sd'] = 0
+            df['cd'] = 1.
+            df['sd'] = 0.
             # apply geocentric correction
             temp, rad, cd, sd = latrad_in_geoc(
                 np.radians(df['lat'].to_numpy()),
@@ -124,18 +124,25 @@ class InputData(object):
 
             # change zero error values to default if no data
             for i, dstr in enumerate(['X', 'Y', 'Z', 'H', 'F']):
-                df[f'd{dstr}'].where(
+                df[f'd{dstr}'] = df[f'd{dstr}'].where(
                     df[dstr].isna() ^ df[f'd{dstr}'].notna(),
-                    other=default_error[i], inplace=True)
-            df['alpha95'].where(
+                    other=default_error[i],
+                    inplace=True,
+                )
+            df['alpha95'] = df['alpha95'].where(
                 (df['D'].isna() & df['I'].isna()) ^ df['alpha95'].notna() ^
                 (df['dD'].notna() & df['dI'].notna()),
-                other=a95, inplace=True)
+                other=a95,
+                inplace=True,
+            )
             # df['dF'] = np.clip(df['dF'], 5, None)
             # Correct sqrt(2) error
             # df['alpha95'] = np.clip(df['alpha95'], np.sqrt(2) * 3.4, None)
-            df['dI'].where(df['dI'].notna(),
-                           other=df['alpha95'] * 57.3 / 140., inplace=True)
+            df['dI'].where(
+                df['dI'].notna(),
+                other=df['alpha95'] * 57.3 / 140.,
+                inplace=True,
+            )
 
             cond = df['D'].notna() & df['I'].isna()  # fix alpha95 issues
             # Get the corresponding indices
@@ -211,6 +218,23 @@ class InputData(object):
         self.idx_out = np.concatenate((self.idx_X, self.idx_Y, self.idx_Z,
                                        self.idx_H, self.idx_F, self.idx_I,
                                        self.idx_D)).flatten()
+        # indices to quickly transform forward return matrices to the same
+        # form as outputs
+        idx_frech = np.hstack(
+            (
+                0 * np.ones_like(self.idx_X),
+                1 * np.ones_like(self.idx_Y),
+                2 * np.ones_like(self.idx_Z),
+                3 * np.ones_like(self.idx_Z),
+                4 * np.ones_like(self.idx_F),
+                5 * np.ones_like(self.idx_I),
+                6 * np.ones_like(self.idx_D),
+            )
+        )
+        self.idx_frech = np.vstack(
+            (self.idx_out, idx_frech)
+        )
+
         self.n_out = len(self.idx_out)
         # get same order as outputs
         self.loc = uniq_loc
