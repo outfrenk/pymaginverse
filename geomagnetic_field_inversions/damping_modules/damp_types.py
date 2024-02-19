@@ -4,7 +4,7 @@ import numpy as np
 def dampingtype(maxdegree: int,
                 damp_type: str,
                 damp_dipole: bool = False,
-                damp_depth: float = 3495 / 6371.2
+                damp_depth: float = 3485 / 6371.2
                 ) -> np.ndarray:
     """ Creates spatial or temporal damping array according to type
 
