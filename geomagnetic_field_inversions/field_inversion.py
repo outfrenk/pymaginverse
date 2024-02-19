@@ -30,8 +30,7 @@ class FieldInversion(object):
         Parameters
         ----------
         t_min, t_max, t_step
-            Sets start, end, and timestep. endtime is changed depending on
-            t_min and t_step in np.arange
+            Sets start, end, and timestep.
         maxdegree
             maximum order for spherical harmonics model, default 3
         r_model
@@ -44,15 +43,15 @@ class FieldInversion(object):
 
         # input parameters
         self.t_min = t_min
+        self.t_max = t_max
         self.t_step = t_step
         self.t_array = np.arange(t_min, t_max + t_step, t_step)
-        if t_max != self.t_array[-1] and verbose:
-            print(f't_max changed from {t_max} to {self.t_array[-1]}')
-        self.t_max = self.t_array[-1]
         # temporal knots
-        self.knots = np.arange(t_min - self._SPL_DEGREE * t_step,
-                               self.t_max + (self._SPL_DEGREE + 1) * t_step,
-                               t_step)
+        self.knots = np.arange(
+            t_min - self._SPL_DEGREE * t_step,
+            self.t_max + (self._SPL_DEGREE + 1) * t_step,
+            t_step,
+        )
         # number of temporal splines
         self.nr_splines = len(self.knots) - self._SPL_DEGREE - 1
 
