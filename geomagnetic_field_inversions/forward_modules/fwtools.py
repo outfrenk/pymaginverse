@@ -57,6 +57,50 @@ def forward_obs(coeff: np.ndarray,
     return forwobs_matrix
 
 
+def forward_obs_time(coeff: np.ndarray,
+                     frechxyz: np.ndarray,
+                     splinebase: np.ndarray,
+                     ) -> np.ndarray:
+    """
+    Calculates modeled observations at given locations
+
+    Parameters
+    ----------
+    coeff
+        Gauss coefficients in a shape corresponding to frechxyz.shape[2],
+        splinebase.shape[1]
+    frechxyz
+        Frechet matrix for dx, dy, and dz components (stations X 3 X nm_total)
+    splinebase
+        Matrix of spline basis functions
+
+    Returns
+    -------
+    forward_obs
+        Forward observations; each row contains one type
+    """
+    # TODO assertions for splinebase and documentation
+
+    # XXX: maybe this is slowed down due to transpose etc.
+    xyz = np.einsum(
+        'ij, klj, ik -> lk',
+        coeff,
+        frechxyz,
+        splinebase,
+        optimize=True,
+    )
+    forwobs_matrix = np.zeros((7, xyz.shape[1]))
+    forwobs_matrix[:3] = xyz
+    hor = np.linalg.norm(xyz[:2], axis=0)
+    b_int = np.linalg.norm(xyz, axis=0)
+    forwobs_matrix[3] = hor
+    forwobs_matrix[4] = b_int
+    forwobs_matrix[5] = np.arcsin(xyz[2] / b_int)
+    forwobs_matrix[6] = np.arctan2(xyz[1], xyz[0])
+
+    return forwobs_matrix
+
+
 def residual_type(residual_weighted: np.ndarray,
                   types_sort: np.ndarray,
                   count_type: np.ndarray
