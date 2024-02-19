@@ -326,7 +326,7 @@ class FieldInversion(object):
             # created by Frenk's code, we need to get the lower part of the
             # d_matrix
             at = 2 * self._SPL_DEGREE - it
-            C_m_inv[it * spacing] = d_matrix[at].copy()
+            C_m_inv[it * self._nm_total] = d_matrix[at].copy()
 
         # =====================================================================
 
@@ -334,6 +334,7 @@ class FieldInversion(object):
             res_iter = np.zeros(7)
             if self.verbose:
                 print(f'Start calculations iteration {it}')
+
             rhs_array = np.zeros(self.nr_splines * self._nm_total)
             normal_eq_splined = np.zeros((self._nm_total * self.nr_splines,
                                           self._nm_total * self.nr_splines))
