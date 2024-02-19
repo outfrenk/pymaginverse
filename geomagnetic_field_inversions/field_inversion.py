@@ -50,8 +50,7 @@ class FieldInversion(object):
             print(f't_max changed from {t_max} to {self.t_array[-1]}')
         self.t_max = self.t_array[-1]
         # temporal knots
-        # XXX why the 1e-12?
-        self.knots = np.arange(t_min - self._SPL_DEGREE * t_step - 1e-12,
+        self.knots = np.arange(t_min - self._SPL_DEGREE * t_step,
                                self.t_max + (self._SPL_DEGREE + 1) * t_step,
                                t_step)
         # number of temporal splines
