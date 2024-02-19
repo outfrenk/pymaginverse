@@ -50,6 +50,7 @@ class FieldInversion(object):
             print(f't_max changed from {t_max} to {self.t_array[-1]}')
         self.t_max = self.t_array[-1]
         # temporal knots
+        # XXX why the 1e-12?
         self.knots = np.arange(t_min - self._SPL_DEGREE * t_step - 1e-12,
                                self.t_max + (self._SPL_DEGREE + 1) * t_step,
                                t_step)
@@ -178,6 +179,15 @@ class FieldInversion(object):
             self.station_frechet[:, 0], self.station_frechet[:, 2], cd, sd)
         self.station_frechet[:, 0] = dx
         self.station_frechet[:, 2] = dz
+        # MAX: station_frechet should be related to spatial
+        temporal = BSpline.design_matrix(
+            d_inst.time,
+            self.knots,
+            self._SPL_DEGREE,
+        ).T
+        # XXX Maybe it is possible to facilitate the banded structure of
+        # temporal directly
+        self.temporal = np.ascontiguousarray(temporal.toarray())
 
         # order data per spline
         self.data_ix = [[] for _ in range(len(self.t_array))]
@@ -194,7 +204,7 @@ class FieldInversion(object):
                 self.data_ix[nleft].append(index)
                 # types per timestep
                 self.type_ix[nleft].append(type_arr[index])
-        # scan data for holes in time
+        # scan data for holes in time  XXX why?
         for tix in range(len(self.t_array)):
             if not self.stat_ix[tix] and tix != len(self.t_array)-1:
                 print(f'Warning: no data between {self.t_array[tix]}'
@@ -277,11 +287,15 @@ class FieldInversion(object):
             raise Exception('Matrices have not been prepared. '
                             'Please run prepare_inversion first.')
         d_matrix = spat_damp * self.sdamp_diag + temp_damp * self.tdamp_diag
+
         # initiate array counting residual per type
         self.res_iter = np.zeros((max_iter+1, 8))
         # initiate splined values with starting model
         if self.verbose:
             print('Setting up starting model')
+
+        # These are the coefficients we solve for.
+        # TODO: rename stuff
         self.splined_gh = np.zeros((self.nr_splines, self._nm_total))
         self.unsplined_iter_gh = []
         if x0.ndim == 1 and len(x0) == self._nm_total:
@@ -295,6 +309,27 @@ class FieldInversion(object):
         sparse_damp = scs.dia_matrix(
             (d_matrix, np.linspace(spacing, -spacing, 2*self._SPL_DEGREE+1)),
             shape=(len(d_matrix[0]), len(d_matrix[0])))
+
+        # This transforms the d_matrix to the right shape. Actually,
+        # the matrices should already be generated that way in the final
+        # version
+        C_m_inv = np.zeros(
+            (
+                spacing + 1,
+                self.nr_splines * self._nm_total
+            ),
+        )
+
+        for it in range(self._SPL_DEGREE + 1):
+            # C_m_inv is banded in the hermitian-banded upper format used by
+            # scipy. Due to the different order in which the d_matrix is
+            # created by Frenk's code, we need to get the lower part of the
+            # d_matrix
+            at = 2 * self._SPL_DEGREE - it
+            C_m_inv[it * spacing] = d_matrix[at].copy()
+
+        # =====================================================================
+
         for it in range(max_iter+1):  # start outer iteration loop
             res_iter = np.zeros(7)
             if self.verbose:
@@ -307,6 +342,7 @@ class FieldInversion(object):
 
             gh_splfunc = BSpline(c=self.splined_gh, t=self.knots,
                                  k=self._SPL_DEGREE, extrapolate=False)
+
             # Calculate frechet and residual matrix for all times
             for tix in range(len(self.t_array)):
                 # use stations to make frechet for spline
@@ -358,6 +394,9 @@ class FieldInversion(object):
             self.res_iter[it, 7] = np.sqrt(sum(res_iter)/sum(self.count_type))
             if self.verbose:
                 print('Residual is %.2f' % self.res_iter[it, 7])
+
+            # =================================================================
+
             # check if final conditions have been met
             # XXX: This leads to 2 iterations, even if maxiter = 1
             if it > 0:
