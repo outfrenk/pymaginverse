@@ -344,7 +344,7 @@ class FieldInversion(object):
             self.splined_gh[:] = x0
         else:
             raise Exception(f'x0 has incorrect shape: {x0.shape}. \n'
-                            f'It should have shape ({self._nm_total}')
+                            f'It should have shape ({self._nm_total},)')
 
         spacing = self._nm_total * self._SPL_DEGREE
         # This transforms the d_matrix to the right shape. Actually,
