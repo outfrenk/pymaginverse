@@ -56,7 +56,7 @@ class Test_inversion(unittest.TestCase):
         )
 
         x0 = np.zeros(fInv._nm_total)
-        x0[0] = -30000
+        x0[0] = -30e3
         fInv.run_inversion(
             x0,
             max_iter=0,
@@ -64,7 +64,24 @@ class Test_inversion(unittest.TestCase):
             temp_damp=lambda_t,
         )
 
-        res_coeffs = fInv.unsplined_iter_gh[0].c
+        res_coeffs = fInv.splined_gh
+
+        # for it in range(res_coeffs.shape[1]):
+        #     abserr = np.abs(res_coeffs[:, it] - ref_coeffs[:, it])
+        #     relerr = np.abs(abserr / ref_coeffs[:, it])
+        #     print(it+1, np.max(abserr), np.max(relerr))
+
+        # from matplotlib import pyplot as plt
+        # ind = 1
+        # plt.plot(
+        #     knots[2:-2],
+        #     ref_coeffs[:, ind],
+        # )
+        # plt.plot(
+        #     knots[2:-2],
+        #     res_coeffs[:, ind],
+        # )
+        # plt.show()
 
         self.assertTrue(
             np.allclose(
