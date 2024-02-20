@@ -92,9 +92,10 @@ def forward_obs_time(coeff: np.ndarray,
     forwobs_matrix = np.zeros((7, xyz.shape[1]))
     forwobs_matrix[:3] = xyz
     hor = np.linalg.norm(xyz[:2], axis=0)
-    b_int = np.linalg.norm(xyz, axis=0)
     forwobs_matrix[3] = hor
+    b_int = np.linalg.norm(xyz, axis=0)
     forwobs_matrix[4] = b_int
+    # XXX why work in radians???
     forwobs_matrix[5] = np.arcsin(xyz[2] / b_int)
     forwobs_matrix[6] = np.arctan2(xyz[1], xyz[0])
 
