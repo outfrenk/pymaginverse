@@ -35,7 +35,7 @@ raw_data.loc[:, 'dI'] /= 10
 
 iData = InputData()
 iData.read_data(raw_data)
-iData.compile_data()
+iData.compile_data(drop_duplicates=False)
 
 
 class Test_inversion(unittest.TestCase):
@@ -65,11 +65,6 @@ class Test_inversion(unittest.TestCase):
         )
 
         res_coeffs = fInv.unsplined_iter_gh[0].c
-
-        for it in range(res_coeffs.shape[1]):
-            abserr = np.abs(res_coeffs[:, it] - ref_coeffs[:, it])
-            relerr = np.abs(abserr / ref_coeffs[:, it])
-            print(it+1, np.max(abserr), np.max(relerr))
 
         self.assertTrue(
             np.allclose(
