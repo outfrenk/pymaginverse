@@ -123,48 +123,48 @@ class InputData(object):
             df['sd'] = df['sd'].where(gd_cond, other=sd)
 
             # change zero error values to default if no data
-            # for i, dstr in enumerate(['X', 'Y', 'Z', 'H', 'F']):
-            #     df[f'd{dstr}'] = df[f'd{dstr}'].where(
-            #         df[dstr].isna() ^ df[f'd{dstr}'].notna(),
-            #         other=default_error[i],
-            #     )
-            # df['alpha95'] = df['alpha95'].where(
-            #     (df['D'].isna() & df['I'].isna()) ^ df['alpha95'].notna() ^
-            #     (df['dD'].notna() & df['dI'].notna()),
-            #     other=a95,
-            # )
-            # # df['dF'] = np.clip(df['dF'], 5, None)
-            # # Correct sqrt(2) error
-            # # df['alpha95'] = np.clip(df['alpha95'], np.sqrt(2) * 3.4, None)
-            # df['dI'] = df['dI'].where(
-            #     df['dI'].notna(),
-            #     other=df['alpha95'] * 57.3 / 140.,
-            # )
-#
-            # cond = df['D'].notna() & df['I'].isna()  # fix alpha95 issues
-            # # Get the corresponding indices
-            # # ind = df.where(cond).dropna(how='all').index
-            # # if ind.size != 0:
-            # #     if force_error_d:
-            # #         df['dD'].where(cond, other=force_error_d, inplace=True)
-            # #     else:
-            # #         warn(f"Records with indices {ind.values} contain "
-            # #              f"declination, but not inclination! No default error "
-            # #              f"(force_error_d) has been inputted.\n"
-            # #              f"To be able to use the provided data, these "
-            # #              f"records have been dropped from the output.",
-            # #              UserWarning)
-            # #         df.drop(df.where(cond).dropna(how='all').index,
-            # #                 inplace=True)
-#
-            # df['dD'] = df['dD'].where(
-            #     df['dD'].notna(),
-            #     other=(
-            #         df['alpha95']
-            #         * 57.3 / 140.
-            #         / np.abs(np.cos(np.deg2rad(df['I'])))
-            #     ),
-            # )
+            for i, dstr in enumerate(['X', 'Y', 'Z', 'H', 'F']):
+                df[f'd{dstr}'] = df[f'd{dstr}'].where(
+                    df[dstr].isna() ^ df[f'd{dstr}'].notna(),
+                    other=default_error[i],
+                )
+            df['alpha95'] = df['alpha95'].where(
+                (df['D'].isna() & df['I'].isna()) ^ df['alpha95'].notna() ^
+                (df['dD'].notna() & df['dI'].notna()),
+                other=a95,
+            )
+            # df['dF'] = np.clip(df['dF'], 5, None)
+            # Correct sqrt(2) error
+            # df['alpha95'] = np.clip(df['alpha95'], np.sqrt(2) * 3.4, None)
+            df['dI'] = df['dI'].where(
+                df['dI'].notna(),
+                other=df['alpha95'] * 57.3 / 140.,
+            )
+
+            cond = df['D'].notna() & df['I'].isna()  # fix alpha95 issues
+            # Get the corresponding indices
+            # ind = df.where(cond).dropna(how='all').index
+            # if ind.size != 0:
+            #     if force_error_d:
+            #         df['dD'].where(cond, other=force_error_d, inplace=True)
+            #     else:
+            #         warn(f"Records with indices {ind.values} contain "
+            #              f"declination, but not inclination! No default error "
+            #              f"(force_error_d) has been inputted.\n"
+            #              f"To be able to use the provided data, these "
+            #              f"records have been dropped from the output.",
+            #              UserWarning)
+            #         df.drop(df.where(cond).dropna(how='all').index,
+            #                 inplace=True)
+
+            df['dD'] = df['dD'].where(
+                df['dD'].notna(),
+                other=(
+                    df['alpha95']
+                    * 57.3 / 140.
+                    / np.abs(np.cos(np.deg2rad(df['I'])))
+                ),
+            )
             # check if data already occurs and drop duplicates if wished so:
             if drop_duplicates:
                 df.drop_duplicates(subset=['lat', 'lon', 'rad', 't'],
