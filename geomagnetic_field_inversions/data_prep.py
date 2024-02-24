@@ -51,8 +51,8 @@ class InputData(object):
     def read_data(self,
                   dfs: Union[list, pd.DataFrame],
                   drop_duplicates: bool = False,
-                  x_err=10, y_err=10, z_err=10,
-                  h_err=10, f_err=10, a95=10,
+                  x_err=10., y_err=10., z_err=10.,  # TODO: These values are
+                  h_err=10., f_err=10., a95=10.,    # too large.
                   force_error_d: float = None
                   ) -> None:
         """ Reads Pandas DataFrame(s) and stores in class
@@ -101,15 +101,15 @@ class InputData(object):
                 raise Exception(f"Records with indices {llind.values} contain "
                                 f"latitude or longitude out of range. \n"
                                 f"Change before proceeding!")
-            df['lon'].where(df['lon'] <= 180, df['lon'] - 360, inplace=True)
-            df['h'].where(df['h'].notna(), other=0, inplace=True)
+            df['lon'] = df['lon'].where(df['lon'] <= 180, df['lon'] - 360)
+            df['h'] = df['h'].where(df['h'].notna(), other=0)
 
             # indicate geodetic (0) or geocentric (1)
-            df['geoc'].where(df['geoc'].notna(), other=0, inplace=True)
-            df['geoc_colat'] = 90 - df['lat']
+            df['geoc'] = df['geoc'].where(df['geoc'].notna(), other=0)
+            df['geoc_colat'] = 90. - df['lat']
             df['geoc_rad'] = 6371.2 + df['h'] * 1e-3
-            df['cd'] = 1
-            df['sd'] = 0
+            df['cd'] = 1.
+            df['sd'] = 0.
             # apply geocentric correction
             temp, rad, cd, sd = latrad_in_geoc(
                 np.radians(df['lat'].to_numpy()),
@@ -117,52 +117,64 @@ class InputData(object):
             colat = 90 - np.degrees(temp)
             # only replace geodetic values
             gd_cond = df['geoc'] != 0
-            df['geoc_colat'].where(gd_cond, other=colat, inplace=True)
-            df['geoc_rad'].where(gd_cond, other=rad, inplace=True)
-            df['cd'].where(gd_cond, other=cd, inplace=True)
-            df['sd'].where(gd_cond, other=sd, inplace=True)
+            df['geoc_colat'] = df['geoc_colat'].where(gd_cond, other=colat)
+            df['geoc_rad'] = df['geoc_rad'].where(gd_cond, other=rad)
+            df['cd'] = df['cd'].where(gd_cond, other=cd)
+            df['sd'] = df['sd'].where(gd_cond, other=sd)
 
             # change zero error values to default if no data
             for i, dstr in enumerate(['X', 'Y', 'Z', 'H', 'F']):
-                df[f'd{dstr}'].where(
+                df[f'd{dstr}'] = df[f'd{dstr}'].where(
                     df[dstr].isna() ^ df[f'd{dstr}'].notna(),
-                    other=default_error[i], inplace=True)
-            df['alpha95'].where(
+                    other=default_error[i],
+                )
+            df['alpha95'] = df['alpha95'].where(
                 (df['D'].isna() & df['I'].isna()) ^ df['alpha95'].notna() ^
                 (df['dD'].notna() & df['dI'].notna()),
-                other=a95, inplace=True)
+                other=a95,
+            )
             # df['dF'] = np.clip(df['dF'], 5, None)
             # Correct sqrt(2) error
             # df['alpha95'] = np.clip(df['alpha95'], np.sqrt(2) * 3.4, None)
-            df['dI'].where(df['dI'].notna(),
-                           other=df['alpha95'] * 57.3 / 140., inplace=True)
+            df['dI'] = df['dI'].where(
+                df['dI'].notna(),
+                other=df['alpha95'] * 57.3 / 140.,
+            )
 
             cond = df['D'].notna() & df['I'].isna()  # fix alpha95 issues
             # Get the corresponding indices
-            ind = df.where(cond).dropna(how='all').index
-            if ind.size != 0:
-                if force_error_d:
-                    df['dD'].where(cond, other=force_error_d, inplace=True)
-                else:
-                    warn(f"Records with indices {ind.values} contain "
-                         f"declination, but not inclination! No default error "
-                         f"(force_error_d) has been inputted.\n"
-                         f"To be able to use the provided data, these "
-                         f"records have been dropped from the output.",
-                         UserWarning)
-                    df.drop(df.where(cond).dropna(how='all').index,
-                            inplace=True)
+            # ind = df.where(cond).dropna(how='all').index
+            # if ind.size != 0:
+            #     if force_error_d:
+            #         df['dD'].where(cond, other=force_error_d, inplace=True)
+            #     else:
+            #         warn(f"Records with indices {ind.values} contain "
+            #              f"declination, but not inclination! No default error "
+            #              f"(force_error_d) has been inputted.\n"
+            #              f"To be able to use the provided data, these "
+            #              f"records have been dropped from the output.",
+            #              UserWarning)
+            #         df.drop(df.where(cond).dropna(how='all').index,
+            #                 inplace=True)
 
-            df['dD'].where(df['dD'].notna(),
-                           other=df['alpha95'] * 57.3 / 140. / np.abs(
-                               np.cos(np.deg2rad(df['I']))), inplace=True)
+            df['dD'] = df['dD'].where(
+                df['dD'].notna(),
+                other=(
+                    df['alpha95']
+                    * 57.3 / 140.
+                    / np.abs(np.cos(np.deg2rad(df['I'])))
+                ),
+            )
             # check if data already occurs and drop duplicates if wished so:
             if drop_duplicates:
                 df.drop_duplicates(subset=['lat', 'lon', 'rad', 't'],
                                    inplace=True)
             # add dataframe to big dataframe
+            # XXX: This gives a warning with new pandas version, as the initial
+            # dataframe is empty.
             self.data = pd.concat([self.data, df[self.data.columns]],
                                   ignore_index=True)
+
             self.compiled = False
 
     def compile_data(self,
@@ -211,10 +223,39 @@ class InputData(object):
         self.idx_out = np.concatenate((self.idx_X, self.idx_Y, self.idx_Z,
                                        self.idx_H, self.idx_F, self.idx_I,
                                        self.idx_D)).flatten()
+        # indices to quickly transform forward return matrices to the same
+        # form as outputs
+        # idx_types = np.hstack(
+        #     (
+        #         0 * np.ones_like(self.idx_X),
+        #         1 * np.ones_like(self.idx_Y),
+        #         2 * np.ones_like(self.idx_Z),
+        #         3 * np.ones_like(self.idx_H),
+        #         4 * np.ones_like(self.idx_F),
+        #         5 * np.ones_like(self.idx_I),
+        #         6 * np.ones_like(self.idx_D),
+        #     )
+        # )
+        self.idx_res = np.cumsum(
+            [
+                0,
+                len(self.idx_X),
+                len(self.idx_Y),
+                len(self.idx_Z),
+                len(self.idx_H),
+                len(self.idx_F),
+                len(self.idx_I),
+                len(self.idx_D),
+            ]
+        )
+
         self.n_out = len(self.idx_out)
         # get same order as outputs
         self.loc = uniq_loc
         self.loc_idx = indices[self.idx_out]
+        # self.idx_frech = np.vstack(
+        #     (self.loc_idx, idx_types)
+        # )
         self.time = data['t'].loc[self.idx_out].to_numpy()
         # vector of data
         self.outputs = np.concatenate((data['X'].loc[self.idx_X],
@@ -236,14 +277,22 @@ class InputData(object):
                                       ).astype(float)
         self.compiled = True
         if verbose:
-            print(f'Data from t={min(self.time)} to t={max(self.time)}\n'
-                  f'This dataset contains {self.n_out} records from '
-                  f'{self.n_inp} locations.\n'
-                  f'It consists of {self.idx_D.size} declinations, '
-                  f'{self.idx_I.size} inclinations and {self.idx_F.size} '
-                  f'intensities, {self.idx_X.size} x-data, '
-                  f'{self.idx_Y.size} y-data, {self.idx_Z.size} z-data, and '
-                  f'{self.idx_H.size} h-data.')
+            print(self)
+
+    def __repr__(self):
+        if self.n_out:
+            return (
+                f'Data from t={min(self.time)} to t={max(self.time)}\n'
+                f'This dataset contains {self.n_out} records from '
+                f'{self.n_inp} locations.\n'
+                f'It consists of {self.idx_D.size} declinations, '
+                f'{self.idx_I.size} inclinations and {self.idx_F.size} '
+                f'intensities, {self.idx_X.size} x-data, '
+                f'{self.idx_Y.size} y-data, {self.idx_Z.size} z-data, and '
+                f'{self.idx_H.size} h-data.'
+            )
+        else:
+            return 'This object does not contain any data.'
 
 
 def read_geomagia(fnames: Union[list, str, Path],
@@ -318,7 +367,7 @@ def read_geomagia(fnames: Union[list, str, Path],
                         'SigmaDec[deg.]': 'dD', 'SigmaInc[deg.]': 'dI'}
         dat.rename(ren_dict, inplace=True, axis='columns')
         dats = pd.concat([dats, dat], ignore_index=True)
-
+    print(dats['dD'].values.dtype)
     dats.dropna(subset=['lat', 'lon', 't'], inplace=True)
     dats.dropna(subset=['D', 'I', 'F'], how='all', inplace=True)
     dats.reset_index(inplace=True)

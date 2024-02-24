@@ -4,7 +4,7 @@ import numpy as np
 def dampingtype(maxdegree: int,
                 damp_type: str,
                 damp_dipole: bool = False,
-                damp_depth: float = 3495 / 6371.2
+                damp_depth: float = 3485 / 6371.2
                 ) -> np.ndarray:
     """ Creates spatial or temporal damping array according to type
 
@@ -106,5 +106,6 @@ def min_ext_energy(d: int, rbycmb: float) -> float:
 
 
 def min_vel_acc(d: int, rbycmb: float) -> float:
+    # XXX 4 pi is missing!
     res = rbycmb**(2*d + 4) * (d+1)**2 / (2*d + 1)
     return res
