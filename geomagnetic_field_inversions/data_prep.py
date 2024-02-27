@@ -140,8 +140,8 @@ class InputData(object):
                 df['dI'].notna(),
                 other=df['alpha95'] * 57.3 / 140.,
             )
-
-            cond = df['D'].notna() & df['I'].isna()  # fix alpha95 issues
+            # this breaks the tests
+            # cond = df['D'].notna() & df['I'].isna()  # fix alpha95 issues
             # Get the corresponding indices
             # ind = df.where(cond).dropna(how='all').index
             # if ind.size != 0:
@@ -225,17 +225,6 @@ class InputData(object):
                                        self.idx_D)).flatten()
         # indices to quickly transform forward return matrices to the same
         # form as outputs
-        # idx_types = np.hstack(
-        #     (
-        #         0 * np.ones_like(self.idx_X),
-        #         1 * np.ones_like(self.idx_Y),
-        #         2 * np.ones_like(self.idx_Z),
-        #         3 * np.ones_like(self.idx_H),
-        #         4 * np.ones_like(self.idx_F),
-        #         5 * np.ones_like(self.idx_I),
-        #         6 * np.ones_like(self.idx_D),
-        #     )
-        # )
         self.idx_res = np.cumsum(
             [
                 0,
@@ -253,9 +242,7 @@ class InputData(object):
         # get same order as outputs
         self.loc = uniq_loc
         self.loc_idx = indices[self.idx_out]
-        # self.idx_frech = np.vstack(
-        #     (self.loc_idx, idx_types)
-        # )
+
         self.time = data['t'].loc[self.idx_out].to_numpy()
         # vector of data
         self.outputs = np.concatenate((data['X'].loc[self.idx_X],
