@@ -281,7 +281,7 @@ def read_geomagia(fname: Union[str, Path],
 
     # check if data already occurs and drop duplicates if wished so:
     if drop_duplicates:
-        dat.drop_duplicates(subset=['lat', 'lon', 'rad', 't'],
+        dat.drop_duplicates(subset=['lat', 'lon', 't'],
                             inplace=True)
     dat.dropna(subset=['lat', 'lon', 't'], inplace=True)
     dat.dropna(subset=['D', 'I', 'F'], how='all', inplace=True)
