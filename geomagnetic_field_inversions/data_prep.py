@@ -10,6 +10,28 @@ class InputData(object):
     """Class that contains geomagnetic data and locations in order to perform
     a geomagnetic field inversion
 
+    Parameters
+    ----------
+    data : pd.DataFrame
+        A dataframe containing input data. It should have the following
+        columns:
+            lat : the record latitude
+            lon : the record longitude
+            h : the height of the records location above the reference
+            ellipsoid
+            geoc : 1 or 0, indicating whether the above coords are given in a
+            geocentric reference frame
+            t : the record date as a calendar year
+            dt : error in the record date in calendar years
+            and at least one of the following
+            X and dX : value and error of the magnetic field X-component
+            Y and dY : value and error of the magnetic field Y-component
+            Z and dZ : value and error of the magnetic field Z-component
+            H and dH : value of the magnetic field horizontal intensity
+            F and dF : value of the magnetic field intensity
+            I and dI : value of the magnetic field inclination
+            D and dD : value of the magnetic field declination
+
     Attributes
     ----------
     data : DataFrame
@@ -44,7 +66,7 @@ class InputData(object):
                 [
                     'lat', 'lon', 'h', 't', 'X', 'dX', 'Y', 'dY', 'Z', 'dZ',
                     'H', 'dH', 'D', 'dD', 'I', 'dI', 'F', 'dF',
-                    'alpha95', 'geoc', 'geoc_colat', 'geoc_rad', 'cd', 'sd'
+                    'geoc', 'geoc_colat', 'geoc_rad', 'cd', 'sd'
                 ],
                 sort=False,
             ),
