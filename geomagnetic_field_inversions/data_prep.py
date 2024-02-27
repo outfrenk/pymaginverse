@@ -143,19 +143,19 @@ class InputData(object):
 
             cond = df['D'].notna() & df['I'].isna()  # fix alpha95 issues
             # Get the corresponding indices
-            ind = df.where(cond).dropna(how='all').index
-            if ind.size != 0:
-                if force_error_d:
-                    df['dD'].where(cond, other=force_error_d, inplace=True)
-                else:
-                    warn(f"Records with indices {ind.values} contain "
-                         f"declination, but not inclination! No default error "
-                         f"(force_error_d) has been inputted.\n"
-                         f"To be able to use the provided data, these "
-                         f"records have been dropped from the output.",
-                         UserWarning)
-                    df.drop(df.where(cond).dropna(how='all').index,
-                            inplace=True)
+            # ind = df.where(cond).dropna(how='all').index
+            # if ind.size != 0:
+            #     if force_error_d:
+            #         df['dD'].where(cond, other=force_error_d, inplace=True)
+            #     else:
+            #         warn(f"Records with indices {ind.values} contain "
+            #              f"declination, but not inclination! No default error "
+            #              f"(force_error_d) has been inputted.\n"
+            #              f"To be able to use the provided data, these "
+            #              f"records have been dropped from the output.",
+            #              UserWarning)
+            #         df.drop(df.where(cond).dropna(how='all').index,
+            #                 inplace=True)
 
             df['dD'] = df['dD'].where(
                 df['dD'].notna(),
