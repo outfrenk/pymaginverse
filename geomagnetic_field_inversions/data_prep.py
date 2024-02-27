@@ -270,7 +270,7 @@ def read_geomagia(fname: Union[str, Path],
                      'Dec[deg.]', 'Inc[deg.]',
                      'SigmaDec[deg.]', 'SigmaInc[deg.]'],
             na_values={'Dec[deg.]': na, 'Inc[deg.]': na,
-                        'SigmaDec[deg.]': na, 'SigmaInc[deg.]': na},
+                       'SigmaDec[deg.]': na, 'SigmaInc[deg.]': na},
             header=1, sep=',', skipinitialspace=True, index_col=False)
         dat['Age[yr.BP]'] = -1 * dat['Age[yr.BP]'] + 1950
         # Rename columns
