@@ -36,7 +36,7 @@ class InputData(object):
     def __init__(self):
         self.data = pd.DataFrame(
             columns=['lat', 'lon', 'h', 't', 'X', 'dX', 'Y', 'dY', 'Z', 'dZ',
-                     'H', 'dH', 'D', 'dD', 'I', 'dI', 'F', 'dF',
+                     'H', 'dH', 'D', 'dD', 'I', 'dI', 'F', 'dats',
                      'alpha95', 'geoc', 'geoc_colat', 'geoc_rad', 'cd', 'sd'])
         self.n_inp, self.n_out = 0, 0
         self.loc = np.zeros((0, 5))
@@ -94,8 +94,10 @@ class InputData(object):
             # drop rows not containing basic information
             df.dropna(subset=['lat', 'lon', 't'], how='any', inplace=True)
             # check latitude and longitude
-            llcond = (abs(df['lat']) > 90) | (
-                    (df['lon'] > 360) | (df['lon'] < -180))
+            llcond = (
+                (abs(df['lat']) > 90)
+                | ((df['lon'] > 360) | (df['lon'] < -180))
+            )
             llind = df.where(llcond).dropna(how='all').index
             if llind.size != 0:
                 raise Exception(f"Records with indices {llind.values} contain "
@@ -128,6 +130,7 @@ class InputData(object):
                     df[dstr].isna() ^ df[f'd{dstr}'].notna(),
                     other=default_error[i],
                 )
+<<<<<<< Updated upstream
             df['alpha95'] = df['alpha95'].where(
                 (df['D'].isna() & df['I'].isna()) ^ df['alpha95'].notna() ^
                 (df['dD'].notna() & df['dI'].notna()),
@@ -156,15 +159,9 @@ class InputData(object):
             #              UserWarning)
             #         df.drop(df.where(cond).dropna(how='all').index,
             #                 inplace=True)
+=======
+>>>>>>> Stashed changes
 
-            df['dD'] = df['dD'].where(
-                df['dD'].notna(),
-                other=(
-                    df['alpha95']
-                    * 57.3 / 140.
-                    / np.abs(np.cos(np.deg2rad(df['I'])))
-                ),
-            )
             # check if data already occurs and drop duplicates if wished so:
             if drop_duplicates:
                 df.drop_duplicates(subset=['lat', 'lon', 'rad', 't'],
@@ -295,9 +292,8 @@ class InputData(object):
             return 'This object does not contain any data.'
 
 
-def read_geomagia(fnames: Union[list, str, Path],
-                  id_attr: InputData = None,
-                  return_df: bool = False,
+def read_geomagia(fname: Union[str, Path],
+                  default_a95: float = 4.5,
                   **kw_args
                   ) -> Optional[InputData]:
     """ Reads geomagia csv-file(s) format
@@ -305,7 +301,7 @@ def read_geomagia(fnames: Union[list, str, Path],
     Parameters
     ----------
     fnames
-        (list of) string or Path-object of geomagia formatted file to read
+        string or Path-object of geomagia formatted file to read
     id_attr
         Instance of InputData-class. If not inputted, will create an instance
     return_df
@@ -322,56 +318,69 @@ def read_geomagia(fnames: Union[list, str, Path],
     if return_df is True: dats
         Pandas DataFrame of inputted geomagia data
     """
-    if id_attr is None:
-        id_attr = InputData()
-    dats = pd.DataFrame(columns=id_attr.data.columns)
+    # Missing values are indicated by either one of
+    na = ('9999', '999', '999.9', 'nan', '-999', '-9999')
+    # Read data as DataFrame
+    try:
+        dat = pd.read_csv(
+            fname,
+            usecols=['Age[yr.AD]', 'Sigma-ve[yr.]', 'Sigma+ve[yr.]',
+                     'Ba[microT]', 'SigmaBa[microT]', 'Dec[deg.]',
+                     'Inc[deg.]', 'Alpha95[deg.]', 'SiteLat[deg.]',
+                     'SiteLon[deg.]'],
+            na_values={'Sigma-ve[yr.]': (-1), 'Sigma+ve[yr.]': (-1),
+                       'Ba[microT]': na, 'SigmaBa[microT]': na,
+                       'Dec[deg.]': na, 'Inc[deg.]': na,
+                       'Alpha95[deg.]': na},
+            header=1, sep=',', skipinitialspace=True)
+        # Rename columns
+        ren_dict = {'Age[yr.AD]': 't', 'Sigma-ve[yr.]': 'dt_lo',
+                    'Sigma+ve[yr.]': 'dt_up', 'Ba[microT]': 'F',
+                    'SigmaBa[microT]': 'dF', 'Dec[deg.]': 'D',
+                    'Inc[deg.]': 'I', 'SiteLat[deg.]': 'lat',
+                    'SiteLon[deg.]': 'lon', 'Alpha95[deg.]': 'alpha95'}
+    # TODO: make better statement to differentiate between sed and volc
+    except ValueError:
+        dat = pd.read_csv(
+            fname,
+            usecols=['Age[yr.BP]', 'Lat[deg.]', 'Lon[deg.]',
+                     'Dec[deg.]', 'Inc[deg.]',
+                     'SigmaDec[deg.]', 'SigmaInc[deg.]'],
+            na_values={'Dec[deg.]': na, 'Inc[deg.]': na,
+                        'SigmaDec[deg.]': na, 'SigmaInc[deg.]': na},
+            header=1, sep=',', skipinitialspace=True, index_col=False)
+        dat['Age[yr.BP]'] = -1 * dat['Age[yr.BP]'] + 1950
+        # Rename columns
+        ren_dict = {'Age[yr.BP]': 't', 'Dec[deg.]': 'D', 'Inc[deg.]': 'I',
+                    'Lat[deg.]': 'lat', 'Lon[deg.]': 'lon',
+                    'SigmaDec[deg.]': 'dD', 'SigmaInc[deg.]': 'dI'}
+    dat.rename(ren_dict, inplace=True, axis='columns')
 
-    if not isinstance(fnames, list):
-        fnames = [fnames]
-    for fname in fnames:
-        # Missing values are indicated by either one of
-        na = ('9999', '999', '999.9', 'nan', '-999', '-9999')
-        # Read data as DataFrame
-        try:
-            dat = pd.read_csv(
-                fname,
-                usecols=['Age[yr.AD]', 'Sigma-ve[yr.]', 'Sigma+ve[yr.]',
-                         'Ba[microT]', 'SigmaBa[microT]', 'Dec[deg.]',
-                         'Inc[deg.]', 'Alpha95[deg.]', 'SiteLat[deg.]',
-                         'SiteLon[deg.]'],
-                na_values={'Sigma-ve[yr.]': (-1), 'Sigma+ve[yr.]': (-1),
-                           'Ba[microT]': na, 'SigmaBa[microT]': na,
-                           'Dec[deg.]': na, 'Inc[deg.]': na,
-                           'Alpha95[deg.]': na},
-                header=1, sep=',', skipinitialspace=True)
-            # Rename columns
-            ren_dict = {'Age[yr.AD]': 't', 'Sigma-ve[yr.]': 'dt_lo',
-                        'Sigma+ve[yr.]': 'dt_up', 'Ba[microT]': 'F',
-                        'SigmaBa[microT]': 'dF', 'Dec[deg.]': 'D',
-                        'Inc[deg.]': 'I', 'SiteLat[deg.]': 'lat',
-                        'SiteLon[deg.]': 'lon', 'Alpha95[deg.]': 'alpha95'}
-        # TODO: make better statement to differentiate between sed and volc
-        except ValueError:
-            dat = pd.read_csv(
-                fname,
-                usecols=['Age[yr.BP]', 'Lat[deg.]', 'Lon[deg.]',
-                         'Dec[deg.]', 'Inc[deg.]',
-                         'SigmaDec[deg.]', 'SigmaInc[deg.]'],
-                na_values={'Dec[deg.]': na, 'Inc[deg.]': na,
-                           'SigmaDec[deg.]': na, 'SigmaInc[deg.]': na},
-                header=1, sep=',', skipinitialspace=True, index_col=False)
-            dat['Age[yr.BP]'] = -1 * dat['Age[yr.BP]'] + 1950
-            # Rename columns
-            ren_dict = {'Age[yr.BP]': 't', 'Dec[deg.]': 'D', 'Inc[deg.]': 'I',
-                        'Lat[deg.]': 'lat', 'Lon[deg.]': 'lon',
-                        'SigmaDec[deg.]': 'dD', 'SigmaInc[deg.]': 'dI'}
-        dat.rename(ren_dict, inplace=True, axis='columns')
-        dats = pd.concat([dats, dat], ignore_index=True)
-    print(dats['dD'].values.dtype)
-    dats.dropna(subset=['lat', 'lon', 't'], inplace=True)
-    dats.dropna(subset=['D', 'I', 'F'], how='all', inplace=True)
-    dats.reset_index(inplace=True)
-    if return_df:
-        return dats
-    else:
-        id_attr.read_data(dats, **kw_args)
+    dat.dropna(subset=['lat', 'lon', 't'], inplace=True)
+    dat.dropna(subset=['D', 'I', 'F'], how='all', inplace=True)
+    dat.reset_index(inplace=True, drop=True)
+
+    dat['alpha95'] = dat['alpha95'].where(
+        (dat['D'].isna() & dat['I'].isna()) ^ dat['alpha95'].notna(),
+        other=default_a95,
+    )
+    # dat['dat'] = np.clip(dat['dat'], 5, None)
+    # Correct sqrt(2) error
+    # dat['alpha95'] = np.clip(dat['alpha95'], np.sqrt(2) * 3.4, None)
+    dat['dI'] = dat['alpha95'] * 57.3 / 140.
+    cond = dat['D'].notna() & dat['I'].isna()  # fix alpha95 issues
+    # Get the corresponding indices
+    ind = dat.where(cond).dropna(how='all').index
+    if ind.size != 0:
+        warn(f"Records with indices {ind.values} contain "
+             f"declination, but not inclination! No default error "
+             f"(force_error_d) has been inputted.\n"
+             f"To be able to use the provided data, these "
+             f"records have been dropped from the output.",
+             UserWarning)
+        dat.drop(dat.where(cond).dropna(how='all').index,
+                 inplace=True)
+
+    dat['dD'] = dat['dI'] / np.abs(np.cos(np.deg2rad(dat['I'])))
+
+    return dat
