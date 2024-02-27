@@ -122,6 +122,7 @@ class InputData(object):
 
         return data
 
+
     def compile_data(self) -> None:
         """ Compiles data ready for quick use in geomagnetic field inversions
 
@@ -183,6 +184,7 @@ class InputData(object):
         self.loc = uniq_loc
         self.loc_idx = indices[self.idx_out]
         self.time = self.data['t'].loc[self.idx_out].to_numpy()
+
         # vector of data
         self.outputs = np.concatenate((self.data['X'].loc[self.idx_X],
                                        self.data['Y'].loc[self.idx_Y],
