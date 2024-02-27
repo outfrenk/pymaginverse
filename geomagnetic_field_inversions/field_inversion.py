@@ -72,10 +72,6 @@ class FieldInversion(object):
         self.data = []
         self.std = []
         self.unsplined_iter_gh = []
-        self.bspl_func = []
-        self.stat_ix = []
-        self.data_ix = []
-        self.type_ix = []
         self.idx_out = np.zeros(0)
         self.count_type = np.zeros(7)
         self.station_coord = np.zeros((0, 3))
@@ -159,25 +155,18 @@ class FieldInversion(object):
             d_inst.compile_data()
         # order datatypes in a more straightforward way
         # line of types_sorted corresponds to index
-        self.count_type = np.array([d_inst.idx_X.size, d_inst.idx_Y.size,
-                                    d_inst.idx_Z.size, d_inst.idx_H.size,
-                                    d_inst.idx_F.size, d_inst.idx_I.size,
-                                    d_inst.idx_D.size])
-        type_arr = np.repeat(np.arange(7), self.count_type)
         self.idx_out = d_inst.idx_out
         # self.idx_frech = d_inst.idx_frech
         self.idx_res = d_inst.idx_res
         self.time = d_inst.time
         # XXX why work in radians???
-        self.data = np.where(
-            type_arr < 5,
-            d_inst.outputs,
-            np.radians(d_inst.outputs),
+        self.data = d_inst.outputs.copy()
+        self.data[d_inst.idx_res[5]:] = np.radians(
+            d_inst.outputs[d_inst.idx_res[5]:]
         )
-        self.std = np.where(
-            type_arr < 5,
-            d_inst.std_out,
-            np.radians(d_inst.std_out),
+        self.std = d_inst.std_out.copy()
+        self.std[d_inst.idx_res[5]:] = np.radians(
+            d_inst.std_out[d_inst.idx_res[5]:]
         )
 
         # calculate frechet dx, dy, dz for all stations
@@ -228,32 +217,6 @@ class FieldInversion(object):
 
         self.starts = np.array(starts, dtype=int)
         self.ind_list = np.array(ind_list, dtype=int)
-        # order data per spline
-        self.data_ix = [[] for _ in range(len(self.t_array))]
-        self.stat_ix = [[] for _ in range(len(self.t_array))]
-        self.type_ix = [[] for _ in range(len(self.t_array))]
-        # loop through dataset
-        for index, time in enumerate(self.time):
-            nleft = int((time - self.t_array[0]) // self.t_step)
-            if 0 <= nleft < len(self.t_array) and time <= self.t_array[-1]:
-                # index corresponds to time, data, and error
-                # add index of station
-                self.stat_ix[nleft].append(d_inst.loc_idx[index])
-                # add index of data per station to spline
-                self.data_ix[nleft].append(index)
-                # types per timestep
-                self.type_ix[nleft].append(type_arr[index])
-        # scan data for holes in time  XXX why?
-        for tix in range(len(self.t_array)):
-            if not self.stat_ix[tix] and tix != len(self.t_array)-1:
-                print(f'Warning: no data between {self.t_array[tix]}'
-                      f' and {self.t_array[tix+1]}')
-
-        # prepare BSplines
-        self.bspl_func = [[] for _ in range(self.nr_splines)]
-        for spl in range(self.nr_splines):
-            self.bspl_func[spl] = BSpline.basis_element(
-                self.knots[spl:spl+self._SPL_DEGREE+2], extrapolate=False)
 
         # Prepare damping matrices
         if spat_type is not None:
