@@ -3,6 +3,7 @@ from tqdm import tqdm
 
 
 def banded2full(banded, quiet=True):
+    """ Utility routine to transform a banded matrix into a full one """
     n = banded.shape[0]-1
     full = np.zeros(
         (banded.shape[1], banded.shape[1]),
@@ -19,6 +20,7 @@ def banded2full(banded, quiet=True):
 
 # TODO: banded multiplications to Cython
 def banded_mul_vec(banded, vec, quiet=True):
+    """ Utility routine to multpiply a banded matrix and a vector """
     n = banded.shape[0]
     result = banded[-1] * vec
     for it in tqdm(np.arange(n-1)+1, disable=quiet):
@@ -30,6 +32,7 @@ def banded_mul_vec(banded, vec, quiet=True):
 
 
 def banded_mul_mat(banded, mat, quiet=True):
+    """ Utility routine to multpiply a banded matrix and a matrix """
     # n = banded.shape[0]
     # result = banded[-1, :, None] * mat
     # for it in tqdm(np.arange(n-1)+1, disable=quiet):
