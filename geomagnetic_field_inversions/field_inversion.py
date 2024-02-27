@@ -358,12 +358,6 @@ class FieldInversion(object):
         )
 
         for it in range(self._SPL_DEGREE + 1):
-            # C_m_inv is banded in the hermitian-banded upper format used by
-            # scipy. Due to the different order in which the d_matrix is
-            # created by Frenk's code, we need to get the lower part of the
-            # d_matrix
-            # ^ not valid anymore
-            # at = 2 * self._SPL_DEGREE - it
             C_m_inv[it * self._nm_total] = d_matrix[it].copy()
 
         # =====================================================================
@@ -378,6 +372,7 @@ class FieldInversion(object):
                 self.spatial,
                 self.temporal,
             )
+            # transform the predictions into the same order as the outputs
             prediction = np.hstack(
                 (
                     forwobs_matrix[0, self.idx_res[0]:self.idx_res[1]],
@@ -389,24 +384,23 @@ class FieldInversion(object):
                     forwobs_matrix[6, self.idx_res[6]:self.idx_res[7]],
                 )
             )
-
+            # calculate misfit and residuals
             df = self.data - prediction
             # Consider periodicity in declinations
-            # df[self.idx_res[-2]:self.idx_res[-1]] += (
-            #     360 * (-180 > df[self.idx_res[-2]:self.idx_res[-1]])
-            #     - 360 * (df[self.idx_res[-2]:self.idx_res[-1]] > 180)
-            # )
+            df[self.idx_res[-2]:self.idx_res[-1]] += (
+                360 * (-180 > df[self.idx_res[-2]:self.idx_res[-1]])
+                - 360 * (df[self.idx_res[-2]:self.idx_res[-1]] > 180)
+            )
 
             res = df / self.std
             for i in range(7):
-                self.res_iter[it] = np.abs(
-                    df[self.idx_res[it]:self.idx_res[it+1]]
-                ).mean()
+                if df[self.idx_res[it]:self.idx_res[it+1]].size > 0:
+                    self.res_iter[it] = np.abs(
+                        df[self.idx_res[it]:self.idx_res[it+1]]
+                    ).mean()
             self.res_iter[it, 7] = np.abs(res).mean()
             if self.verbose:
                 print('Residual is %.2f' % self.res_iter[it, 7])
-
-            # =================================================================
 
             # check if final conditions have been met
             if it > 0:
@@ -420,7 +414,7 @@ class FieldInversion(object):
             # solve the equations
             if self.verbose:
                 print('Prepare and solve equations')
-            # This is base_DIF
+            # set up the spatial linearization / gradients
             frech_matrix = frechet_types(
                 self.spatial, forwobs_matrix
             )
@@ -435,9 +429,9 @@ class FieldInversion(object):
                     frech_matrix[self.idx_res[6]:self.idx_res[7], 6],
                 )
             ).T
-
+            # include the C_e^{-1/2} factor
             frech_matrix /= self.std[None, :]
-
+            # efficiently set up normal equations using Cython code
             banded = build_banded_2(
                 np.ascontiguousarray(frech_matrix),
                 self.temporal,
@@ -445,10 +439,11 @@ class FieldInversion(object):
                 self.ind_list,
                 self.starts,
             )
+            # add damping to normal equations
             banded[banded.shape[0]-C_m_inv.shape[0]:] += C_m_inv
-
+            # calculate cholesky
             chol = cholesky_banded(banded)
-
+            # set up right hand side
             rhs = np.einsum(
                 'ik,jk,k,k->ij',
                 self.temporal,
@@ -458,11 +453,15 @@ class FieldInversion(object):
                 optimize=True,
             ).flatten()
             rhs -= banded_mul_vec(C_m_inv, self.splined_gh.flatten())
-
+            # solve using cholesky and update solution
             self.splined_gh += cho_solve_banded((chol, False), rhs).reshape(
                 self.nr_splines,
                 self._nm_total,
             )
+            # store iteration results as BSpline objects
+            spline = BSpline(t=self.knots, c=self.splined_gh.copy(),
+                             k=3, axis=0, extrapolate=False)
+            self.unsplined_iter_gh.append(spline)
 
         # sum residuals and finish up stuff
         if self.verbose:
