@@ -351,8 +351,8 @@ class FieldInversion(object):
             df = self.data - prediction
             # Consider periodicity in declinations
             df[self.idx_res[-2]:self.idx_res[-1]] += (
-                360 * (-180 > df[self.idx_res[-2]:self.idx_res[-1]])
-                - 360 * (df[self.idx_res[-2]:self.idx_res[-1]] > 180)
+                2 * np.pi * (-np.pi > df[self.idx_res[-2]:self.idx_res[-1]])
+                - 2 * np.pi * (df[self.idx_res[-2]:self.idx_res[-1]] > np.pi)
             )
 
             res = df / self.std
