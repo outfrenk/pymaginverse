@@ -73,9 +73,6 @@ class InputData(object):
             if True, drop duplicates with same lat, lon, time, and radius
         x_err, y_err, z_err, h_err, f_err
             default errors (10) if no error is found in DataFrame
-        a95
-            default error for alpha95, only used if no error for
-             dec or/and inc are found.
         force_error_d
             If None, removes data with dec data, but no dec error & inc data
             If float is set, will set dec error to that float
@@ -130,42 +127,7 @@ class InputData(object):
                     df[dstr].isna() ^ df[f'd{dstr}'].notna(),
                     other=default_error[i],
                 )
-<<<<<<< Updated upstream
-            df['alpha95'] = df['alpha95'].where(
-                (df['D'].isna() & df['I'].isna()) ^ df['alpha95'].notna() ^
-                (df['dD'].notna() & df['dI'].notna()),
-                other=a95,
-            )
-            # df['dF'] = np.clip(df['dF'], 5, None)
-            # Correct sqrt(2) error
-            # df['alpha95'] = np.clip(df['alpha95'], np.sqrt(2) * 3.4, None)
-            df['dI'] = df['dI'].where(
-                df['dI'].notna(),
-                other=df['alpha95'] * 57.3 / 140.,
-            )
 
-            cond = df['D'].notna() & df['I'].isna()  # fix alpha95 issues
-            # Get the corresponding indices
-            # ind = df.where(cond).dropna(how='all').index
-            # if ind.size != 0:
-            #     if force_error_d:
-            #         df['dD'].where(cond, other=force_error_d, inplace=True)
-            #     else:
-            #         warn(f"Records with indices {ind.values} contain "
-            #              f"declination, but not inclination! No default error "
-            #              f"(force_error_d) has been inputted.\n"
-            #              f"To be able to use the provided data, these "
-            #              f"records have been dropped from the output.",
-            #              UserWarning)
-            #         df.drop(df.where(cond).dropna(how='all').index,
-            #                 inplace=True)
-=======
->>>>>>> Stashed changes
-
-            # check if data already occurs and drop duplicates if wished so:
-            if drop_duplicates:
-                df.drop_duplicates(subset=['lat', 'lon', 'rad', 't'],
-                                   inplace=True)
             # add dataframe to big dataframe
             # XXX: This gives a warning with new pandas version, as the initial
             # dataframe is empty.
@@ -175,15 +137,12 @@ class InputData(object):
             self.compiled = False
 
     def compile_data(self,
-                     drop_duplicates: bool = True,
                      verbose: bool = False
                      ) -> None:
         """ Compiles data ready for quick use in geomagnetic field inversions
 
         Parameters
         ----------
-        drop_duplicates
-            if True, drops duplicate rows, i.e. rows that are exactly the same
         verbose
             if True, returns status report of number of data points
 
@@ -193,9 +152,6 @@ class InputData(object):
         self.compiled = False
         # obtain index lists pointing to data quickly
         data = self.data
-        # check for duplicates
-        if drop_duplicates:
-            data.drop_duplicates(inplace=True)
         data.reset_index(inplace=True)
         # for quick access to stations
         uniq_loc, indices = np.unique(data[['geoc_colat', 'lon', 'geoc_rad',
@@ -222,17 +178,6 @@ class InputData(object):
                                        self.idx_D)).flatten()
         # indices to quickly transform forward return matrices to the same
         # form as outputs
-        # idx_types = np.hstack(
-        #     (
-        #         0 * np.ones_like(self.idx_X),
-        #         1 * np.ones_like(self.idx_Y),
-        #         2 * np.ones_like(self.idx_Z),
-        #         3 * np.ones_like(self.idx_H),
-        #         4 * np.ones_like(self.idx_F),
-        #         5 * np.ones_like(self.idx_I),
-        #         6 * np.ones_like(self.idx_D),
-        #     )
-        # )
         self.idx_res = np.cumsum(
             [
                 0,
@@ -250,9 +195,6 @@ class InputData(object):
         # get same order as outputs
         self.loc = uniq_loc
         self.loc_idx = indices[self.idx_out]
-        # self.idx_frech = np.vstack(
-        #     (self.loc_idx, idx_types)
-        # )
         self.time = data['t'].loc[self.idx_out].to_numpy()
         # vector of data
         self.outputs = np.concatenate((data['X'].loc[self.idx_X],
@@ -293,29 +235,26 @@ class InputData(object):
 
 
 def read_geomagia(fname: Union[str, Path],
+                  drop_duplicates: bool = True,
                   default_a95: float = 4.5,
-                  **kw_args
+                  **kw_args,
                   ) -> Optional[InputData]:
     """ Reads geomagia csv-file(s) format
 
     Parameters
     ----------
-    fnames
+    fname
         string or Path-object of geomagia formatted file to read
-    id_attr
-        Instance of InputData-class. If not inputted, will create an instance
-    return_df
-        If False (default), function returns instance of InputData-class
-        If True, function returns pandas DataFrame
+    drop_duplicates
+        if True, drops duplicate rows, i.e. rows that are exactly the same
+    a95
+        default error for alpha95, only used if no error is found in the file
     kw_args
         optional keyword argument(s) used for reading DataFrame with
         Input_data.read_data()
 
     Returns
     -------
-    if return_df is False: id_attr
-        Instance of DataInput-class with inputted geomagia data added
-    if return_df is True: dats
         Pandas DataFrame of inputted geomagia data
     """
     # Missing values are indicated by either one of
@@ -356,6 +295,10 @@ def read_geomagia(fname: Union[str, Path],
                     'SigmaDec[deg.]': 'dD', 'SigmaInc[deg.]': 'dI'}
     dat.rename(ren_dict, inplace=True, axis='columns')
 
+    # check if data already occurs and drop duplicates if wished so:
+    if drop_duplicates:
+        dat.drop_duplicates(subset=['lat', 'lon', 'rad', 't'],
+                            inplace=True)
     dat.dropna(subset=['lat', 'lon', 't'], inplace=True)
     dat.dropna(subset=['D', 'I', 'F'], how='all', inplace=True)
     dat.reset_index(inplace=True, drop=True)
