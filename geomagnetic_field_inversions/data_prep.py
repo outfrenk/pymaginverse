@@ -30,96 +30,77 @@ class InputData(object):
         The outputs (order is X, Y, Z, H, dec, inc, int)
     std_out : array
         The output-errors.
-    compiled : boolean
-        Whether indices for data have been compiled
     """
-    def __init__(self):
-        self.data = pd.DataFrame(
-            columns=['lat', 'lon', 'h', 't', 'X', 'dX', 'Y', 'dY', 'Z', 'dZ',
-                     'H', 'dH', 'D', 'dD', 'I', 'dI', 'F', 'dats',
-                     'alpha95', 'geoc', 'geoc_colat', 'geoc_rad', 'cd', 'sd'])
-        self.n_inp, self.n_out = 0, 0
-        self.loc = np.zeros((0, 5))
-        self.loc_idx, self.time = np.zeros(0), np.zeros(0)
-        self.idx_X,  self.idx_Y = np.zeros(0), np.zeros(0)
-        self.idx_Z, self.idx_H = np.zeros(0), np.zeros(0)
-        self.idx_D,  self.idx_I = np.zeros(0), np.zeros(0)
-        self.idx_F, self.idx_out = np.zeros(0), np.zeros(0)
-        self.outputs, self.std_out = np.zeros(0), np.zeros(0)
-        self.compiled = False
+    def __init__(self, data: pd.DataFrame):
+        self.data = self._check_consistency(data.copy())
+        self.data = self.geoc_transform_loc(self.data)
+        self.compile_data()
 
-    def read_data(self,
-                  dfs: Union[list, pd.DataFrame],
-                  ) -> None:
-        """ Reads Pandas DataFrame(s) and stores in class
+    def _check_consistency(self, data: pd.DataFrame) -> pd.DataFrame:
+        """ Check if a dataframe is consistent with the data model. """
+        # this evades errors due to missing column names
+        data = data.reindex(
+            data.columns.union(
+                [
+                    'lat', 'lon', 'h', 't', 'X', 'dX', 'Y', 'dY', 'Z', 'dZ',
+                    'H', 'dH', 'D', 'dD', 'I', 'dI', 'F', 'dF',
+                    'alpha95', 'geoc', 'geoc_colat', 'geoc_rad', 'cd', 'sd'
+                ],
+                sort=False,
+            ),
+            axis=1,
+        )
+        for name in ['lat', 'lon', 't']:
+            idx = data.query(f'{name} != {name}').index.to_numpy()
+            if idx.size > 0:
+                raise Exception(
+                    f"Records with indices {idx} have no {name} information."
+                )
+        # check latitude and longitude
+        llcond = (
+            (abs(data['lat']) > 90)
+            | ((data['lon'] > 360) | (data['lon'] < -180))
+        )
+        llind = data.where(llcond).dropna(how='all').index
+        if llind.size != 0:
+            raise Exception(f"Records with indices {llind.values} contain "
+                            f"latitude or longitude out of range. \n"
+                            f"Change before proceeding!")
 
-        Parameters
-        ----------
-        dfs
-            (list with instances of) Pandas DataFrame. Contains data + error
-             on either X/Y/Z/(H) component or inc/dec/int components or both.
-            Header should be:
-             'lat' (latitude), 'lon' (longitude), 'h' (optional: height above
-              geoid in m), 't' (time), 'X'/'Y'/'Z'/'H' (x/y/z/h),
-             'I'/'D'/'F' (inc/dec/int), 'dX'/'dY'/'dZ'/'dH' (x/y/z/h-error),
-             'dD'/'dI'/'dF' (dec/inc/int error),
-             'alpha95' (a95 error for both dec and inc error)
-             'geoc' (only set to 1 if data is obtained in geocentric dataframe)
+        return data
 
-        Method updates data
+    def geoc_transform_loc(self,
+                           data: pd.DataFrame,
+                           ) -> pd.DataFrame:
+        """ Transforms data locations to geocentric reference frame and stores
+        corresponding transformations for the geodetic observables.
+
+        Modifies data.
         """
-        # check for list -> enables processing multiple DataFrames
-        if not isinstance(dfs, list):
-            dfs = [dfs]
+        data['lon'] = data['lon'].where(data['lon'] <= 180, data['lon'] - 360)
+        data['h'] = data['h'].where(data['h'].notna(), other=0)
 
-        for df in dfs:
-            # this evades errors due to missing column names
-            df = df.reindex(df.columns.union(self.data.columns, sort=False),
-                            axis=1)
-            # drop rows not containing basic information
-            df.dropna(subset=['lat', 'lon', 't'], how='any', inplace=True)
-            # check latitude and longitude
-            llcond = (
-                (abs(df['lat']) > 90)
-                | ((df['lon'] > 360) | (df['lon'] < -180))
-            )
-            llind = df.where(llcond).dropna(how='all').index
-            if llind.size != 0:
-                raise Exception(f"Records with indices {llind.values} contain "
-                                f"latitude or longitude out of range. \n"
-                                f"Change before proceeding!")
-            df['lon'] = df['lon'].where(df['lon'] <= 180, df['lon'] - 360)
-            df['h'] = df['h'].where(df['h'].notna(), other=0)
+        # indicate geodetic (0) or geocentric (1)
+        data['geoc'] = data['geoc'].where(data['geoc'].notna(), other=0)
+        data['geoc_colat'] = 90. - data['lat']
+        data['geoc_rad'] = 6371.2 + data['h'] * 1e-3
+        data['cd'] = 1.
+        data['sd'] = 0.
+        # apply geocentric correction
+        temp, rad, cd, sd = latrad_in_geoc(
+            np.radians(data['lat'].to_numpy()),
+            data['h'].to_numpy().astype('float'))
+        colat = 90 - np.degrees(temp)
+        # only replace geodetic values
+        gd_cond = data['geoc'] != 0
+        data['geoc_colat'] = data['geoc_colat'].where(gd_cond, other=colat)
+        data['geoc_rad'] = data['geoc_rad'].where(gd_cond, other=rad)
+        data['cd'] = data['cd'].where(gd_cond, other=cd)
+        data['sd'] = data['sd'].where(gd_cond, other=sd)
 
-            # indicate geodetic (0) or geocentric (1)
-            df['geoc'] = df['geoc'].where(df['geoc'].notna(), other=0)
-            df['geoc_colat'] = 90. - df['lat']
-            df['geoc_rad'] = 6371.2 + df['h'] * 1e-3
-            df['cd'] = 1.
-            df['sd'] = 0.
-            # apply geocentric correction
-            temp, rad, cd, sd = latrad_in_geoc(
-                np.radians(df['lat'].to_numpy()),
-                df['h'].to_numpy().astype('float'))
-            colat = 90 - np.degrees(temp)
-            # only replace geodetic values
-            gd_cond = df['geoc'] != 0
-            df['geoc_colat'] = df['geoc_colat'].where(gd_cond, other=colat)
-            df['geoc_rad'] = df['geoc_rad'].where(gd_cond, other=rad)
-            df['cd'] = df['cd'].where(gd_cond, other=cd)
-            df['sd'] = df['sd'].where(gd_cond, other=sd)
+        return data
 
-            # add dataframe to big dataframe
-            # XXX: This gives a warning with new pandas version, as the initial
-            # dataframe is empty.
-            self.data = pd.concat([self.data, df[self.data.columns]],
-                                  ignore_index=True)
-
-            self.compiled = False
-
-    def compile_data(self,
-                     verbose: bool = False
-                     ) -> None:
+    def compile_data(self) -> None:
         """ Compiles data ready for quick use in geomagnetic field inversions
 
         Parameters
@@ -132,28 +113,31 @@ class InputData(object):
         """
         self.compiled = False
         # obtain index lists pointing to data quickly
-        data = self.data
-        data.reset_index(inplace=True)
+        self.data.reset_index(inplace=True)
         # for quick access to stations
-        uniq_loc, indices = np.unique(data[['geoc_colat', 'lon', 'geoc_rad',
-                                            'cd', 'sd'
-                                            ]].to_numpy().astype('float'),
-                                      return_inverse=True, axis=0)
+        uniq_loc, indices = np.unique(
+            self.data[['geoc_colat', 'lon', 'geoc_rad',
+                       'cd', 'sd']].to_numpy().astype('float'),
+            return_inverse=True,
+            axis=0,
+        )
         # check geodetic/geocentric discrepancies
-        uniq_loc_check = np.unique(data[['lat', 'lon', 'h']
-                                        ].to_numpy().astype('float'), axis=0)
+        uniq_loc_check = np.unique(
+            self.data[['lat', 'lon', 'h']].to_numpy().astype('float'),
+            axis=0,
+        )
         if not (len(uniq_loc) == len(uniq_loc_check)):
             raise Exception('Location has both geocentric and geodetic data!')
 
         # DataFrame indices for D, I and F records
         self.n_inp = len(uniq_loc)
-        self.idx_X = data.query('X==X').index
-        self.idx_Y = data.query('Y==Y').index
-        self.idx_Z = data.query('Z==Z').index
-        self.idx_H = data.query('H==H').index
-        self.idx_F = data.query('F==F').index
-        self.idx_I = data.query('I==I').index
-        self.idx_D = data.query('D==D').index
+        self.idx_X = self.data.query('X==X').index
+        self.idx_Y = self.data.query('Y==Y').index
+        self.idx_Z = self.data.query('Z==Z').index
+        self.idx_H = self.data.query('H==H').index
+        self.idx_F = self.data.query('F==F').index
+        self.idx_I = self.data.query('I==I').index
+        self.idx_D = self.data.query('D==D').index
         self.idx_out = np.concatenate((self.idx_X, self.idx_Y, self.idx_Z,
                                        self.idx_H, self.idx_F, self.idx_I,
                                        self.idx_D)).flatten()
@@ -176,28 +160,25 @@ class InputData(object):
         # get same order as outputs
         self.loc = uniq_loc
         self.loc_idx = indices[self.idx_out]
-        self.time = data['t'].loc[self.idx_out].to_numpy()
+        self.time = self.data['t'].loc[self.idx_out].to_numpy()
         # vector of data
-        self.outputs = np.concatenate((data['X'].loc[self.idx_X],
-                                       data['Y'].loc[self.idx_Y],
-                                       data['Z'].loc[self.idx_Z],
-                                       data['H'].loc[self.idx_H],
-                                       data['F'].loc[self.idx_F],
-                                       data['I'].loc[self.idx_I],
-                                       data['D'].loc[self.idx_D])
+        self.outputs = np.concatenate((self.data['X'].loc[self.idx_X],
+                                       self.data['Y'].loc[self.idx_Y],
+                                       self.data['Z'].loc[self.idx_Z],
+                                       self.data['H'].loc[self.idx_H],
+                                       self.data['F'].loc[self.idx_F],
+                                       self.data['I'].loc[self.idx_I],
+                                       self.data['D'].loc[self.idx_D])
                                       ).astype(float)
         # vector of errors
-        self.std_out = np.concatenate((data['dX'].loc[self.idx_X],
-                                       data['dY'].loc[self.idx_Y],
-                                       data['dZ'].loc[self.idx_Z],
-                                       data['dH'].loc[self.idx_H],
-                                       data['dF'].loc[self.idx_F],
-                                       data['dI'].loc[self.idx_I],
-                                       data['dD'].loc[self.idx_D])
+        self.std_out = np.concatenate((self.data['dX'].loc[self.idx_X],
+                                       self.data['dY'].loc[self.idx_Y],
+                                       self.data['dZ'].loc[self.idx_Z],
+                                       self.data['dH'].loc[self.idx_H],
+                                       self.data['dF'].loc[self.idx_F],
+                                       self.data['dI'].loc[self.idx_I],
+                                       self.data['dD'].loc[self.idx_D])
                                       ).astype(float)
-        self.compiled = True
-        if verbose:
-            print(self)
 
     def __repr__(self):
         if self.n_out:
