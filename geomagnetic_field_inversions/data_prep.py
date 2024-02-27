@@ -50,10 +50,6 @@ class InputData(object):
 
     def read_data(self,
                   dfs: Union[list, pd.DataFrame],
-                  drop_duplicates: bool = False,
-                  x_err=10., y_err=10., z_err=10.,  # TODO: These values are
-                  h_err=10., f_err=10., a95=10.,    # too large.
-                  force_error_d: float = None
                   ) -> None:
         """ Reads Pandas DataFrame(s) and stores in class
 
@@ -69,17 +65,9 @@ class InputData(object):
              'dD'/'dI'/'dF' (dec/inc/int error),
              'alpha95' (a95 error for both dec and inc error)
              'geoc' (only set to 1 if data is obtained in geocentric dataframe)
-        drop_duplicates
-            if True, drop duplicates with same lat, lon, time, and radius
-        x_err, y_err, z_err, h_err, f_err
-            default errors (10) if no error is found in DataFrame
-        force_error_d
-            If None, removes data with dec data, but no dec error & inc data
-            If float is set, will set dec error to that float
 
         Method updates data
         """
-        default_error = [x_err, y_err, z_err, h_err, f_err]
         # check for list -> enables processing multiple DataFrames
         if not isinstance(dfs, list):
             dfs = [dfs]
@@ -120,13 +108,6 @@ class InputData(object):
             df['geoc_rad'] = df['geoc_rad'].where(gd_cond, other=rad)
             df['cd'] = df['cd'].where(gd_cond, other=cd)
             df['sd'] = df['sd'].where(gd_cond, other=sd)
-
-            # change zero error values to default if no data
-            for i, dstr in enumerate(['X', 'Y', 'Z', 'H', 'F']):
-                df[f'd{dstr}'] = df[f'd{dstr}'].where(
-                    df[dstr].isna() ^ df[f'd{dstr}'].notna(),
-                    other=default_error[i],
-                )
 
             # add dataframe to big dataframe
             # XXX: This gives a warning with new pandas version, as the initial
