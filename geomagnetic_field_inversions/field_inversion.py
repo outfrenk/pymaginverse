@@ -543,3 +543,23 @@ class FieldInversion(object):
                         file_name=f'{spatial_df:.2e}s+{temporal_df:.2e}t',
                         basedir=basedir, save_iterations=False,
                         save_residual=True, save_dampnorm=True)
+
+    def save_to_fortran_format(self, path: Union[str, Path]) -> None:
+        with open(path, 'w') as fh:
+            fh.write(
+                f'{self.t_min:.1f}  {self.t_max:.1f}  '
+                f'{self._SPL_DEGREE + 1:d}\n'
+            )
+
+            fh.write(
+                f'          {self.maxdegree:d}           0         '
+                f'{self.nr_splines}\n'
+            )
+            for knot in self.knots:
+                fh.write(f'{knot:0<17f}      ')
+            fh.write('\n')
+            for coeff in self.splined_gh.flatten():
+                if 1e-1 <= coeff and coeff <= 1e5:
+                    fh.write(f'{coeff:0<17f}      ')
+                else:
+                    fh.write(f'{coeff:.15E}      ')
