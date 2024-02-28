@@ -150,9 +150,8 @@ class FieldInversion(object):
         self.matrix_ready
             indicates whether all matrices have been formed (boolean)
         """
-        if not d_inst.compiled:
-            print('Compiling data now with default options')
-            d_inst.compile_data()
+        if self.verbose:
+            print(d_inst)
         # order datatypes in a more straightforward way
         # line of types_sorted corresponds to index
         self.idx_out = d_inst.idx_out

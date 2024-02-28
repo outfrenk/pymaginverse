@@ -33,9 +33,8 @@ raw_data.loc[:, 'dD'] /= 10
 raw_data.loc[:, 'I'] /= 10
 raw_data.loc[:, 'dI'] /= 10
 
-iData = InputData()
-iData.read_data(raw_data)
-iData.compile_data(drop_duplicates=False)
+iData = InputData(raw_data)
+iData.compile_data()
 
 
 class Test_inversion(unittest.TestCase):
