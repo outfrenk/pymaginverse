@@ -30,7 +30,7 @@ class FieldInversion(object):
                  t_min: float, t_max: float, t_step: float,
                  maxdegree: int = 3,
                  r_model: float = 6371.2,
-                 verbose: bool = False
+                 verbose: bool = False,
                  ) -> None:
         """
         Initializes the Field Inversion class
@@ -563,3 +563,31 @@ class FieldInversion(object):
                     fh.write(f'{coeff:0<17f}      ')
                 else:
                     fh.write(f'{coeff:.15E}      ')
+
+    # XXX I'm not sure how to do the type hinting in this case...
+    def result_to_pymagglobal(self, name: str) -> 'pymagglobal.Model':
+        try:
+            from pymagglobal import Model
+
+            class InvModel(Model):
+                def __init__(_self):
+                    _self.name = name
+                    _self.t_min = self.t_min
+                    _self.t_max = self.t_max
+                    _self.l_max = self.maxdegree
+                    _self.knots = self.knots
+                    _self.coeffs = self.splined_gh
+                    _self.splines = BSpline(
+                        _self.knots,
+                        _self.coeffs,
+                        3,
+                    )
+                    _self.cov_splines = None
+
+            return InvModel()
+
+        except ImportError:
+            raise ImportError(
+                'pymagglobal could not be found, please install to transform '
+                'the inversion result to a pymagglobal model.'
+            )
