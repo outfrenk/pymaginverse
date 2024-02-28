@@ -44,10 +44,9 @@ setuptools.setup(
         'pandas',
         'pathlib',
         'tqdm',
-        'pyshtools',
+        'pyshtools==4.10.4',
         'cartopy',
         'numba',
-        'openpyxl',
         'pytest'
     ],
     # TODO: Update license
