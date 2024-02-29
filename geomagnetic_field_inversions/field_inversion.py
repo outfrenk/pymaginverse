@@ -545,6 +545,16 @@ class FieldInversion(object):
                         save_residual=True, save_dampnorm=True)
 
     def save_to_fortran_format(self, path: Union[str, Path]) -> None:
+        """ Saves the final iteration inversion result as a file in the same
+        format as the Fortran code. A file format description is given  `here
+        <https://sec23.git-pages.gfz-potsdam.de/korte/pymagglobal/
+        overview.html#file-format-description>`_.
+
+        Paramters
+        ---------
+        path
+            The path where the output will be saved.
+        """
         with open(path, 'w') as fh:
             fh.write(
                 f'{self.t_min:.1f}  {self.t_max:.1f}  '
@@ -566,6 +576,25 @@ class FieldInversion(object):
 
     # XXX I'm not sure how to do the type hinting in this case...
     def result_to_pymagglobal(self, name: str) -> 'pymagglobal.Model':
+        """ Returns the output as a [pymagglobal]_ Model instance.
+
+        Parameters
+        ----------
+        name
+            The model name, used internally by pymagglobal.
+
+        Returns
+        -------
+            The final iteration inversion result, wrapped as a pymagglobal
+            model.
+
+        References
+        ----------
+        .. [pymagglobal] : Schanner, M. A.; Mauerberger, S.; Korte, M.
+            "`pymagglobal - Python interface for global geomagnetic field
+            models.<https://sec23.git-pages.gfz-potsdam.de/korte/
+            pymagglobal/>`_", GFZ Data Services, 2020
+        """
         try:
             from pymagglobal import Model
 
