@@ -18,12 +18,12 @@ class InputData(object):
             lat : the record latitude
             lon : the record longitude
             h : the height of the records location above the reference
-            ellipsoid
+                ellipsoid
             geoc : 1 or 0, indicating whether the above coords are given in a
-            geocentric reference frame
+                geocentric reference frame
             t : the record date as a calendar year
             dt : error in the record date in calendar years
-            and at least one of the following
+            and at least one of the following columns
             X and dX : value and error of the magnetic field X-component
             Y and dY : value and error of the magnetic field Y-component
             Z and dZ : value and error of the magnetic field Z-component
@@ -121,7 +121,6 @@ class InputData(object):
         data['sd'] = data['sd'].where(gd_cond, other=sd)
 
         return data
-
 
     def compile_data(self) -> None:
         """ Compiles data ready for quick use in geomagnetic field inversions

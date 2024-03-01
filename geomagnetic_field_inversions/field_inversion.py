@@ -30,7 +30,7 @@ class FieldInversion(object):
                  t_min: float, t_max: float, t_step: float,
                  maxdegree: int = 3,
                  r_model: float = 6371.2,
-                 verbose: bool = False
+                 verbose: bool = False,
                  ) -> None:
         """
         Initializes the Field Inversion class
@@ -543,3 +543,80 @@ class FieldInversion(object):
                         file_name=f'{spatial_df:.2e}s+{temporal_df:.2e}t',
                         basedir=basedir, save_iterations=False,
                         save_residual=True, save_dampnorm=True)
+
+    def save_to_fortran_format(self, path: Union[str, Path]) -> None:
+        """ Saves the final iteration inversion result as a file in the same
+        format as the Fortran code. A file format description is given  `here
+        <https://sec23.git-pages.gfz-potsdam.de/korte/pymagglobal/
+        overview.html#file-format-description>`_.
+
+        Paramters
+        ---------
+        path
+            The path where the output will be saved.
+        """
+        with open(path, 'w') as fh:
+            fh.write(
+                f'{self.t_min:.1f}  {self.t_max:.1f}  '
+                f'{self._SPL_DEGREE + 1:d}\n'
+            )
+
+            fh.write(
+                f'          {self.maxdegree:d}           0         '
+                f'{self.nr_splines}\n'
+            )
+            for knot in self.knots:
+                fh.write(f'{knot:0<17f}      ')
+            fh.write('\n')
+            for coeff in self.splined_gh.flatten():
+                if 1e-1 <= coeff and coeff <= 1e5:
+                    fh.write(f'{coeff:0<17f}      ')
+                else:
+                    fh.write(f'{coeff:.15E}      ')
+
+    # XXX I'm not sure how to do the type hinting in this case...
+    def result_to_pymagglobal(self, name: str) -> 'pymagglobal.Model':
+        """ Returns the output as a [pymagglobal]_ Model instance.
+
+        Parameters
+        ----------
+        name
+            The model name, used internally by pymagglobal.
+
+        Returns
+        -------
+            The final iteration inversion result, wrapped as a pymagglobal
+            model.
+
+        References
+        ----------
+        .. [pymagglobal] : Schanner, M. A.; Mauerberger, S.; Korte, M.
+            "`pymagglobal - Python interface for global geomagnetic field
+            models.<https://sec23.git-pages.gfz-potsdam.de/korte/
+            pymagglobal/>`_", GFZ Data Services, 2020
+        """
+        try:
+            from pymagglobal import Model
+
+            class InvModel(Model):
+                def __init__(_self):
+                    _self.name = name
+                    _self.t_min = self.t_min
+                    _self.t_max = self.t_max
+                    _self.l_max = self.maxdegree
+                    _self.knots = self.knots
+                    _self.coeffs = self.splined_gh
+                    _self.splines = BSpline(
+                        _self.knots,
+                        _self.coeffs,
+                        3,
+                    )
+                    _self.cov_splines = None
+
+            return InvModel()
+
+        except ImportError:
+            raise ImportError(
+                'pymagglobal could not be found, please install to transform '
+                'the inversion result to a pymagglobal model.'
+            )
