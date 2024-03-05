@@ -17,6 +17,8 @@ from geomagnetic_field_inversions.damping_modules import damp_matrix, damp_norm
 from geomagnetic_field_inversions.tools import frechet_in_geoc
 from geomagnetic_field_inversions.banded_tools.build_banded import \
     build_banded_2
+from geomagnetic_field_inversions.banded_tools.calc_nonzero import \
+    calc_nonzero
 from geomagnetic_field_inversions.banded_tools.utils import banded_mul_vec
 
 
@@ -197,25 +199,10 @@ class FieldInversion(object):
         # XXX Maybe it is possible to facilitate the banded structure of
         # temporal directly
         self.temporal = np.ascontiguousarray(temporal.toarray())
-
         # Calculate indices for loop speedup.
-        # I guess there's a more clever way to get these indices...
-        def nonzero(it, jt):
-            return np.argwhere(
-                (self.temporal[it] * self.temporal[jt]) != 0
-            ).flatten()
-
-        ind_arr = np.empty((self.nr_splines, self.nr_splines), dtype=object)
-        starts = [0]
-        ind_list = []
-        for it in range(self.nr_splines):
-            for jt in range(self.nr_splines):
-                ind_arr[it, jt] = nonzero(it, jt)
-                starts.append(len(nonzero(it, jt)) + starts[-1])
-                ind_list += list(nonzero(it, jt))
-
-        self.starts = np.array(starts, dtype=int)
-        self.ind_list = np.array(ind_list, dtype=int)
+        starts, ind_list = calc_nonzero(self.temporal)
+        self.starts = np.ascontiguousarray(np.cumsum(starts), dtype=int)
+        self.ind_list = np.ascontiguousarray(ind_list, dtype=int)
 
         # Prepare damping matrices
         if spat_type is not None:

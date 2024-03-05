@@ -14,13 +14,26 @@ os.environ['CC'] = 'clang'
 os.environ['CXX'] = 'clang++'
 os.environ['LDSHARED'] = 'clang -shared'
 
+
 ext_modules = [
     setuptools.Extension(
         "geomagnetic_field_inversions.banded_tools.build_banded",
-        ["geomagnetic_field_inversions/banded_tools/build_banded.pyx"],
+        [
+            "geomagnetic_field_inversions/banded_tools/build_banded.pyx",
+        ],
         include_dirs=[np.get_include()],
         extra_compile_args=['-O3', '-mavx', '-fopenmp', '-ffast-math'],
         extra_link_args=['-fopenmp'],
+    ),
+    setuptools.Extension(
+        "geomagnetic_field_inversions.banded_tools.calc_nonzero",
+        [
+            "geomagnetic_field_inversions/banded_tools/calc_nonzero.pyx",
+        ],
+        include_dirs=[np.get_include()],
+        extra_compile_args=['-O3', '-mavx', '-fopenmp', '-ffast-math'],
+        extra_link_args=['-fopenmp'],
+        language="c++",
     )
 ]
 
