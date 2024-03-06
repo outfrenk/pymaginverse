@@ -16,7 +16,7 @@ from geomagnetic_field_inversions.forward_modules.fwtools import \
 from geomagnetic_field_inversions.damping_modules import damp_matrix, damp_norm
 from geomagnetic_field_inversions.tools import frechet_in_geoc
 from geomagnetic_field_inversions.banded_tools.build_banded import \
-    build_banded_2
+    build_banded_2, build_banded_3
 from geomagnetic_field_inversions.banded_tools.calc_nonzero import \
     calc_nonzero
 from geomagnetic_field_inversions.banded_tools.utils import banded_mul_vec
@@ -101,6 +101,7 @@ class FieldInversion(object):
         self.temp_fac = np.zeros(self._nm_total)
         self.matrix_ready = False
 
+    # @profile
     def prepare_inversion(self,
                           d_inst,
                           spat_type: str = None,
@@ -199,7 +200,17 @@ class FieldInversion(object):
         # XXX Maybe it is possible to facilitate the banded structure of
         # temporal directly
         self.temporal = np.ascontiguousarray(temporal.toarray())
+
         # Calculate indices for loop speedup.
+        def get_nleft(knots, time):
+            return np.max(
+                np.argwhere(knots <= time).flatten()
+            )
+
+        # self.nlefts = np.empty(self.time.size, dtype=int)
+        # for it, time in enumerate(self.time):
+        #     self.nlefts[it] = get_nleft(self.knots, time)
+
         starts, ind_list = calc_nonzero(self.temporal)
         self.starts = np.ascontiguousarray(np.cumsum(starts), dtype=int)
         self.ind_list = np.ascontiguousarray(ind_list, dtype=int)
@@ -225,6 +236,7 @@ class FieldInversion(object):
         if self.verbose:
             print('Calculations finished')
 
+    # @profile
     def run_inversion(self,
                       x0: np.ndarray,
                       spat_damp: float,
@@ -309,8 +321,6 @@ class FieldInversion(object):
         for it in range(self._SPL_DEGREE + 1):
             C_m_inv[it * self._nm_total] = d_matrix[it].copy()
 
-        # =====================================================================
-
         for it in range(max_iter+1):  # start outer iteration loop
             if self.verbose:
                 print(f'Start calculations iteration {it}')
@@ -380,7 +390,6 @@ class FieldInversion(object):
             ).T
             # include the C_e^{-1/2} factor
             frech_matrix /= self.std[None, :]
-            # efficiently set up normal equations using Cython code
             banded = build_banded_2(
                 np.ascontiguousarray(frech_matrix),
                 self.temporal,
@@ -388,6 +397,13 @@ class FieldInversion(object):
                 self.ind_list,
                 self.starts,
             )
+            # efficiently set up normal equations using Cython code
+            # banded = build_banded_3(
+            #     self.nlefts,
+            #     np.ascontiguousarray(frech_matrix),
+            #     self.temporal,
+            #     self._SPL_DEGREE,
+            # )
             # add damping to normal equations
             banded[banded.shape[0]-C_m_inv.shape[0]:] += C_m_inv
             # calculate cholesky
