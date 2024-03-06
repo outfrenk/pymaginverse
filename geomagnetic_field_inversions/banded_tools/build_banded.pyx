@@ -45,20 +45,19 @@ def build_banded_2(
     double[:, ::1] base_DIF,
     double[:, ::1] temporal,
     int p,
-    long long[::1] nonzero_inds,
-    long long[::1] starts,
+    long[::1] nonzero_inds,
+    long[::1] starts,
 ):
     # Calculate the normal equations matrix by using the precalculated
     # nonzero indices to speed up the loops below
     cdef int n_t = temporal.shape[0]
     cdef int n_coeffs = base_DIF.shape[0]
     cdef int bandw = (p + 1) * n_coeffs + 1
-    cdef int n_data = base_DIF.shape[1]
     cdef double[:, :] banded = np.zeros((bandw, n_t*n_coeffs))
     cdef int k, it_t, it_s, jt_t, jt_s, it, jt, kt, ind
 
     for it in prange(bandw, nogil=True):
-        k = bandw-1-it
+        k = bandw-it-1
         for jt in range(n_t*n_coeffs-it):
             it_t = (it + jt) // n_coeffs
             jt_t = jt // n_coeffs
@@ -77,5 +76,39 @@ def build_banded_2(
                     * temporal[jt_t, nonzero_inds[kt]]
                     * base_DIF[jt_s, nonzero_inds[kt]]
                 )
+
+    return banded
+
+
+@cdivision(True)
+def build_banded_3(
+    long[::1] nlefts,
+    double[:, ::1] base_DIF,
+    double[:, ::1] temporal,
+    int deg,
+):
+    cdef int n_t = temporal.shape[0]
+    cdef int n_coeffs = base_DIF.shape[0]
+    cdef int n_data = base_DIF.shape[1]
+    cdef int bandw = (deg + 1) * n_coeffs
+    cdef double[:, :] banded = np.zeros((bandw, n_t*n_coeffs))
+
+    cdef int it, p, q, i, j, ind
+    for it in range(n_data):
+        for p in range(nlefts[it]-deg, nlefts[it]+1):
+            if n_t <= p:
+                continue
+            for q in range(p, nlefts[it]+1):
+                if n_t <= q:
+                    continue
+                for j in range(n_coeffs):
+                    for i in range(n_coeffs):
+                        ind = n_coeffs * (4 + p - q) + j - i - 1
+                        banded[ind, i + q * n_coeffs] += (
+                            temporal[p, it] *
+                            temporal[q, it] *
+                            base_DIF[i, it] *
+                            base_DIF[j, it]
+                        )
 
     return banded
