@@ -16,7 +16,7 @@ from geomagnetic_field_inversions.forward_modules.fwtools import \
 from geomagnetic_field_inversions.damping_modules import damp_matrix, damp_norm
 from geomagnetic_field_inversions.tools import frechet_in_geoc
 from geomagnetic_field_inversions.banded_tools.build_banded import \
-    build_banded_2, build_banded_3
+    build_banded_2, build_banded_3, build_banded_2_direct
 from geomagnetic_field_inversions.banded_tools.calc_nonzero import \
     calc_nonzero
 from geomagnetic_field_inversions.banded_tools.utils import banded_mul_vec
@@ -198,8 +198,23 @@ class FieldInversion(object):
             self._SPL_DEGREE,
         )
         lookup_list = []
+        # lookup_starts = np.zeros(
+        #     self.nr_splines + 1,
+        #     dtype=np.int32,
+        # )
         for it in range(self.nr_splines):
-            lookup_list.append(temporal[:, [it]].nonzero()[0])
+            idxs = temporal[:, [it]].nonzero()[0]
+            lookup_list.append(idxs)
+            # lookup_starts[it + 1] = len(idxs)
+
+        # self.lookup_list = np.ascontiguousarray(
+        #     np.hstack(lookup_list),
+        #     dtype=np.int32,
+        # )
+        # self.lookup_starts = np.ascontiguousarray(
+        #     np.cumsum(lookup_starts),
+        #     dtype=np.int32,
+        # )
 
         # XXX Maybe it is possible to facilitate the banded structure of
         # temporal directly
