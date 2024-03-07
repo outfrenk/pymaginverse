@@ -196,24 +196,45 @@ class FieldInversion(object):
             d_inst.time,
             self.knots,
             self._SPL_DEGREE,
-        ).T
+        )
+        lookup_list = []
+        for it in range(self.nr_splines):
+            lookup_list.append(temporal[:, [it]].nonzero()[0])
+
         # XXX Maybe it is possible to facilitate the banded structure of
         # temporal directly
-        self.temporal = np.ascontiguousarray(temporal.toarray())
+        self.temporal = np.ascontiguousarray(temporal.T.toarray())
 
         # Calculate indices for loop speedup.
-        def get_nleft(knots, time):
-            return np.max(
-                np.argwhere(knots <= time).flatten()
-            )
+        # def get_nleft(knots, time):
+        #     return np.max(
+        #         np.argwhere(knots <= time).flatten()
+        #     )
 
-        # self.nlefts = np.empty(self.time.size, dtype=int)
+        # self.nlefts = np.zeros(self.time.size, dtype=int)
         # for it, time in enumerate(self.time):
         #     self.nlefts[it] = get_nleft(self.knots, time)
 
-        starts, ind_list = calc_nonzero(self.temporal)
-        self.starts = np.ascontiguousarray(np.cumsum(starts), dtype=int)
-        self.ind_list = np.ascontiguousarray(ind_list, dtype=int)
+        # starts, ind_list = calc_nonzero(self.temporal)
+        ind_list = [None] * self.nr_splines * self.nr_splines
+        starts = np.zeros(self.nr_splines * self.nr_splines + 1, dtype=int)
+        starts[0] = 0
+        for it in range(self.nr_splines):
+            inds = np.intersect1d(lookup_list[it], lookup_list[it])
+            ind_list[it * self.nr_splines + it] = inds
+            starts[it * self.nr_splines + it + 1] = len(inds)
+            for jt in range(it+1, self.nr_splines):
+                inds = np.intersect1d(lookup_list[it], lookup_list[jt])
+                idx_1 = it * self.nr_splines + jt
+                idx_2 = jt * self.nr_splines + it
+                ind_list[idx_1] = inds
+                ind_list[idx_2] = inds
+                starts[idx_1 + 1] = len(inds)
+                starts[idx_2 + 1] = len(inds)
+
+        ind_list = np.hstack(ind_list)
+        self.starts = np.ascontiguousarray(np.cumsum(starts), dtype=np.int32)
+        self.ind_list = np.ascontiguousarray(ind_list, dtype=np.int32)
 
         # Prepare damping matrices
         if spat_type is not None:
