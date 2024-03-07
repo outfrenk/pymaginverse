@@ -12,7 +12,7 @@ import numpy as np
 
 os.environ['CC'] = 'clang'
 os.environ['CXX'] = 'clang++'
-os.environ['LDSHARED'] = 'clang -shared'
+# os.environ['LDSHARED'] = 'clang -shared'
 
 
 ext_modules = [
@@ -22,7 +22,13 @@ ext_modules = [
             "geomagnetic_field_inversions/banded_tools/build_banded.pyx",
         ],
         include_dirs=[np.get_include()],
-        extra_compile_args=['-O3', '-mavx', '-fopenmp', '-ffast-math'],
+        extra_compile_args=[
+            '-Ofast',
+            '-mavx',
+            '-fopenmp',
+            '-ffast-math',
+            '-march=native',
+        ],
         extra_link_args=['-fopenmp'],
     ),
     setuptools.Extension(
@@ -31,7 +37,13 @@ ext_modules = [
             "geomagnetic_field_inversions/banded_tools/calc_nonzero.pyx",
         ],
         include_dirs=[np.get_include()],
-        extra_compile_args=['-O3', '-mavx', '-fopenmp', '-ffast-math'],
+        extra_compile_args=[
+            '-Ofast',
+            '-mavx',
+            '-fopenmp',
+            '-ffast-math',
+            '-march=native',
+        ],
         extra_link_args=['-fopenmp'],
         language="c++",
     )
