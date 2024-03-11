@@ -356,9 +356,9 @@ class FieldInversion(object):
 
             res = df / self.std
             for i in range(7):
-                if df[self.idx_res[it]:self.idx_res[it+1]].size > 0:
-                    self.res_iter[it] = np.abs(
-                        df[self.idx_res[it]:self.idx_res[it+1]]
+                if df[self.idx_res[i]:self.idx_res[i+1]].size > 0:
+                    self.res_iter[it, i] = np.abs(
+                        df[self.idx_res[i]:self.idx_res[i+1]]
                     ).mean()
             self.res_iter[it, 7] = np.abs(res).mean()
             if self.verbose:
