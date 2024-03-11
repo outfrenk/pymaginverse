@@ -78,34 +78,31 @@ def uniform(d: int, rbycmb: float) -> float:
 
 
 def energy_diss(d: int, rbycmb: float) -> float:
-    # according to gubbins and bloxham 1985, bloxham 1987:
-    # res = 4*np.pi * (d+1)**2 * (2-d*(d+1)) / ((2*d + 1) * rbycmb**(2*d+4))
-    # to be combined with one spline integral (ddt=1)
-    res = 4*np.pi * (d+1)**2 * d**4 / ((2*d + 1) * rbycmb**(2*d))
+    res = 4 * np.pi * rbycmb**(2*d+4) * (d+1)**2 * d**4 / (2*d + 1)
     return res
 
 
 def powerseries(d: int, rbycmb: float) -> float:
-    res = rbycmb**(2*d + 4) * (d+1)
+    res = 4 * np.pi * rbycmb**(2*d + 4) * (d+1)
     return res
 
 
 def ohmic_heating(d: int, rbycmb: float) -> float:
-    res = rbycmb**(2*d + 3) * 4*np.pi * (d+1) * (2*d + 1) * (2*d + 3) / d
+    res = 4 * np.pi * rbycmb**(2*d + 3) * (d+1) * (2*d + 1) * (2*d + 3) / d
     return res
 
 
 def smooth_core(d: int, rbycmb: float) -> float:
-    res = rbycmb**(2*d + 6) * d * (d+1)**3 / (2*d + 1)
+    res = 4 * np.pi * rbycmb**(2*d + 6) * d * (d+1)**3 / (2*d + 1)
     return res
 
 
 def min_ext_energy(d: int, rbycmb: float) -> float:
-    res = rbycmb**(2*d + 1) * (d+1) / (2*d + 1)
+    res = 4 * np.pi * rbycmb**(2*d + 1) * (d+1) / (2*d + 1)
     return res
 
 
 def min_vel_acc(d: int, rbycmb: float) -> float:
     # XXX 4 pi is missing!
-    res = rbycmb**(2*d + 4) * (d+1)**2 / (2*d + 1)
+    res = 4 * np.pi * rbycmb**(2*d + 4) * (d+1)**2 / (2*d + 1)
     return res
