@@ -210,11 +210,19 @@ class FieldInversion(object):
         starts = np.zeros(self.nr_splines * self.nr_splines + 1, dtype=int)
         starts[0] = 0
         for it in range(self.nr_splines):
-            inds = np.intersect1d(lookup_list[it], lookup_list[it])
-            ind_list[it * self.nr_splines + it] = inds
-            starts[it * self.nr_splines + it + 1] = len(inds)
+            # inds = np.intersect1d(
+            #     lookup_list[it],
+            #     lookup_list[it],
+            #     assume_unique=True,
+            # )
+            ind_list[it * self.nr_splines + it] = lookup_list[it]
+            starts[it * self.nr_splines + it + 1] = len(lookup_list[it])
             for jt in range(it+1, self.nr_splines):
-                inds = np.intersect1d(lookup_list[it], lookup_list[jt])
+                inds = np.intersect1d(
+                    lookup_list[it],
+                    lookup_list[jt],
+                    assume_unique=True,
+                )
                 idx_1 = it * self.nr_splines + jt
                 idx_2 = jt * self.nr_splines + it
                 ind_list[idx_1] = inds
