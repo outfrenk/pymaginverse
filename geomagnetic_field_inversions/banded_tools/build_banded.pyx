@@ -3,46 +3,11 @@
 # python setup.py build_ext --inplace
 
 from cython.parallel import prange
-from cpython.mem cimport PyMem_Malloc, PyMem_Free
-from libc.math cimport abs
 
 import numpy as np
 
 
-def build_banded(double[:, ::1] base_DIF, double[:, ::1] temporal, int p):
-    cdef int n_t = temporal.shape[0]
-    cdef int n_coeffs = base_DIF.shape[0]
-    cdef int bandw = (p + 1) * n_coeffs + 1
-    cdef int n_data = base_DIF.shape[1]
-    cdef double[:, :] banded = np.zeros((bandw, n_t*n_coeffs))
-    cdef int k, it_t, it_s, jt_t, jt_s, it, jt, kt
-
-    for it in prange(bandw, nogil=True):
-        k = bandw-1-it
-        # XXX This is a bit lazy...I guess thinking about this loops
-        # offers the potential for another speed gain.
-        for jt in range(n_t*n_coeffs-it):
-            it_t = (it + jt) // n_coeffs
-            jt_t = jt // n_coeffs
-
-            if p < abs(it_t - jt_t):
-                continue
-
-            it_s = (it + jt) % n_coeffs
-            jt_s = jt % n_coeffs
-
-            for kt in range(n_data):
-                banded[k, it+jt] += (
-                    temporal[it_t, kt]
-                    * base_DIF[it_s, kt]
-                    * temporal[jt_t, kt]
-                    * base_DIF[jt_s, kt]
-                )
-
-    return banded
-
-
-def build_banded_2(
+def build_banded(
     double[:, ::1] base_DIF,
     double[:, ::1] temporal,
     int p,
@@ -78,88 +43,5 @@ def build_banded_2(
                     * temporal[jt_t, nonzero_inds[kt]]
                     * base_DIF[jt_s, nonzero_inds[kt]]
                 )
-
-    return banded
-
-
-def build_banded_2_direct(
-    double[:, ::1] base_DIF,
-    double[:, ::1] temporal,
-    int p,
-    int[::1] lookup_inds,
-    int[::1] lookup_starts,
-):
-    # Calculate the normal equations matrix by using the precalculated
-    # nonzero indices to speed up the loops below
-    cdef int n_t = temporal.shape[0]
-    cdef int n_coeffs = base_DIF.shape[0]
-    cdef int bandw = (p + 1) * n_coeffs + 1
-    cdef double[:, ::1] banded = np.zeros(
-        (bandw, n_t*n_coeffs),
-        dtype=np.float64,
-    )
-    cdef int k, it_t, it_s, jt_t, jt_s, it, jt, kt, lt
-
-    for jt in prange(n_t*n_coeffs, nogil=True):
-        # for jt in range(n_t*n_coeffs-it):
-        for it in range(bandw):
-            if n_t * n_coeffs - it <= jt:
-                continue
-
-            k = bandw-it-1
-            it_t = (it + jt) // n_coeffs
-            jt_t = jt // n_coeffs
-
-            if p < abs(it_t - jt_t):
-                continue
-
-
-            it_s = (it + jt) % n_coeffs
-            jt_s = jt % n_coeffs
-
-            for kt in range(lookup_starts[it_t], lookup_starts[it_t+1]):
-                for lt in range(lookup_starts[jt_t], lookup_starts[jt_t+1]):
-                    if (lookup_inds[kt] - lookup_inds[lt]) == 0:
-                        banded[k, it + jt] += (
-                            temporal[it_t, lookup_inds[kt]]
-                            * base_DIF[it_s, lookup_inds[kt]]
-                            * temporal[jt_t, lookup_inds[kt]]
-                            * base_DIF[jt_s, lookup_inds[kt]]
-                        )
-
-    return banded
-
-
-
-def build_banded_3(
-    long[::1] nlefts,
-    double[:, ::1] base_DIF,
-    double[:, ::1] temporal,
-    int deg,
-):
-    cdef int n_t = temporal.shape[0]
-    cdef int n_coeffs = base_DIF.shape[0]
-    cdef int n_data = base_DIF.shape[1]
-    cdef int bandw = (deg + 1) * n_coeffs
-    cdef double[:, :] banded = np.zeros((bandw, n_t*n_coeffs))
-
-    cdef int it, p, q, i, j, ind
-
-    for it in prange(n_data, nogil=True):
-        for p in range(nlefts[it]-deg, nlefts[it]+1):
-            if n_t <= p:
-                continue
-            for q in range(p, nlefts[it]+1):
-                if n_t <= q:
-                    continue
-                for j in range(n_coeffs):
-                    for i in range(n_coeffs):
-                        ind = n_coeffs * (4 + p - q) + j - i - 1
-                        banded[ind, i + q * n_coeffs] += (
-                            temporal[p, it] *
-                            temporal[q, it] *
-                            base_DIF[i, it] *
-                            base_DIF[j, it]
-                        )
 
     return banded
