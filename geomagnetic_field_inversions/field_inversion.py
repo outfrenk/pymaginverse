@@ -16,9 +16,8 @@ from geomagnetic_field_inversions.forward_modules.fwtools import \
 from geomagnetic_field_inversions.damping_modules import damp_matrix, damp_norm
 from geomagnetic_field_inversions.tools import frechet_in_geoc
 from geomagnetic_field_inversions.banded_tools.build_banded import \
-    build_banded_2, build_banded_3, build_banded_2_direct
-from geomagnetic_field_inversions.banded_tools.calc_nonzero import \
-    calc_nonzero
+    build_banded
+
 from geomagnetic_field_inversions.banded_tools.utils import banded_mul_vec
 
 
@@ -158,10 +157,10 @@ class FieldInversion(object):
         # order datatypes in a more straightforward way
         # line of types_sorted corresponds to index
         self.idx_out = d_inst.idx_out
-        # self.idx_frech = d_inst.idx_frech
+
         self.idx_res = d_inst.idx_res
         self.time = d_inst.time
-        # XXX why work in radians???
+
         self.data = d_inst.outputs.copy()
         self.data[d_inst.idx_res[5]:] = np.radians(
             d_inst.outputs[d_inst.idx_res[5]:]
@@ -191,46 +190,22 @@ class FieldInversion(object):
         self.station_frechet[:, 2] = dz
 
         self.spatial = self.station_frechet[d_inst.loc_idx]
-        # MAX: station_frechet should be related to spatial
+
         temporal = BSpline.design_matrix(
             d_inst.time,
             self.knots,
             self._SPL_DEGREE,
         )
         lookup_list = []
-        # lookup_starts = np.zeros(
-        #     self.nr_splines + 1,
-        #     dtype=np.int32,
-        # )
         for it in range(self.nr_splines):
             idxs = temporal[:, [it]].nonzero()[0]
             lookup_list.append(idxs)
-            # lookup_starts[it + 1] = len(idxs)
-
-        # self.lookup_list = np.ascontiguousarray(
-        #     np.hstack(lookup_list),
-        #     dtype=np.int32,
-        # )
-        # self.lookup_starts = np.ascontiguousarray(
-        #     np.cumsum(lookup_starts),
-        #     dtype=np.int32,
-        # )
 
         # XXX Maybe it is possible to facilitate the banded structure of
         # temporal directly
         self.temporal = np.ascontiguousarray(temporal.T.toarray())
 
         # Calculate indices for loop speedup.
-        # def get_nleft(knots, time):
-        #     return np.max(
-        #         np.argwhere(knots <= time).flatten()
-        #     )
-
-        # self.nlefts = np.zeros(self.time.size, dtype=int)
-        # for it, time in enumerate(self.time):
-        #     self.nlefts[it] = get_nleft(self.knots, time)
-
-        # starts, ind_list = calc_nonzero(self.temporal)
         ind_list = [None] * self.nr_splines * self.nr_splines
         starts = np.zeros(self.nr_splines * self.nr_splines + 1, dtype=int)
         starts[0] = 0
@@ -426,20 +401,14 @@ class FieldInversion(object):
             ).T
             # include the C_e^{-1/2} factor
             frech_matrix /= self.std[None, :]
-            banded = build_banded_2(
+            # efficiently set up normal equations using Cython code
+            banded = build_banded(
                 np.ascontiguousarray(frech_matrix),
                 self.temporal,
                 self._SPL_DEGREE,
                 self.ind_list,
                 self.starts,
             )
-            # efficiently set up normal equations using Cython code
-            # banded = build_banded_3(
-            #     self.nlefts,
-            #     np.ascontiguousarray(frech_matrix),
-            #     self.temporal,
-            #     self._SPL_DEGREE,
-            # )
             # add damping to normal equations
             banded[banded.shape[0]-C_m_inv.shape[0]:] += C_m_inv
             # calculate cholesky
