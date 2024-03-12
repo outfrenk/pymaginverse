@@ -1,10 +1,10 @@
 # Installation guideline
 
-In order to get the inversion code running, you need to have the Clang and Clang++ compiler and the OpenMP libraries installed. 
+In order to get the inversion code running, you need to have the Clang compiler and the OpenMP libraries installed.
 The easiest way to get a working set up is using the conda dependency manager, e.g. from [here](https://github.com/conda-forge/miniforge).
-Replacing <env-name> with a name of your choice, you can create a conda environment with all dependencies provided using:  
+Replacing <env-name> with a name of your choice, you can create a conda environment with all dependencies provided using:
 ```
-conda create --name <env-name> clang clangxx cython llvm-openmp "python<=3.11"
+conda create --name <env-name> clang cython llvm-openmp "python<=3.11"
 ```
 Then you can run
 ```
