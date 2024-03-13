@@ -307,7 +307,7 @@ class FieldInversion(object):
         if not self.matrix_ready:
             raise Exception('Matrices have not been prepared. '
                             'Please run prepare_inversion first.')
-        d_matrix = spat_damp * self.sdamp_diag + temp_damp * self.tdamp_diag
+        C_m_inv = spat_damp * self.sdamp_diag + temp_damp * self.tdamp_diag
 
         # TODO: check iteration count.
         # XXX: This leads to 2 iterations, even if maxiter = 1
@@ -327,20 +327,6 @@ class FieldInversion(object):
         else:
             raise Exception(f'x0 has incorrect shape: {x0.shape}. \n'
                             f'It should have shape ({self._nm_total},)')
-
-        spacing = self._nm_total * self._SPL_DEGREE
-        # This transforms the d_matrix to the right shape. Actually,
-        # the matrices should already be generated that way in the final
-        # version
-        C_m_inv = np.zeros(
-            (
-                spacing + 1,
-                self.nr_splines * self._nm_total
-            ),
-        )
-
-        for it in range(self._SPL_DEGREE + 1):
-            C_m_inv[it * self._nm_total] = d_matrix[it].copy()
 
         for it in range(max_iter+1):  # start outer iteration loop
             if self.verbose:
