@@ -45,20 +45,28 @@ def damp_matrix(max_degree: int,
         raise Exception(f'Damping type {damp_type} not found. Exiting...')
 
     nm_total = (max_degree + 1) ** 2 - 1
-    matrix_diag = np.zeros((2 * SPL_DEGREE + 1, nr_splines * nm_total))
+    matrix_diag = np.zeros((nm_total * SPL_DEGREE + 1, nr_splines * nm_total))
     damp_diag = dampingtype(max_degree, damp_type, damp_dipole)
+
     # start combining interacting splines
-    for spl1 in range(nr_splines):  # loop through splines with j
-        # loop with spl2 between spl1-spl_degree and spl1+spl_degree
-        for spl2 in range(max(spl1 - SPL_DEGREE, 0),
-                          min(spl1 + SPL_DEGREE + 1, nr_splines)):
+    for it in range(SPL_DEGREE + 1):
+        # k takes care of the correct position in the banded format.
+        k = SPL_DEGREE - it
+        for jt in range(nr_splines - k):
             # integrate cubic B-Splines
-            spl_integral = integrator(spl1, spl2, nr_splines, t_step,
-                                      _Dampdict[damp_type])
+            spl_integral = integrator(
+                jt,
+                jt + k,
+                nr_splines,
+                t_step,
+                _Dampdict[damp_type],
+            )
             # place damping in matrix
-            matrix_diag[spl2 - spl1 + SPL_DEGREE,
-                        spl1 * nm_total:(spl1 + 1) * nm_total
-                        ] = spl_integral * damp_diag
+            matrix_diag[
+                it * nm_total,
+                (jt + k) * nm_total:(jt + k + 1) * nm_total
+            ] = spl_integral * damp_diag
+
     return matrix_diag, damp_diag
 
 
