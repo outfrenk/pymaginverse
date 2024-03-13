@@ -217,7 +217,6 @@ class InputData(object):
 def read_geomagia(fname: Union[str, Path],
                   drop_duplicates: bool = True,
                   default_a95: float = 4.5,
-                  **kw_args,
                   ) -> Optional[InputData]:
     """ Reads geomagia csv-file(s) format
 
