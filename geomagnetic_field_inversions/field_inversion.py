@@ -16,7 +16,8 @@ from geomagnetic_field_inversions.forward_modules.fwtools import \
 from geomagnetic_field_inversions.damping_modules import damp_matrix, damp_norm
 from geomagnetic_field_inversions.tools import frechet_in_geoc
 from geomagnetic_field_inversions.banded_tools.build_banded import \
-    build_banded_2
+    build_banded
+
 from geomagnetic_field_inversions.banded_tools.utils import banded_mul_vec
 
 
@@ -99,6 +100,7 @@ class FieldInversion(object):
         self.temp_fac = np.zeros(self._nm_total)
         self.matrix_ready = False
 
+    # @profile
     def prepare_inversion(self,
                           d_inst,
                           spat_type: str = None,
@@ -155,10 +157,10 @@ class FieldInversion(object):
         # order datatypes in a more straightforward way
         # line of types_sorted corresponds to index
         self.idx_out = d_inst.idx_out
-        # self.idx_frech = d_inst.idx_frech
+
         self.idx_res = d_inst.idx_res
         self.time = d_inst.time
-        # XXX why work in radians???
+
         self.data = d_inst.outputs.copy()
         self.data[d_inst.idx_res[5]:] = np.radians(
             d_inst.outputs[d_inst.idx_res[5]:]
@@ -188,34 +190,49 @@ class FieldInversion(object):
         self.station_frechet[:, 2] = dz
 
         self.spatial = self.station_frechet[d_inst.loc_idx]
-        # MAX: station_frechet should be related to spatial
+
         temporal = BSpline.design_matrix(
             d_inst.time,
             self.knots,
             self._SPL_DEGREE,
-        ).T
+        )
+        lookup_list = []
+        for it in range(self.nr_splines):
+            idxs = temporal[:, [it]].nonzero()[0]
+            lookup_list.append(idxs)
+
         # XXX Maybe it is possible to facilitate the banded structure of
         # temporal directly
-        self.temporal = np.ascontiguousarray(temporal.toarray())
+        self.temporal = np.ascontiguousarray(temporal.T.toarray())
 
         # Calculate indices for loop speedup.
-        # I guess there's a more clever way to get these indices...
-        def nonzero(it, jt):
-            return np.argwhere(
-                (self.temporal[it] * self.temporal[jt]) != 0
-            ).flatten()
-
-        ind_arr = np.empty((self.nr_splines, self.nr_splines), dtype=object)
-        starts = [0]
-        ind_list = []
+        ind_list = [None] * self.nr_splines * self.nr_splines
+        starts = np.zeros(self.nr_splines * self.nr_splines + 1, dtype=int)
+        starts[0] = 0
         for it in range(self.nr_splines):
-            for jt in range(self.nr_splines):
-                ind_arr[it, jt] = nonzero(it, jt)
-                starts.append(len(nonzero(it, jt)) + starts[-1])
-                ind_list += list(nonzero(it, jt))
+            # inds = np.intersect1d(
+            #     lookup_list[it],
+            #     lookup_list[it],
+            #     assume_unique=True,
+            # )
+            ind_list[it * self.nr_splines + it] = lookup_list[it]
+            starts[it * self.nr_splines + it + 1] = len(lookup_list[it])
+            for jt in range(it+1, self.nr_splines):
+                inds = np.intersect1d(
+                    lookup_list[it],
+                    lookup_list[jt],
+                    assume_unique=True,
+                )
+                idx_1 = it * self.nr_splines + jt
+                idx_2 = jt * self.nr_splines + it
+                ind_list[idx_1] = inds
+                ind_list[idx_2] = inds
+                starts[idx_1 + 1] = len(inds)
+                starts[idx_2 + 1] = len(inds)
 
-        self.starts = np.array(starts, dtype=int)
-        self.ind_list = np.array(ind_list, dtype=int)
+        ind_list = np.hstack(ind_list)
+        self.starts = np.ascontiguousarray(np.cumsum(starts), dtype=np.int32)
+        self.ind_list = np.ascontiguousarray(ind_list, dtype=np.int32)
 
         # Prepare damping matrices
         if spat_type is not None:
@@ -238,6 +255,7 @@ class FieldInversion(object):
         if self.verbose:
             print('Calculations finished')
 
+    # @profile
     def run_inversion(self,
                       x0: np.ndarray,
                       spat_damp: float,
@@ -322,8 +340,6 @@ class FieldInversion(object):
         for it in range(self._SPL_DEGREE + 1):
             C_m_inv[it * self._nm_total] = d_matrix[it].copy()
 
-        # =====================================================================
-
         for it in range(max_iter+1):  # start outer iteration loop
             if self.verbose:
                 print(f'Start calculations iteration {it}')
@@ -394,7 +410,7 @@ class FieldInversion(object):
             # include the C_e^{-1/2} factor
             frech_matrix /= self.std[None, :]
             # efficiently set up normal equations using Cython code
-            banded = build_banded_2(
+            banded = build_banded(
                 np.ascontiguousarray(frech_matrix),
                 self.temporal,
                 self._SPL_DEGREE,

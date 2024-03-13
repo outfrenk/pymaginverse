@@ -5,23 +5,30 @@
 # llvm-openmp
 
 import setuptools
-# from setuptools.extension import Extension
+
 import os
 from Cython.Build import cythonize
 import numpy as np
 
 os.environ['CC'] = 'clang'
-os.environ['CXX'] = 'clang++'
-os.environ['LDSHARED'] = 'clang -shared'
+
 
 ext_modules = [
     setuptools.Extension(
         "geomagnetic_field_inversions.banded_tools.build_banded",
-        ["geomagnetic_field_inversions/banded_tools/build_banded.pyx"],
+        [
+            "geomagnetic_field_inversions/banded_tools/build_banded.pyx",
+        ],
         include_dirs=[np.get_include()],
-        extra_compile_args=['-O3', '-mavx', '-fopenmp', '-ffast-math'],
+        extra_compile_args=[
+            '-Ofast',
+            '-mavx',
+            '-fopenmp',
+            '-ffast-math',
+            '-march=native',
+        ],
         extra_link_args=['-fopenmp'],
-    )
+    ),
 ]
 
 
