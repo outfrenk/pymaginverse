@@ -83,8 +83,7 @@ def frechet_in_geoc(dx: np.ndarray,
 def calc_stdev(path: Path,
                degree: int,
                save_covar: bool = False,
-               save_res: bool = False,
-               one_time: bool = False):
+               save_res: bool = False):
     """ Function to calculate and save standard deviation
 
     Parameters
@@ -94,24 +93,18 @@ def calc_stdev(path: Path,
     degree
         degree of the spherical model.
     save_covar
-        boolean indicating whether to save covariance matrix. default is false
+        boolean indicating whether to save covariance matrix. default is False
     save_res
-        boolean indicating whether to save resolution matrix. default is false
-    one_time
-        whether the class for one timestep, FieldInversion_notime, was used or
-        not (FieldInversion)
+        boolean indicating whether to save resolution matrix. default is False
     """
-    if one_time:
-        normal_eq = np.load(path / 'normal_eq.npy')
-    else:
-        normal_eq = scs.load_npz(path / 'forward_matrix.npz')
-        damp = scs.load_npz(path / 'damp_matrix.npz')
-        if save_res:
-            print('Calculating resolution matrix')
-            res_mat = np.linalg.solve((normal_eq+damp).todense(),
-                                      normal_eq.todense())
-            np.save(path / 'resolution_mat', res_mat)
-        normal_eq += damp
+    normal_eq = scs.load_npz(path / 'forward_matrix.npz')
+    damp = scs.load_npz(path / 'damp_matrix.npz')
+    if save_res:
+        print('Calculating resolution matrix')
+        res_mat = np.linalg.solve((normal_eq+damp).todense(),
+                                  normal_eq.todense())
+        np.save(path / 'resolution_mat', res_mat)
+    normal_eq += damp
     print('start inversion')
     covar = np.linalg.inv(normal_eq.todense())
     print('finished inversion, calculating std')
