@@ -295,10 +295,8 @@ class FieldInversion(object):
                             'Please run prepare_inversion first.')
         C_m_inv = spat_damp * self.sdamp_diag + temp_damp * self.tdamp_diag
 
-        # TODO: check iteration count.
-        # XXX: This leads to 2 iterations, even if maxiter = 1
         # initiate array counting residual per type
-        self.res_iter = np.zeros((max_iter+1, 8))
+        self.res_iter = np.zeros((max_iter, 8))
         # initiate splined values with starting model
         if self.verbose:
             print('Setting up starting model')
@@ -314,7 +312,7 @@ class FieldInversion(object):
             raise Exception(f'x0 has incorrect shape: {x0.shape}. \n'
                             f'It should have shape ({self._nr_coeffs},)')
 
-        for it in range(max_iter+1):  # start outer iteration loop
+        for it in range(max_iter):  # start outer iteration loop
             if self.verbose:
                 print(f'Start calculations iteration {it}')
 
@@ -355,13 +353,14 @@ class FieldInversion(object):
                 print('Residual is %.2f' % self.res_iter[it, 7])
 
             # check if final conditions have been met
-            if it > 0:
-                rel_err = abs(self.res_iter[it, 7] - self.res_iter[it-1, 7]
-                              ) / self.res_iter[it-1, 7]
-                if stop_crit >= rel_err or it == max_iter:
-                    if self.verbose:
-                        print(f'Final iteration; relative error = {rel_err}')
-                    break
+            rel_err = (
+                abs(self.res_iter[it, 7] - self.res_iter[it-1, 7])
+                / self.res_iter[it-1, 7]
+            )
+            if stop_crit >= rel_err or it == max_iter:
+                if self.verbose:
+                    print(f'Final iteration; relative error = {rel_err}')
+                break
 
             # solve the equations
             if self.verbose:

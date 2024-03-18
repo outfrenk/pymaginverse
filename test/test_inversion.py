@@ -58,7 +58,7 @@ class Test_inversion(unittest.TestCase):
         x0[0] = -30e3
         fInv.run_inversion(
             x0,
-            max_iter=0,
+            max_iter=1,
             spat_damp=lambda_s,
             temp_damp=lambda_t,
         )
