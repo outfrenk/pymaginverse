@@ -74,7 +74,6 @@ class FieldInversion(object):
         self.std = []
         self.unsplined_iter_gh = []
         self.idx_out = np.zeros(0)
-        self.count_type = np.zeros(7)
         self.sdamp_diag = np.zeros(0)
         self.tdamp_diag = np.zeros(0)
         self.spat_norm = 0
@@ -125,8 +124,6 @@ class FieldInversion(object):
 
         Creates or modifies
         -------------------
-        self.count_type
-            array of length 7 recording the number of different data types
         self.idx_out
             index of data
         self.time
