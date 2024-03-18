@@ -305,7 +305,7 @@ class FieldInversion(object):
         if not self.matrix_ready:
             raise Exception('Matrices have not been prepared. '
                             'Please run prepare_inversion first.')
-        d_matrix = spat_damp * self.sdamp_diag + temp_damp * self.tdamp_diag
+        C_m_inv = spat_damp * self.sdamp_diag + temp_damp * self.tdamp_diag
 
         # TODO: check iteration count.
         # XXX: This leads to 2 iterations, even if maxiter = 1
@@ -326,19 +326,19 @@ class FieldInversion(object):
             raise Exception(f'x0 has incorrect shape: {x0.shape}. \n'
                             f'It should have shape ({self._nm_total},)')
 
-        spacing = self._nm_total * self._SPL_DEGREE
+        # spacing = self._nm_total * self._SPL_DEGREE
         # This transforms the d_matrix to the right shape. Actually,
         # the matrices should already be generated that way in the final
         # version
-        C_m_inv = np.zeros(
-            (
-                spacing + 1,
-                self.nr_splines * self._nm_total
-            ),
-        )
-
-        for it in range(self._SPL_DEGREE + 1):
-            C_m_inv[it * self._nm_total] = d_matrix[it].copy()
+        # C_m_inv = np.zeros(
+        #     (
+        #         spacing + 1,
+        #         self.nr_splines * self._nm_total
+        #     ),
+        # )
+        #
+        # for it in range(self._SPL_DEGREE + 1):
+        #     C_m_inv[it * self._nm_total] = d_matrix[it].copy()
 
         for it in range(max_iter+1):  # start outer iteration loop
             if self.verbose:
@@ -386,7 +386,7 @@ class FieldInversion(object):
                               ) / self.res_iter[it-1, 7]
                 if stop_crit >= rel_err or it == max_iter:
                     if self.verbose:
-                        print(f'Final iteration; relative error = {rel_err}')
+                        print(f'Final iteration; rel. error = {rel_err:.2e}')
                     break
 
             # solve the equations
@@ -446,15 +446,21 @@ class FieldInversion(object):
             print('Calculating optional spatial and temporal norms')
         tsp = self.t_array[-1] - self.t_array[0]
         if spat_damp != 0:
+            self.sum_spat = np.dot(banded_mul_vec(self.sdamp_diag,
+                                                  self.splined_gh.flatten()),
+                              self.splined_gh.flatten()) / tsp
             self.spat_norm = damp_norm(self.spat_fac, self.splined_gh,
-                                       self.spat_type, self.t_step)
+                                       self.knots, self.spat_type)
             if self.verbose:
-                print(f'Spatial damping norm: {np.sum(self.spat_norm) / tsp}')
+                print(f'Spatial damping norm: {self.sum_spat:.2e}')
         if temp_damp != 0:
+            self.sum_temp = np.dot(banded_mul_vec(self.tdamp_diag,
+                                                  self.splined_gh.flatten()),
+                              self.splined_gh.flatten()) / tsp
             self.temp_norm = damp_norm(self.temp_fac, self.splined_gh,
-                                       self.temp_type, self.t_step)
+                                       self.knots, self.temp_type)
             if self.verbose:
-                print(f'Temporal damping norm: {np.sum(self.temp_norm) / tsp}')
+                print(f'Temporal damping norm: {self.sum_temp:.2e}')
 
         if path is not None:
             if self.verbose:
@@ -515,7 +521,9 @@ class FieldInversion(object):
         if save_dampnorm:
             np.savez(basedir / f'{file_name}_damp.npz',
                      spat_norm=self.spat_norm,
+                     sum_spat=self.sum_spat,
                      temp_norm=self.temp_norm,
+                     sum_temp=self.sum_temp,
                      time_array=self.t_array)
 
     def sweep_damping(self,
@@ -566,7 +574,7 @@ class FieldInversion(object):
         <https://sec23.git-pages.gfz-potsdam.de/korte/pymagglobal/
         overview.html#file-format-description>`_.
 
-        Paramters
+        Parameters
         ---------
         path
             The path where the output will be saved.

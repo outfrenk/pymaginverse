@@ -45,18 +45,18 @@ def damp_matrix(max_degree: int,
         raise Exception(f'Damping type {damp_type} not found. Exiting...')
 
     nm_total = (max_degree + 1) ** 2 - 1
-    matrix_diag = np.zeros((2 * SPL_DEGREE + 1, nr_splines * nm_total))
+    spacing = nm_total * SPL_DEGREE
+    matrix_diag = np.zeros((spacing + 1, nr_splines * nm_total))
     damp_diag = dampingtype(max_degree, damp_type, damp_dipole)
     # start combining interacting splines
     for spl1 in range(nr_splines):  # loop through splines with j
         # loop with spl2 between spl1-spl_degree and spl1+spl_degree
-        for spl2 in range(max(spl1 - SPL_DEGREE, 0),
-                          min(spl1 + SPL_DEGREE + 1, nr_splines)):
+        for spl2 in range(max(spl1 - SPL_DEGREE, 0), spl1 + 1):
             # integrate cubic B-Splines
             spl_integral = integrator(spl1, spl2, nr_splines, t_step,
                                       _Dampdict[damp_type])
             # place damping in matrix
-            matrix_diag[spl2 - spl1 + SPL_DEGREE,
+            matrix_diag[(spl2 - spl1 + SPL_DEGREE) * nm_total,
                         spl1 * nm_total:(spl1 + 1) * nm_total
                         ] = spl_integral * damp_diag
     return matrix_diag, damp_diag
@@ -124,8 +124,8 @@ def integrator(spl1: int,
 
 def damp_norm(damp_fac: np.ndarray,
               coeff: np.ndarray,
-              damp_type: str,
-              t_step: float,
+              knots: np.ndarray,
+              damp_type: str
               ) -> np.ndarray:
     """
     Calculates the spatial or temporal damping norm
@@ -135,27 +135,23 @@ def damp_norm(damp_fac: np.ndarray,
     damp_fac
         damping diagonal as produced by damp_types
     coeff
-        splined Gauss coefficients of one time per row
+        all splined Gauss coefficients
+    knots
+        knot array, assumes equal distanced steps
     damp_type
         damping type to be applied (see _Dampdict)
-    t_step
-        dt of timevector
 
     Returns
     -------
     norm
-        contains the spatial or temporal damping norm per TIME INTERVAL
-        NOTE: DOES NOT NORMALIZE!
+        contains the spatial or temporal damping norm per time step
     """
-    ddt = _Dampdict[damp_type]
-    spl = BSpline.basis_element(np.arange(SPL_DEGREE+2) * t_step,
-                                extrapolate=False).derivative(ddt)(
-          np.arange(0, SPL_DEGREE+1) * t_step)
-    norm = np.zeros(len(coeff) - (SPL_DEGREE-1))
-    norm[0] = np.dot(damp_fac, np.matmul(spl[1:], coeff[:3])**2)
-    for t in range(1, len(coeff) - (SPL_DEGREE-1)):  # loop through time
-        # calculate Gauss coefficient according to derivative spline
-        g_spl = np.matmul(spl, coeff[t-1:t+SPL_DEGREE])
-        norm[t] = np.dot(damp_fac, g_spl**2)
+    norm = np.zeros(len(knots) - 2 * SPL_DEGREE)
+    bsp_dt = _Dampdict[damp_type]
+    dt = knots[1] - knots[0]
+    spline = BSpline(t=knots, c=coeff, k=SPL_DEGREE,
+                     axis=0, extrapolate=False).derivative(bsp_dt)
+    for t, time in enumerate(knots[SPL_DEGREE:-SPL_DEGREE]):  # time loop
+        norm[t] = np.dot(damp_fac, spline(time)**2)
 
-    return norm
+    return norm / dt
