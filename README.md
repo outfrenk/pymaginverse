@@ -40,7 +40,7 @@ All tests for this library can be found in the `test`-folder. To run the tests y
 After installation of pytest, you can test the code by typing `pytest`.
 
 ## Accompanying Article
-The Article describing this library can be found at:
+The Article describing this library can be found here:
 
 ## Acknowledgements
 This Library is based on years of geomagnetic code development by:
