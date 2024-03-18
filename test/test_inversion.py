@@ -65,23 +65,6 @@ class Test_inversion(unittest.TestCase):
 
         res_coeffs = fInv.splined_gh
 
-        # for it in range(res_coeffs.shape[1]):
-        #     abserr = np.abs(res_coeffs[:, it] - ref_coeffs[:, it])
-        #     relerr = np.abs(abserr / ref_coeffs[:, it])
-        #     print(it+1, np.max(abserr), np.max(relerr))
-
-        # from matplotlib import pyplot as plt
-        # ind = 1
-        # plt.plot(
-        #     knots[2:-2],
-        #     ref_coeffs[:, ind],
-        # )
-        # plt.plot(
-        #     knots[2:-2],
-        #     res_coeffs[:, ind],
-        # )
-        # plt.show()
-
         self.assertTrue(
             np.allclose(
                 ref_coeffs,
