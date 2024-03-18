@@ -54,7 +54,7 @@ class Test_inversion(unittest.TestCase):
             temp_type="min_acc",
         )
 
-        x0 = np.zeros(fInv._nm_total)
+        x0 = np.zeros(fInv._nr_coeffs)
         x0[0] = -30e3
         fInv.run_inversion(
             x0,

@@ -94,10 +94,10 @@ class FieldInversion(object):
     @maxdegree.setter
     def maxdegree(self, degree: int):
         # determines the maximum number of spherical coefficients
-        self._nm_total = int((degree+1)**2 - 1)
+        self._nr_coeffs = int((degree+1)**2 - 1)
         self._maxdegree = int(degree)
-        self.spat_fac = np.zeros(self._nm_total)  # contains damping factors
-        self.temp_fac = np.zeros(self._nm_total)
+        self.spat_fac = np.zeros(self._nr_coeffs)  # contains damping factors
+        self.temp_fac = np.zeros(self._nr_coeffs)
         self.matrix_ready = False
 
     def prepare_inversion(self,
@@ -316,14 +316,14 @@ class FieldInversion(object):
 
         # TODO: rename stuff
         # These are the coefficients we solve for.
-        self.splined_gh = np.zeros((self.nr_splines, self._nm_total))
+        self.splined_gh = np.zeros((self.nr_splines, self._nr_coeffs))
         self.unsplined_iter_gh = []
-        if x0.ndim == 1 and len(x0) == self._nm_total:
+        if x0.ndim == 1 and len(x0) == self._nr_coeffs:
             self.x0 = x0.copy()
             self.splined_gh[:] = x0
         else:
             raise Exception(f'x0 has incorrect shape: {x0.shape}. \n'
-                            f'It should have shape ({self._nm_total},)')
+                            f'It should have shape ({self._nr_coeffs},)')
 
         for it in range(max_iter+1):  # start outer iteration loop
             if self.verbose:
@@ -419,7 +419,7 @@ class FieldInversion(object):
             # solve using cholesky and update solution
             self.splined_gh += cho_solve_banded((chol, False), rhs).reshape(
                 self.nr_splines,
-                self._nm_total,
+                self._nr_coeffs,
             )
             # store iteration results as BSpline objects
             spline = BSpline(t=self.knots, c=self.splined_gh.copy(),
@@ -488,7 +488,7 @@ class FieldInversion(object):
                 (
                     len(self.unsplined_iter_gh),
                     len(self.t_array),
-                    self._nm_total
+                    self._nr_coeffs
                 )
             )
             for i in range(len(self.unsplined_iter_gh)):
