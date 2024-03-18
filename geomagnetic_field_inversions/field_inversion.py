@@ -196,19 +196,12 @@ class FieldInversion(object):
             idxs = temporal[:, [it]].nonzero()[0]
             lookup_list.append(idxs)
 
-        # XXX Maybe it is possible to facilitate the banded structure of
-        # temporal directly
         self.temporal = temporal.T.toarray(order='C')
         # Calculate indices for loop speedup.
         ind_list = [[]] * self.nr_splines * self.nr_splines
         starts = np.zeros(self.nr_splines * self.nr_splines + 1, dtype=int)
         starts[0] = 0
         for it in range(self.nr_splines):
-            # inds = np.intersect1d(
-            #     lookup_list[it],
-            #     lookup_list[it],
-            #     assume_unique=True,
-            # )
             ind_list[it * self.nr_splines + it] = lookup_list[it]
             starts[it * self.nr_splines + it + 1] = len(lookup_list[it])
             for jt in range(it+1, it+self._SPL_DEGREE+1):
