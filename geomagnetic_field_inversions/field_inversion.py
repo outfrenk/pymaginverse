@@ -100,7 +100,6 @@ class FieldInversion(object):
         self.temp_fac = np.zeros(self._nm_total)
         self.matrix_ready = False
 
-    # @profile
     def prepare_inversion(self,
                           d_inst,
                           spat_type: str = None,
@@ -204,7 +203,6 @@ class FieldInversion(object):
         # XXX Maybe it is possible to facilitate the banded structure of
         # temporal directly
         self.temporal = temporal.T.toarray(order='C')
-
         # Calculate indices for loop speedup.
         ind_list = [[]] * self.nr_splines * self.nr_splines
         starts = np.zeros(self.nr_splines * self.nr_splines + 1, dtype=int)
@@ -257,7 +255,6 @@ class FieldInversion(object):
         if self.verbose:
             print('Calculations finished')
 
-    # @profile
     def run_inversion(self,
                       x0: np.ndarray,
                       spat_damp: float,
