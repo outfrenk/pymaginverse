@@ -79,9 +79,12 @@ def forward_obs_time(coeff: np.ndarray,
     forward_obs
         Forward observations; each row contains one type
     """
-    # TODO assertions for splinebase and documentation
+    assert frechxyz.ndim == 3, 'frechet matrix should have 3 dimensions'
+    assert len(frechxyz[0]) == 3, 'frechet matrix does not contain dx, dy, dz'
+    assert coeff.ndim == 2, 'Gauss coefficients have incorrect dimensions'
+    assert splinebase.shape[0] == coeff.shape[0], \
+        'Spline basis and coefficients are inconsistent'
 
-    # XXX: maybe this is slowed down due to transpose etc.
     xyz = np.einsum(
         'ij, klj, ik -> lk',
         coeff,
@@ -95,7 +98,7 @@ def forward_obs_time(coeff: np.ndarray,
     forwobs_matrix[3] = hor
     b_int = np.linalg.norm(xyz, axis=0)
     forwobs_matrix[4] = b_int
-    # XXX why work in radians???
+
     forwobs_matrix[5] = np.arcsin(xyz[2] / b_int)
     forwobs_matrix[6] = np.arctan2(xyz[1], xyz[0])
 
