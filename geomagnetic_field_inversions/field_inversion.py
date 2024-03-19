@@ -311,7 +311,7 @@ class FieldInversion(object):
             self.splined_gh[:] = x0
         else:
             raise Exception(f'x0 has incorrect shape: {x0.shape}. \n'
-                            f'It should have shape ({self._nm_total},)')
+                            f'It should have shape ({self._nr_coeffs},)')
 
         for it in range(max_iter):  # start outer iteration loop
             if self.verbose:
