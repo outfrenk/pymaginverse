@@ -1,5 +1,7 @@
-
+build/
 .idea/
 __pycache__/
 .ipynb_checkpoints/
 doc/output/
+*egg-info/
+build_banded.c*

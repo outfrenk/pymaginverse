@@ -293,6 +293,7 @@ class FieldInversion(object):
         if not self.matrix_ready:
             raise Exception('Matrices have not been prepared. '
                             'Please run prepare_inversion first.')
+
         C_m_inv = spat_damp * self.sdamp_diag + temp_damp * self.tdamp_diag
 
         # initiate array counting residual per type
@@ -310,7 +311,7 @@ class FieldInversion(object):
             self.splined_gh[:] = x0
         else:
             raise Exception(f'x0 has incorrect shape: {x0.shape}. \n'
-                            f'It should have shape ({self._nr_coeffs},)')
+                            f'It should have shape ({self._nm_total},)')
 
         for it in range(max_iter):  # start outer iteration loop
             if self.verbose:
@@ -344,23 +345,22 @@ class FieldInversion(object):
 
             res = df / self.std
             for i in range(7):
-                if df[self.idx_res[it]:self.idx_res[it+1]].size > 0:
-                    self.res_iter[it] = np.abs(
-                        df[self.idx_res[it]:self.idx_res[it+1]]
+                if df[self.idx_res[i]:self.idx_res[i+1]].size > 0:
+                    self.res_iter[it, i] = np.abs(
+                        df[self.idx_res[i]:self.idx_res[i+1]]
                     ).mean()
             self.res_iter[it, 7] = np.abs(res).mean()
             if self.verbose:
                 print('Residual is %.2f' % self.res_iter[it, 7])
 
             # check if final conditions have been met
-            rel_err = (
-                abs(self.res_iter[it, 7] - self.res_iter[it-1, 7])
-                / self.res_iter[it-1, 7]
-            )
-            if stop_crit >= rel_err or it == max_iter:
-                if self.verbose:
-                    print(f'Final iteration; relative error = {rel_err}')
-                break
+            if it > 0:
+                rel_err = abs(self.res_iter[it, 7] - self.res_iter[it-1, 7]
+                              ) / self.res_iter[it-1, 7]
+                if stop_crit >= rel_err or it == max_iter:
+                    if self.verbose:
+                        print(f'Final iteration; relative error = {rel_err}')
+                    break
 
             # solve the equations
             if self.verbose:
@@ -419,15 +419,23 @@ class FieldInversion(object):
             print('Calculating optional spatial and temporal norms')
         tsp = self.t_array[-1] - self.t_array[0]
         if spat_damp != 0:
+            self.sum_spat = np.dot(
+                banded_mul_vec(self.sdamp_diag, self.splined_gh.flatten()),
+                self.splined_gh.flatten(),
+            ) / tsp
             self.spat_norm = damp_norm(self.spat_fac, self.splined_gh,
-                                       self.spat_type, self.t_step)
+                                       self.knots, self.spat_type)
             if self.verbose:
-                print(f'Spatial damping norm: {np.sum(self.spat_norm) / tsp}')
+                print(f'Spatial damping norm: {self.sum_spat:.2e}')
         if temp_damp != 0:
+            self.sum_temp = np.dot(
+                banded_mul_vec(self.tdamp_diag, self.splined_gh.flatten()),
+                self.splined_gh.flatten(),
+            ) / tsp
             self.temp_norm = damp_norm(self.temp_fac, self.splined_gh,
-                                       self.temp_type, self.t_step)
+                                       self.knots, self.temp_type)
             if self.verbose:
-                print(f'Temporal damping norm: {np.sum(self.temp_norm) / tsp}')
+                print(f'Temporal damping norm: {self.sum_temp:.2e}')
 
         if path is not None:
             if self.verbose:
@@ -488,7 +496,9 @@ class FieldInversion(object):
         if save_dampnorm:
             np.savez(basedir / f'{file_name}_damp.npz',
                      spat_norm=self.spat_norm,
+                     sum_spat=self.sum_spat,
                      temp_norm=self.temp_norm,
+                     sum_temp=self.sum_temp,
                      time_array=self.t_array)
 
     def sweep_damping(self,
@@ -539,7 +549,7 @@ class FieldInversion(object):
         <https://sec23.git-pages.gfz-potsdam.de/korte/pymagglobal/
         overview.html#file-format-description>`_.
 
-        Paramters
+        Parameters
         ---------
         path
             The path where the output will be saved.

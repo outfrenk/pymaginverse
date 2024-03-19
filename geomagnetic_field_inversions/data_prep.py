@@ -125,11 +125,6 @@ class InputData(object):
     def compile_data(self) -> None:
         """ Compiles data ready for quick use in geomagnetic field inversions
 
-        Parameters
-        ----------
-        verbose
-            if True, returns status report of number of data points
-
         Method updates data, loc_idx, loc, time, n_inp, idx_..., n_out,
         outputs, and errs
         """
@@ -222,7 +217,6 @@ class InputData(object):
 def read_geomagia(fname: Union[str, Path],
                   drop_duplicates: bool = True,
                   default_a95: float = 4.5,
-                  **kw_args,
                   ) -> Optional[InputData]:
     """ Reads geomagia csv-file(s) format
 
@@ -232,7 +226,7 @@ def read_geomagia(fname: Union[str, Path],
         string or Path-object of geomagia formatted file to read
     drop_duplicates
         if True, drops duplicate rows, i.e. rows that are exactly the same
-    a95
+    default_a95
         default error for alpha95, only used if no error is found in the file
     kw_args
         optional keyword argument(s) used for reading DataFrame with

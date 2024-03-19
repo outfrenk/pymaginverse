@@ -1,4 +1,5 @@
 import numpy as np
+from .frechet import frechet_basis
 
 
 def forward_obs(coeff: np.ndarray,

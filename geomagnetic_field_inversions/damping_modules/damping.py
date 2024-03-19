@@ -132,8 +132,8 @@ def integrator(spl1: int,
 
 def damp_norm(damp_fac: np.ndarray,
               coeff: np.ndarray,
-              damp_type: str,
-              t_step: float,
+              knots: np.ndarray,
+              damp_type: str
               ) -> np.ndarray:
     """
     Calculates the spatial or temporal damping norm
@@ -143,27 +143,23 @@ def damp_norm(damp_fac: np.ndarray,
     damp_fac
         damping diagonal as produced by damp_types
     coeff
-        splined Gauss coefficients of one time per row
+        all splined Gauss coefficients
+    knots
+        knot array, assumes equal distanced steps
     damp_type
         damping type to be applied (see _Dampdict)
-    t_step
-        dt of timevector
 
     Returns
     -------
     norm
-        contains the spatial or temporal damping norm per TIME INTERVAL
-        NOTE: DOES NOT NORMALIZE!
+        contains the spatial or temporal damping norm per time step
     """
-    ddt = _Dampdict[damp_type]
-    spl = BSpline.basis_element(np.arange(SPL_DEGREE+2) * t_step,
-                                extrapolate=False).derivative(ddt)(
-          np.arange(0, SPL_DEGREE+1) * t_step)
-    norm = np.zeros(len(coeff) - (SPL_DEGREE-1))
-    norm[0] = np.dot(damp_fac, np.matmul(spl[1:], coeff[:3])**2)
-    for t in range(1, len(coeff) - (SPL_DEGREE-1)):  # loop through time
-        # calculate Gauss coefficient according to derivative spline
-        g_spl = np.matmul(spl, coeff[t-1:t+SPL_DEGREE])
-        norm[t] = np.dot(damp_fac, g_spl**2)
+    norm = np.zeros(len(knots) - 2 * SPL_DEGREE)
+    bsp_dt = _Dampdict[damp_type]
+    dt = knots[1] - knots[0]
+    spline = BSpline(t=knots, c=coeff, k=SPL_DEGREE,
+                     axis=0, extrapolate=False).derivative(bsp_dt)
+    for t, time in enumerate(knots[SPL_DEGREE:-SPL_DEGREE]):  # time loop
+        norm[t] = np.dot(damp_fac, spline(time)**2)
 
-    return norm
+    return norm / dt
