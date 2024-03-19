@@ -40,7 +40,7 @@ iData.compile_data()
 class Test_inversion(unittest.TestCase):
     def test_single_inversion(self):
         lambda_s = 1.0e-13
-        lambda_t = 1.0e-3
+        lambda_t = 1.0e-3 / 4 / np.pi
 
         fInv = FieldInversion(
             t_min=t_min, t_max=t_max, t_step=knots[1]-knots[0],
@@ -54,33 +54,16 @@ class Test_inversion(unittest.TestCase):
             temp_type="min_acc",
         )
 
-        x0 = np.zeros(fInv._nm_total)
+        x0 = np.zeros(fInv._nr_coeffs)
         x0[0] = -30e3
         fInv.run_inversion(
             x0,
-            max_iter=0,
+            max_iter=1,
             spat_damp=lambda_s,
             temp_damp=lambda_t,
         )
 
         res_coeffs = fInv.splined_gh
-
-        # for it in range(res_coeffs.shape[1]):
-        #     abserr = np.abs(res_coeffs[:, it] - ref_coeffs[:, it])
-        #     relerr = np.abs(abserr / ref_coeffs[:, it])
-        #     print(it+1, np.max(abserr), np.max(relerr))
-
-        # from matplotlib import pyplot as plt
-        # ind = 1
-        # plt.plot(
-        #     knots[2:-2],
-        #     ref_coeffs[:, ind],
-        # )
-        # plt.plot(
-        #     knots[2:-2],
-        #     res_coeffs[:, ind],
-        # )
-        # plt.show()
 
         self.assertTrue(
             np.allclose(

@@ -74,8 +74,6 @@ class FieldInversion(object):
         self.std = []
         self.unsplined_iter_gh = []
         self.idx_out = np.zeros(0)
-        self.count_type = np.zeros(7)
-        self.station_coord = np.zeros((0, 3))
         self.sdamp_diag = np.zeros(0)
         self.tdamp_diag = np.zeros(0)
         self.spat_norm = 0
@@ -94,13 +92,12 @@ class FieldInversion(object):
     @maxdegree.setter
     def maxdegree(self, degree: int):
         # determines the maximum number of spherical coefficients
-        self._nm_total = int((degree+1)**2 - 1)
+        self._nr_coeffs = int((degree+1)**2 - 1)
         self._maxdegree = int(degree)
-        self.spat_fac = np.zeros(self._nm_total)  # contains damping factors
-        self.temp_fac = np.zeros(self._nm_total)
+        self.spat_fac = np.zeros(self._nr_coeffs)  # contains damping factors
+        self.temp_fac = np.zeros(self._nr_coeffs)
         self.matrix_ready = False
 
-    # @profile
     def prepare_inversion(self,
                           d_inst,
                           spat_type: str = None,
@@ -127,8 +124,6 @@ class FieldInversion(object):
 
         Creates or modifies
         -------------------
-        self.count_type
-            array of length 7 recording the number of different data types
         self.idx_out
             index of data
         self.time
@@ -201,23 +196,17 @@ class FieldInversion(object):
             idxs = temporal[:, [it]].nonzero()[0]
             lookup_list.append(idxs)
 
-        # XXX Maybe it is possible to facilitate the banded structure of
-        # temporal directly
-        self.temporal = np.ascontiguousarray(temporal.T.toarray())
-
+        self.temporal = temporal.T.toarray(order='C')
         # Calculate indices for loop speedup.
-        ind_list = [None] * self.nr_splines * self.nr_splines
+        ind_list = [[]] * self.nr_splines * self.nr_splines
         starts = np.zeros(self.nr_splines * self.nr_splines + 1, dtype=int)
         starts[0] = 0
         for it in range(self.nr_splines):
-            # inds = np.intersect1d(
-            #     lookup_list[it],
-            #     lookup_list[it],
-            #     assume_unique=True,
-            # )
             ind_list[it * self.nr_splines + it] = lookup_list[it]
             starts[it * self.nr_splines + it + 1] = len(lookup_list[it])
-            for jt in range(it+1, self.nr_splines):
+            for jt in range(it+1, it+self._SPL_DEGREE+1):
+                if self.nr_splines <= jt:
+                    continue
                 inds = np.intersect1d(
                     lookup_list[it],
                     lookup_list[jt],
@@ -255,7 +244,6 @@ class FieldInversion(object):
         if self.verbose:
             print('Calculations finished')
 
-    # @profile
     def run_inversion(self,
                       x0: np.ndarray,
                       spat_damp: float,
@@ -305,42 +293,27 @@ class FieldInversion(object):
         if not self.matrix_ready:
             raise Exception('Matrices have not been prepared. '
                             'Please run prepare_inversion first.')
+
         C_m_inv = spat_damp * self.sdamp_diag + temp_damp * self.tdamp_diag
 
-        # TODO: check iteration count.
-        # XXX: This leads to 2 iterations, even if maxiter = 1
         # initiate array counting residual per type
-        self.res_iter = np.zeros((max_iter+1, 8))
+        self.res_iter = np.zeros((max_iter, 8))
         # initiate splined values with starting model
         if self.verbose:
             print('Setting up starting model')
 
         # TODO: rename stuff
         # These are the coefficients we solve for.
-        self.splined_gh = np.zeros((self.nr_splines, self._nm_total))
+        self.splined_gh = np.zeros((self.nr_splines, self._nr_coeffs))
         self.unsplined_iter_gh = []
-        if x0.ndim == 1 and len(x0) == self._nm_total:
+        if x0.ndim == 1 and len(x0) == self._nr_coeffs:
             self.x0 = x0.copy()
             self.splined_gh[:] = x0
         else:
             raise Exception(f'x0 has incorrect shape: {x0.shape}. \n'
                             f'It should have shape ({self._nm_total},)')
 
-        # spacing = self._nm_total * self._SPL_DEGREE
-        # This transforms the d_matrix to the right shape. Actually,
-        # the matrices should already be generated that way in the final
-        # version
-        # C_m_inv = np.zeros(
-        #     (
-        #         spacing + 1,
-        #         self.nr_splines * self._nm_total
-        #     ),
-        # )
-        #
-        # for it in range(self._SPL_DEGREE + 1):
-        #     C_m_inv[it * self._nm_total] = d_matrix[it].copy()
-
-        for it in range(max_iter+1):  # start outer iteration loop
+        for it in range(max_iter):  # start outer iteration loop
             if self.verbose:
                 print(f'Start calculations iteration {it}')
 
@@ -386,7 +359,7 @@ class FieldInversion(object):
                               ) / self.res_iter[it-1, 7]
                 if stop_crit >= rel_err or it == max_iter:
                     if self.verbose:
-                        print(f'Final iteration; rel. error = {rel_err:.2e}')
+                        print(f'Final iteration; relative error = {rel_err}')
                     break
 
             # solve the equations
@@ -434,7 +407,7 @@ class FieldInversion(object):
             # solve using cholesky and update solution
             self.splined_gh += cho_solve_banded((chol, False), rhs).reshape(
                 self.nr_splines,
-                self._nm_total,
+                self._nr_coeffs,
             )
             # store iteration results as BSpline objects
             spline = BSpline(t=self.knots, c=self.splined_gh.copy(),
@@ -446,17 +419,19 @@ class FieldInversion(object):
             print('Calculating optional spatial and temporal norms')
         tsp = self.t_array[-1] - self.t_array[0]
         if spat_damp != 0:
-            self.sum_spat = np.dot(banded_mul_vec(self.sdamp_diag,
-                                                  self.splined_gh.flatten()),
-                              self.splined_gh.flatten()) / tsp
+            self.sum_spat = np.dot(
+                banded_mul_vec(self.sdamp_diag, self.splined_gh.flatten()),
+                self.splined_gh.flatten(),
+            ) / tsp
             self.spat_norm = damp_norm(self.spat_fac, self.splined_gh,
                                        self.knots, self.spat_type)
             if self.verbose:
                 print(f'Spatial damping norm: {self.sum_spat:.2e}')
         if temp_damp != 0:
-            self.sum_temp = np.dot(banded_mul_vec(self.tdamp_diag,
-                                                  self.splined_gh.flatten()),
-                              self.splined_gh.flatten()) / tsp
+            self.sum_temp = np.dot(
+                banded_mul_vec(self.tdamp_diag, self.splined_gh.flatten()),
+                self.splined_gh.flatten(),
+            ) / tsp
             self.temp_norm = damp_norm(self.temp_fac, self.splined_gh,
                                        self.knots, self.temp_type)
             if self.verbose:
@@ -509,7 +484,7 @@ class FieldInversion(object):
                 (
                     len(self.unsplined_iter_gh),
                     len(self.t_array),
-                    self._nm_total
+                    self._nr_coeffs
                 )
             )
             for i in range(len(self.unsplined_iter_gh)):
