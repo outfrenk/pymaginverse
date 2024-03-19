@@ -40,7 +40,7 @@ iData.compile_data()
 class Test_inversion(unittest.TestCase):
     def test_single_inversion(self):
         lambda_s = 1.0e-13
-        lambda_t = 1.0e-3
+        lambda_t = 1.0e-3 / 4 / np.pi
 
         fInv = FieldInversion(
             t_min=t_min, t_max=t_max, t_step=knots[1]-knots[0],
