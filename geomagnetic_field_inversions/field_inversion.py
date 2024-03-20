@@ -440,7 +440,15 @@ class FieldInversion(object):
         if path is not None:
             if self.verbose:
                 print('Saving matrices')
-            print('Export is currently not supported')
+            banded = build_banded(
+                np.ascontiguousarray(frech_matrix),
+                self.temporal,
+                self._SPL_DEGREE,
+                self.ind_list,
+                self.starts,
+            )
+            np.save(path / 'forward_matrix', banded)
+            np.save(path / 'damp_matrix', C_m_inv)
 
         if self.verbose:
             print('Finished inversion')

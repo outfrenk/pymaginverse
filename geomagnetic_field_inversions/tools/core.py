@@ -1,7 +1,8 @@
 import numpy as np
-import scipy.sparse as scs
+from scipy.linalg import cholesky_banded, cho_solve_banded
 from scipy.interpolate import BSpline
 from pathlib import Path
+from tqdm import tqdm
 from typing import Tuple
 
 SPL_DEGREE = 3
@@ -83,8 +84,9 @@ def frechet_in_geoc(dx: np.ndarray,
 def calc_stdev(path: Path,
                degree: int,
                save_covar: bool = False,
-               save_res: bool = False):
-    """ Function to calculate and save standard deviation
+               save_res: bool = False,
+               verbose: bool = True):
+    """ Function to calculate and save standard deviations
 
     Parameters
     ----------
@@ -96,32 +98,57 @@ def calc_stdev(path: Path,
         boolean indicating whether to save covariance matrix. default is False
     save_res
         boolean indicating whether to save resolution matrix. default is False
+    verbose
+        verbosity flag
     """
-    normal_eq = scs.load_npz(path / 'forward_matrix.npz')
-    damp = scs.load_npz(path / 'damp_matrix.npz')
+    # TODO: Optimize if possible
+    normal_eq = np.load(path / 'forward_matrix.npy')
+    damp = np.load(path / 'damp_matrix.npy')
+    norm_damp = normal_eq.copy()
+    norm_damp[norm_damp.shape[0] - damp.shape[0]:] += damp
     if save_res:
-        print('Calculating resolution matrix')
-        res_mat = np.linalg.solve((normal_eq+damp).todense(),
-                                  normal_eq.todense())
+        if verbose:
+            print('Calculating resolution matrix')
+        chol = cholesky_banded(norm_damp)
+        n, d = normal_eq.shape
+        res_mat = np.zeros((d, d))
+        n_range = np.arange(n)
+        rows = np.zeros(2 * len(n_range) - 1)
+        rows[:n] = n_range
+        rows[n:] = n_range[-2::-1]
+        for i in tqdm(range(d)):
+            rhs = np.zeros(d)
+            row_sub = rows[max(n-1-i, 0):min(n-1+d-i, 2*n - 1)]
+            col_sub = np.zeros_like(row_sub)
+            col_sub[min(i, n-1):] = np.arange(i, min(i+n, d))
+            col_sub[:min(i, n-1)] = i
+            idx = (col_sub + row_sub * d).astype(int)
+            rhs[max(i-n+1, 0):min(i+n, d)] = normal_eq.flatten()[idx]
+            res_mat[i] = cho_solve_banded((chol, False), rhs)
         np.save(path / 'resolution_mat', res_mat)
-    normal_eq += damp
-    print('start inversion')
-    covar = np.linalg.inv(normal_eq.todense())
-    print('finished inversion, calculating std')
+        del res_mat
+
+    del normal_eq, damp
+    if verbose:
+        print('Start inversion for covariance')
+    chol = cholesky_banded(norm_damp)
+    n, d = norm_damp.shape
+    covar = np.zeros((d, d))
+    for i in tqdm(range(d)):
+        rhs = np.zeros(d)
+        rhs[i] = 1
+        covar[i] = cho_solve_banded((chol, False), rhs)
+    if verbose:
+        print('Finished inversion, calculating std')
     nm_total = (degree+1)**2 - 1
-    covar_spl = np.sqrt(np.diag(covar)).reshape(-1, nm_total)
-    coeff_big = np.vstack((np.zeros((SPL_DEGREE, nm_total)), covar_spl))
-    std = np.zeros((len(covar_spl), nm_total))
-    spl0 = BSpline.basis_element(np.arange(SPL_DEGREE + 2),
-                                 extrapolate=False).derivative(0)(
-           np.arange(0, SPL_DEGREE+1))
-    for t in range(len(covar_spl)):
-        std[t] = np.matmul(spl0, coeff_big[t:t + SPL_DEGREE + 1])
-    print('start saving')
-    np.save(path / 'std', std[SPL_DEGREE-1:])
+    std = np.sqrt(np.diag(covar)).reshape(-1, nm_total)
+    if verbose:
+        print('Saving')
+    np.save(path / 'std', std)
     if save_covar:
         np.save(path / 'covar', covar)
-    print('saving finished')
+    if verbose:
+        print('Saving finished')
 
 
 def calc_spectra(coeff: np.ndarray,
