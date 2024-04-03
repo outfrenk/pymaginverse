@@ -44,8 +44,10 @@ def damp_matrix(max_degree: int,
     if damp_type not in _Dampdict:
         raise Exception(f'Damping type {damp_type} not found. Exiting...')
 
-    nm_total = (max_degree + 1) ** 2 - 1
-    matrix_diag = np.zeros((nm_total * SPL_DEGREE + 1, nr_splines * nm_total))
+    nr_coeffs = (max_degree + 1) ** 2 - 1
+    matrix_diag = np.zeros(
+        (nr_coeffs * SPL_DEGREE + 1, nr_splines * nr_coeffs)
+    )
     damp_diag = dampingtype(max_degree, damp_type, damp_dipole)
 
     # start combining interacting splines
@@ -63,8 +65,8 @@ def damp_matrix(max_degree: int,
             )
             # place damping in matrix
             matrix_diag[
-                it * nm_total,
-                (jt + k) * nm_total:(jt + k + 1) * nm_total
+                it * nr_coeffs,
+                (jt + k) * nr_coeffs:(jt + k + 1) * nr_coeffs
             ] = spl_integral * damp_diag
 
     return matrix_diag, damp_diag
