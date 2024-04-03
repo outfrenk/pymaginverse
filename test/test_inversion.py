@@ -63,7 +63,7 @@ class Test_inversion(unittest.TestCase):
             temp_damp=lambda_t,
         )
 
-        res_coeffs = fInv.splined_gh
+        res_coeffs = fInv.coeffs_solution
 
         self.assertTrue(
             np.allclose(
