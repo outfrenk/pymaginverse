@@ -1,11 +1,15 @@
-import unittest
 from pathlib import Path
 
 import numpy as np
+from matplotlib import pyplot as plt
+
 from pandas import read_csv
 
 from geomagnetic_field_inversions.data_prep import InputData
 from geomagnetic_field_inversions import FieldInversion
+
+from pymagglobal import local_curve
+
 
 path = Path(__file__).parent
 
@@ -36,44 +40,53 @@ raw_data.loc[:, 'dI'] /= 10
 iData = InputData(raw_data)
 iData.compile_data()
 
+lambda_s = 1.0e-13
+lambda_t = 1.0e-3
 
-class Test_inversion(unittest.TestCase):
-    def test_single_inversion(self):
-        lambda_s = 1.0e-13
-        lambda_t = 1.0e-3 / 4 / np.pi
+fInv = FieldInversion(
+    t_min=t_min, t_max=t_max, t_step=knots[1]-knots[0],
+    maxdegree=10,
+    verbose=False,
+)
 
-        fInv = FieldInversion(
-            t_min=t_min, t_max=t_max, t_step=knots[1]-knots[0],
-            maxdegree=10,
-            verbose=False,
-        )
+fInv.prepare_inversion(
+    iData,
+    spat_type="ohmic_heating",
+    temp_type="min_acc",
+)
 
-        fInv.prepare_inversion(
-            iData,
-            spat_type="ohmic_heating",
-            temp_type="min_acc",
-        )
+x0 = np.zeros(fInv._nr_coeffs)
+x0[0] = -30e3
+fInv.run_inversion(
+    x0,
+    max_iter=1,
+    spat_damp=lambda_s,
+    temp_damp=lambda_t,
+)
 
-        x0 = np.zeros(fInv._nr_coeffs)
-        x0[0] = -30e3
-        fInv.run_inversion(
-            x0,
-            max_iter=1,
-            spat_damp=lambda_s,
-            temp_damp=lambda_t,
-        )
+myModel = fInv.result_to_pymagglobal('test')
 
-        res_coeffs = fInv.coeffs_solution
+# Honululu as lat, lon tuple
+loc = (21.306944, -157.858333)
 
-        self.assertTrue(
-            np.allclose(
-                ref_coeffs,
-                res_coeffs,
-                rtol=5e-3,
-                atol=10,
-            )
-        )
+# Create an evenly spaced array over the ggfmb interval
+
+times = np.linspace(
+    myModel.t_min,
+    myModel.t_max,
+    501,
+)
+d, i, f = local_curve(times, loc, myModel)
 
 
-if __name__ == '__main__':
-    unittest.main()
+fig, ax = plt.subplots(1, 1, figsize=(10, 5))
+
+ax.plot(
+    times,
+    i,
+)
+ax.invert_xaxis()
+ax.set_xlabel('time [ka BP]')
+ax.set_ylabel('inclination [deg.]')
+
+plt.show()

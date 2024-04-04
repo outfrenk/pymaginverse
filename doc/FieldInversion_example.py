@@ -15,7 +15,7 @@ test_inv = FieldInversion(t_min=-2000, t_max=1990, t_step=10, maxdegree=10)
 test_inv.prepare_inversion(inputdata, spat_type='ohmic_heating',
                            temp_type='min_acc')
 # set starting model, should have 120 elements
-x0 = np.zeros(test_inv._nm_total)
+x0 = np.zeros(test_inv._nr_coeffs)
 x0[0] = -30000
 # run inversion by setting start model, damp factors, and max # iterations
 test_inv.run_inversion(x0, spat_damp=1.0e-13, temp_damp=1.0e-3, max_iter=5)

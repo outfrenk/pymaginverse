@@ -14,7 +14,7 @@ def forward_obs(coeff: np.ndarray,
     coeff
         Gauss coefficients. Each row contains the coefficients of one datum
     frechxyz
-        Frechet matrix for dx, dy, and dz components (stations X 3 X nm_total)
+        Frechet matrix for dx, dy, and dz components (stations X 3 X nr_coeffs)
     link
         Array which tells how coeff and frechxyz should be combined. If it has
         the same length as coeff if tells to which 1st dimension of frechxyz
@@ -71,7 +71,7 @@ def forward_obs_time(coeff: np.ndarray,
         Gauss coefficients in a shape corresponding to frechxyz.shape[2],
         splinebase.shape[1]
     frechxyz
-        Frechet matrix for dx, dy, and dz components (stations X 3 X nm_total)
+        Frechet matrix for dx, dy, and dz components (stations X 3 X nr_coeffs)
     splinebase
         Matrix of spline basis functions
 

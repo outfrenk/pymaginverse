@@ -14,7 +14,7 @@ sweep_inv.prepare_inversion(inputdata, spat_type='ohmic_heating',
 spatial_range = np.logspace(-17, -11, 7)
 temporal_range = np.logspace(-7, 1, 9)
 # set starting model
-x0 = np.zeros(sweep_inv._nm_total)
+x0 = np.zeros(sweep_inv._nr_coeffs)
 x0[0] = -30000
 # call sweep_damping, results will be saved in the path / 'output'-folder
 sweep_inv.sweep_damping(x0, spatial_range, temporal_range,
