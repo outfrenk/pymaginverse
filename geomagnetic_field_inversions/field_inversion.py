@@ -649,14 +649,14 @@ class FieldInversion(object):
         if not self.matrix_ready:
             raise Exception('Matrices have not been prepared. '
                             'Please run prepare_inversion first.')
-        if self.splined_gh.size == 0:
+        if self.coeffs_solution.size == 0:
             raise Exception('No model solution found. Please run inversion'
                             'before sampling from the posterior')
 
         C_m_inv = spat_damp * self.sdamp_diag + temp_damp * self.tdamp_diag
 
         forwobs_matrix = forward_obs_time(
-            self.splined_gh,
+            self.coeffs_solution,
             self.spatial,
             self.temporal,
         )
@@ -702,7 +702,7 @@ class FieldInversion(object):
             self._nr_coeffs,
             nr_samples,
         )
-        samples += self.splined_gh[:, :, None]
+        samples += self.coeffs_solution[:, :, None]
 
         return samples
 
