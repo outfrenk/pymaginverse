@@ -80,12 +80,12 @@
 #     for r, row in enumerate(f):
 #         if r == 1:
 #             maxdegree = int(row.split()[0])
-#             nm_total = (maxdegree+1)**2 - 1
+#             nr_coeffs = (maxdegree+1)**2 - 1
 #         elif r == 2:
 #             time_knots = np.array(row.split()).astype(float)
 #         elif r == 3:
 #             coeff = np.array(row.split()).astype(float)
-#             coeff = coeff.reshape((len(time_knots) - 4), nm_total)
+#             coeff = coeff.reshape((len(time_knots) - 4), nr_coeffs)
 #             break
 #     model = read_gauss(coeff, maxdegree, time_knots, splined=True)
 #     return model

@@ -20,7 +20,7 @@ def frechet_basis(loc: np.ndarray,
     Returns
     -------
     frechxyz
-        size= stations X 3 X nm_total matrix: contains the frechet coefficients
+        size= stations X 3 X nr_coeffs matrix: contains the frechet coefficients
             first dx, then dy, then dz
     """
     schmidt_total = int((maxdegree+1) * (maxdegree+2) / 2)
@@ -78,18 +78,18 @@ def frechet_types(frechxyz: np.ndarray,
     Returns
     -------
     frech_matrix
-        7*len(stations) X nm_total matrix containing frechet
+        7*len(stations) X nr_coeffs matrix containing frechet
         coefficients for the specific datatypes. Should probably be used in
         an iterative inversion scheme
     """
     locs = len(frechxyz)
-    nm_total = len(frechxyz[0, 0])
+    nr_coeffs = len(frechxyz[0, 0])
     # expand arrays to cover all locations
     # per row first all gh then locs
-    width = nm_total*locs  # row width
-    txyz = np.repeat(forwobs_matrix[:3], nm_total).reshape(3, width)
-    thor = np.repeat(forwobs_matrix[3], nm_total)
-    tb_int = np.repeat(forwobs_matrix[4], nm_total)
+    width = nr_coeffs*locs  # row width
+    txyz = np.repeat(forwobs_matrix[:3], nr_coeffs).reshape(3, width)
+    thor = np.repeat(forwobs_matrix[3], nr_coeffs)
+    tb_int = np.repeat(forwobs_matrix[4], nr_coeffs)
     dxyz = np.swapaxes(frechxyz, 0, 1).reshape(3, width)
     dhor = (txyz[0]*dxyz[0] + txyz[1]*dxyz[1]) / thor
     # creates frechet for all coefficients, timesteps, and locations
@@ -103,6 +103,6 @@ def frechet_types(frechxyz: np.ndarray,
     # first reshape frech_mat to correspond to datatypes
     # meaning: one row is one station containing every datatype and then
     # Gauss coefficient
-    frech_matrix = frech_matrix.reshape(7, locs, nm_total).swapaxes(0, 1)
+    frech_matrix = frech_matrix.reshape(7, locs, nr_coeffs).swapaxes(0, 1)
 
     return frech_matrix

@@ -72,7 +72,7 @@ class FieldInversion(object):
         self.time = []
         self.data = []
         self.std = []
-        self.unsplined_iter_gh = []
+        self.coeffs_per_iteration = []
         self.idx_out = np.zeros(0)
         self.sdamp_diag = np.zeros(0)
         self.tdamp_diag = np.zeros(0)
@@ -80,7 +80,7 @@ class FieldInversion(object):
         self.spat_type = None
         self.temp_norm = 0
         self.temp_type = None
-        self.splined_gh = np.zeros(0)
+        self.coeffs_solution = np.zeros(0)
         self.station_frechet = np.zeros(0)
         self.res_iter = np.zeros(0)
         self.x0 = np.zeros(0)
@@ -132,18 +132,18 @@ class FieldInversion(object):
             geomagnetic datum and its error
         self.station_frechet
             contains frechet matrix per location
-            size= ((# stations x 3), nm_total) (floats)
+            size= ((# stations x 3), nr_coeffs) (floats)
         self.data_ix, self.stat_ix, self.type_ix
             contains per timestep index of datum, location, and data type
         self.spat_fac, self.temp_fac
             contains the damping elements dependent on degree
-             size= nm_total (floats) (see damp_types.py)
+             size= nr_coeffs (floats) (see damp_types.py)
         self.sdamp_diag
             contains diagonals of symmetric spatial damping matrix
-            size= (nm_total x nr_splines, nm_total x nr_splines) (floats)
+            size= (nr_coeffs x nr_splines, nr_coeffs x nr_splines) (floats)
         self.tdamp_diag
             contains diagonals of symmetric temporal damping matrix
-            size= (nm_total x nr_splines, nm_total x nr_splines) (floats)
+            size= (nr_coeffs x nr_splines, nr_coeffs x nr_splines) (floats)
         self.matrix_ready
             indicates whether all matrices have been formed (boolean)
         """
@@ -280,13 +280,18 @@ class FieldInversion(object):
         self.res_iter
             contains the RMS per datatype and the sum of all types
             size= 8 (floats)
-        self.unsplined_iter_gh
-            contains the BSpline function to unspline Gauss coeffs at any
-            requested time (within range) for every iteration
-            size= # iterations (BSpline functions)
-        self.splined_gh
-            contains the splined Gauss coeffs at all times of current iteration
-            size= (len(nr_splines), nm_total) (floats)
+        self.coeffs_solution
+            contains the time independent Gauss coefficients at all times of
+            current iteration. size = (nr_splines, nr_coeffs) (floats)
+        self.coeffs_spline
+            a callable BSpline object that can be used to access the model
+            solution at any time. I.e. self.coeffs_spline(epoch) returns
+            an array of size nr_coeffs, containing the Gauss coefficients at
+            the requested epoch.
+        self.coeffs_per_iteration
+            Contains the time independent Gauss coefficients at all iterations
+            requested time (within range) for every iteration as a list of
+            length max_iter.
         self.temp_norm, self.spat_norm
             contains temporal or spatial damping norm
         """
@@ -304,11 +309,11 @@ class FieldInversion(object):
 
         # TODO: rename stuff
         # These are the coefficients we solve for.
-        self.splined_gh = np.zeros((self.nr_splines, self._nr_coeffs))
-        self.unsplined_iter_gh = []
+        self.coeffs_solution = np.zeros((self.nr_splines, self._nr_coeffs))
+        self.coeffs_per_iteration = []
         if x0.ndim == 1 and len(x0) == self._nr_coeffs:
             self.x0 = x0.copy()
-            self.splined_gh[:] = x0
+            self.coeffs_solution[:] = x0
         else:
             raise Exception(f'x0 has incorrect shape: {x0.shape}. \n'
                             f'It should have shape ({self._nr_coeffs},)')
@@ -319,7 +324,7 @@ class FieldInversion(object):
 
             # get all predictions at once using splinebasis
             forwobs_matrix = forward_obs_time(
-                self.splined_gh,
+                self.coeffs_solution,
                 self.spatial,
                 self.temporal,
             )
@@ -403,16 +408,24 @@ class FieldInversion(object):
                 df,
                 optimize=True,
             ).flatten()
-            rhs -= banded_mul_vec(C_m_inv, self.splined_gh.flatten())
+            rhs -= banded_mul_vec(C_m_inv, self.coeffs_solution.flatten())
             # solve using cholesky and update solution
-            self.splined_gh += cho_solve_banded((chol, False), rhs).reshape(
+            self.coeffs_solution += cho_solve_banded(
+                (chol, False), rhs
+            ).reshape(
                 self.nr_splines,
                 self._nr_coeffs,
             )
             # store iteration results as BSpline objects
-            spline = BSpline(t=self.knots, c=self.splined_gh.copy(),
-                             k=3, axis=0, extrapolate=False)
-            self.unsplined_iter_gh.append(spline)
+            self.coeffs_per_iteration.append(self.coeffs_solution.copy())
+
+        self.coeffs_spline = BSpline(
+            t=self.knots,
+            c=self.coeffs_solution.copy(),
+            k=3,
+            axis=0,
+            extrapolate=False,
+        )
 
         # sum residuals and finish up stuff
         if self.verbose:
@@ -420,19 +433,19 @@ class FieldInversion(object):
         tsp = self.t_array[-1] - self.t_array[0]
         if spat_damp != 0:
             self.sum_spat = np.dot(
-                banded_mul_vec(self.sdamp_diag, self.splined_gh.flatten()),
-                self.splined_gh.flatten(),
+                banded_mul_vec(self.sdamp_diag, self.coeffs_solution.flatten()),
+                self.coeffs_solution.flatten(),
             ) / tsp
-            self.spat_norm = damp_norm(self.spat_fac, self.splined_gh,
+            self.spat_norm = damp_norm(self.spat_fac, self.coeffs_solution,
                                        self.knots, self.spat_type)
             if self.verbose:
                 print(f'Spatial damping norm: {self.sum_spat:.2e}')
         if temp_damp != 0:
             self.sum_temp = np.dot(
-                banded_mul_vec(self.tdamp_diag, self.splined_gh.flatten()),
-                self.splined_gh.flatten(),
+                banded_mul_vec(self.tdamp_diag, self.coeffs_solution.flatten()),
+                self.coeffs_solution.flatten(),
             ) / tsp
-            self.temp_norm = damp_norm(self.temp_fac, self.splined_gh,
+            self.temp_norm = damp_norm(self.temp_fac, self.coeffs_solution,
                                        self.knots, self.temp_type)
             if self.verbose:
                 print(f'Temporal damping norm: {self.sum_temp:.2e}')
@@ -472,7 +485,7 @@ class FieldInversion(object):
         save_iterations
             boolean indicating whether to save coefficients after
             each iteration. Is saved with the following shape:
-             (# iterations, len(time vector), nm_total)
+             (# iterations, len(time vector), nr_coeffs)
         save_residual
             boolean indicating whether to save the residuals of each timestep
         save_dampnorm
@@ -490,16 +503,16 @@ class FieldInversion(object):
         if save_iterations:
             all_coeff = np.zeros(
                 (
-                    len(self.unsplined_iter_gh),
+                    len(self.coeffs_per_iteration),
                     len(self.t_array),
                     self._nr_coeffs
                 )
             )
-            for i in range(len(self.unsplined_iter_gh)):
-                all_coeff[i] = self.unsplined_iter_gh[i](self.t_array)
+            for i in range(len(self.coeffs_per_iteration)):
+                all_coeff[i] = self.coeffs_per_iteration[i](self.t_array)
             np.save(basedir / f'{file_name}_all.npy', all_coeff)
         else:
-            gh_time = self.unsplined_iter_gh[-1](self.t_array)
+            gh_time = self.coeffs_per_iteration[-1](self.t_array)
             np.save(basedir / f'{file_name}_final.npy', gh_time)
         if save_dampnorm:
             np.savez(basedir / f'{file_name}_damp.npz',
@@ -717,7 +730,7 @@ class FieldInversion(object):
             for knot in self.knots:
                 fh.write(f'{knot:0<17f}      ')
             fh.write('\n')
-            for coeff in self.splined_gh.flatten():
+            for coeff in self.coeffs_solution.flatten():
                 if 1e-1 <= coeff and coeff <= 1e5:
                     fh.write(f'{coeff:0<17f}      ')
                 else:
@@ -754,7 +767,7 @@ class FieldInversion(object):
                     _self.t_max = self.t_max
                     _self.l_max = self.maxdegree
                     _self.knots = self.knots
-                    _self.coeffs = self.splined_gh
+                    _self.coeffs = self.coeffs_solution
                     _self.splines = BSpline(
                         _self.knots,
                         _self.coeffs,
