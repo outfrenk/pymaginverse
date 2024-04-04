@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.interpolate import BSpline
 
-from scipy.linalg import cholesky_banded, cho_solve_banded
+from scipy.linalg import cholesky_banded, cho_solve_banded, solve_banded
 import pandas as pd
 from typing import Union, Final
 from pathlib import Path
@@ -550,6 +550,148 @@ class FieldInversion(object):
                         file_name=f'{spatial_df:.2e}s+{temporal_df:.2e}t',
                         basedir=basedir, save_iterations=False,
                         save_residual=True, save_dampnorm=True)
+
+    def sample_prior(self,
+                     spat_damp: float,
+                     temp_damp: float,
+                     nr_samples: int = 100,
+                     seed: int = None,
+                     ) -> np.ndarray:
+        """ Generate samples of Gauss coefficients from the prior distribution
+
+        The sampling is performed using the Cholesky factor of the inverse of
+        the prior covariance, as this is in banded form. Using the property
+        that
+
+        Parameters
+        ----------
+        spat_damp, temp_damp
+            damping factor to be applied to the spatial or temporal
+            damping matrix
+        nr_samples
+            The number of samples to generate
+        seed
+            seed for the random generator
+        Returns
+        -------
+        array
+            an array of shape (nr_splines, nr_coeffs, nr_samples) containing
+            the samples
+        """
+        rng = np.random.default_rng(seed=seed)
+
+        if not self.matrix_ready:
+            raise Exception('Matrices have not been prepared. '
+                            'Please run prepare_inversion first.')
+
+        C_m_inv = spat_damp * self.sdamp_diag + temp_damp * self.tdamp_diag
+        C_m_inv[-1] += 1e-15*np.min(np.abs(C_m_inv[-1]))
+
+        std_normal = rng.normal(
+            size=(
+                self.nr_splines*self._nr_coeffs,
+                nr_samples,
+            ),
+        )
+
+        L_m_inv = cholesky_banded(C_m_inv)
+        samples = solve_banded((0, L_m_inv.shape[0]-1), L_m_inv, std_normal)
+
+        return samples.reshape(
+            self.nr_splines,
+            self._nr_coeffs,
+            nr_samples,
+        )
+
+    def sample_posterior(self,
+                         spat_damp: float,
+                         temp_damp: float,
+                         nr_samples: int = 100,
+                         seed: int = None,
+                         ) -> np.ndarray:
+        """ Generate samples of Gauss coefficients from the posterior
+        distribution
+
+        The sampling is performed using the Cholesky factor of the inverse of
+        the prior covariance, as this is in banded form. Using the property
+        that
+
+        Parameters
+        ----------
+        spat_damp, temp_damp
+            damping factor to be applied to the spatial or temporal
+            damping matrix
+        nr_samples
+            The number of samples to generate
+        seed
+            seed for the random generator
+        Returns
+        -------
+        array
+            an array of shape (nr_splines, nr_coeffs, nr_samples) containing
+            the samples
+        """
+        rng = np.random.default_rng(seed=seed)
+
+        if not self.matrix_ready:
+            raise Exception('Matrices have not been prepared. '
+                            'Please run prepare_inversion first.')
+        if self.splined_gh.size == 0:
+            raise Exception('No model solution found. Please run inversion'
+                            'before sampling from the posterior')
+
+        C_m_inv = spat_damp * self.sdamp_diag + temp_damp * self.tdamp_diag
+
+        forwobs_matrix = forward_obs_time(
+            self.splined_gh,
+            self.spatial,
+            self.temporal,
+        )
+        frech_matrix = frechet_types(
+                self.spatial, forwobs_matrix
+            )
+        frech_matrix = np.vstack(
+            (
+                frech_matrix[self.idx_res[0]:self.idx_res[1], 0],
+                frech_matrix[self.idx_res[1]:self.idx_res[2], 1],
+                frech_matrix[self.idx_res[2]:self.idx_res[3], 2],
+                frech_matrix[self.idx_res[3]:self.idx_res[4], 3],
+                frech_matrix[self.idx_res[4]:self.idx_res[5], 4],
+                frech_matrix[self.idx_res[5]:self.idx_res[6], 5],
+                frech_matrix[self.idx_res[6]:self.idx_res[7], 6],
+            )
+        ).T
+        # include the C_e^{-1/2} factor
+        frech_matrix /= self.std[None, :]
+        # efficiently set up normal equations using Cython code
+        banded = build_banded(
+            np.ascontiguousarray(frech_matrix),
+            self.temporal,
+            self._SPL_DEGREE,
+            self.ind_list,
+            self.starts,
+        )
+        # add damping to normal equations
+        banded[banded.shape[0]-C_m_inv.shape[0]:] += C_m_inv
+
+        std_normal = rng.normal(
+            size=(
+                self.nr_splines*self._nr_coeffs,
+                nr_samples,
+            ),
+        )
+
+        L_m_inv = cholesky_banded(banded)
+
+        samples = solve_banded((0, L_m_inv.shape[0]-1), L_m_inv, std_normal)
+        samples = samples.reshape(
+            self.nr_splines,
+            self._nr_coeffs,
+            nr_samples,
+        )
+        samples += self.splined_gh[:, :, None]
+
+        return samples
 
     def save_to_fortran_format(self, path: Union[str, Path]) -> None:
         """ Saves the final iteration inversion result as a file in the same
