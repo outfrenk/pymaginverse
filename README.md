@@ -9,12 +9,12 @@ The library consists of two main modules:
 - `geomagnetic_field_inversions/field_inversion.py`: contains the `FieldInversion`-class that performs the actual inversion of geomagnetic field data. It requires, besides the time vector over which the inversion will take place, an instance of `InputData` as minimum input.
 
 ## Installation
-The easiest way to get a working set up is using the conda dependency manager, e.g. from [here](https://github.com/conda-forge/miniforge).
+The easiest way to get a working environment set up is using the conda dependency manager, e.g. from [here](https://github.com/conda-forge/miniforge).
 Replacing <env-name> with a name of your choice, you can create a conda environment with all dependencies provided using:
 ```
-conda create --name <env-name> clang cython llvm-openmp "python<=3.11"
+conda create --name <env-name> poetry "python<=3.11"
 ```
-(In order to get the inversion code running, you need to have the Clang compiler and the OpenMP libraries installed.)
+(In order to get the inversion code running, you need to have poetry installed.)
 
 Then, activate your environment
 ```
@@ -23,7 +23,7 @@ conda activate <env-name>
 
 Enter the root directory of the repository (which you should have downloaded with either git clone or the download button above), to install the package.
 ```
-pip install . -U
+python -m poetry install
 ```
 
 Uninstallation is possible by typing in the terminal (possibly in the specific virtual environment):
