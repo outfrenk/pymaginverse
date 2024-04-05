@@ -12,9 +12,9 @@ The library consists of two main modules:
 The easiest way to get a working environment set up is using the conda dependency manager, e.g. from [here](https://github.com/conda-forge/miniforge).
 Replacing <env-name> with a name of your choice, you can create a conda environment with all dependencies provided using:
 ```
-conda create --name <env-name> poetry "python<=3.11"
+conda create --name <env-name> "python==3.11"
 ```
-(In order to get the inversion code running, you need to have poetry installed.)
+(In order to get the inversion code running, you need to have poetry *properly* installed. See the [website](https://python-poetry.org/docs/#installing-with-the-official-installer) of poetry.)
 
 Then, activate your environment
 ```
@@ -23,7 +23,7 @@ conda activate <env-name>
 
 Enter the root directory of the repository (which you should have downloaded with either git clone or the download button above), to install the package.
 ```
-python -m poetry install
+poetry install
 ```
 
 Uninstallation is possible by typing in the terminal (possibly in the specific virtual environment):
