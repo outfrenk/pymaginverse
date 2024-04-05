@@ -1,10 +1,11 @@
-from setuptools.extension import Extension
+import os
 from setuptools.dist import Distribution
 from setuptools.command.build_ext import build_ext
 from Cython.Build import cythonize
 
-com_args = ['-std=c99', '-O3', '-fopenmp']
-link_args = ['-fopenmp']
+os.environ['CC'] = 'clang'
+os.environ['LDSHARED'] = 'clang -shared'
+
 extensions = []
 cmdclass = {'build_ext': build_ext}
 dist = Distribution(attrs=dict(
