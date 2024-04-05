@@ -501,18 +501,9 @@ class FieldInversion(object):
                                   sep=';')
 
         if save_iterations:
-            all_coeff = np.zeros(
-                (
-                    len(self.coeffs_per_iteration),
-                    len(self.t_array),
-                    self._nr_coeffs
-                )
-            )
-            for i in range(len(self.coeffs_per_iteration)):
-                all_coeff[i] = self.coeffs_per_iteration[i](self.t_array)
-            np.save(basedir / f'{file_name}_all.npy', all_coeff)
+            np.save(basedir / f'{file_name}_all.npy', self.coeffs_per_iteration)
         else:
-            gh_time = self.coeffs_per_iteration[-1](self.t_array)
+            gh_time = self.coeffs_per_iteration[-1]
             np.save(basedir / f'{file_name}_final.npy', gh_time)
         if save_dampnorm:
             np.savez(basedir / f'{file_name}_damp.npz',
