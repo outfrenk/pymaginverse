@@ -2232,22 +2232,22 @@ files = [
 
 [[package]]
 name = "pyerfa"
-version = "2.0.1.1"
+version = "2.0.1.2"
 description = "Python bindings for ERFA"
 optional = false
 python-versions = ">=3.9"
 files = [
-    {file = "pyerfa-2.0.1.1-cp39-abi3-macosx_10_9_x86_64.whl", hash = "sha256:1ce322ac30673c2aeb0ee22ced4938c1e9e26db0cbe175912a213aaff42383df"},
-    {file = "pyerfa-2.0.1.1-cp39-abi3-macosx_11_0_arm64.whl", hash = "sha256:67dfc00dcdea87a9b3c0bb4596fb0cfb54ee9c1c75fdcf19411d1029a18f6eec"},
-    {file = "pyerfa-2.0.1.1-cp39-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:34ee545780246fb0d1d3f7e46a6daa152be06a26b2d27fbfe309cab9ab488ea7"},
-    {file = "pyerfa-2.0.1.1-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:1db85db72ab352da6ffc790e41209d8f41feb5b175d682cf1f0e3e60e9e5cdf8"},
-    {file = "pyerfa-2.0.1.1-cp39-abi3-musllinux_1_1_x86_64.whl", hash = "sha256:c50b7cdb005632931b7b56a679cf25361ed6b3aa7c21e491e65cc89cb337e66a"},
-    {file = "pyerfa-2.0.1.1-cp39-abi3-win32.whl", hash = "sha256:30649047b7a8ce19f43e4d18a26b8a44405a6bb406df16c687330a3b937723b2"},
-    {file = "pyerfa-2.0.1.1-cp39-abi3-win_amd64.whl", hash = "sha256:94df7566ce5a5abb14e2dd1fe879204390639e9a76383ec27f10598eb24be760"},
-    {file = "pyerfa-2.0.1.1-pp39-pypy39_pp73-macosx_10_9_x86_64.whl", hash = "sha256:0e95cf3d11f76f473bf011980e9ea367ca7e68ca675d8b32499814fb6e387d4c"},
-    {file = "pyerfa-2.0.1.1-pp39-pypy39_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:08b5abb90b34e819c1fca69047a76c0d344cb0c8fe4f7c8773f032d8afd623b4"},
-    {file = "pyerfa-2.0.1.1-pp39-pypy39_pp73-win_amd64.whl", hash = "sha256:1c0c1efa701cab986aa58d03c58f77e47ea1898bff2684377d29580a055f836a"},
-    {file = "pyerfa-2.0.1.1.tar.gz", hash = "sha256:dbac74ef8d3d3b0f22ef0ad3bbbdb30b2a9e10570b1fa5a98be34c7be36c9a6b"},
+    {file = "pyerfa-2.0.1.2-cp39-abi3-macosx_10_9_x86_64.whl", hash = "sha256:3b37a721c73a8307809db3bc6bfa659799a2fdfdcfcc523661f6e24b828f2330"},
+    {file = "pyerfa-2.0.1.2-cp39-abi3-macosx_11_0_arm64.whl", hash = "sha256:619d50214386e1e97d5129f655617bf8d97e4985b1fa377cb7ce1b0ee91bf1c6"},
+    {file = "pyerfa-2.0.1.2-cp39-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:a3c246249e994f69a9357c6c56ba89ebf97534fc370f115f203f452facb16787"},
+    {file = "pyerfa-2.0.1.2-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:0a46f0e8fa765739855edd72d22d868df765dd0ce65cde5732baa1b1915c5d47"},
+    {file = "pyerfa-2.0.1.2-cp39-abi3-musllinux_1_1_x86_64.whl", hash = "sha256:9085c9b55f887dde1e35ab8ad1e90f56c4792962488a9b770366d2f309ddf5e7"},
+    {file = "pyerfa-2.0.1.2-cp39-abi3-win32.whl", hash = "sha256:4ce07e10db430845a8d15d2fc39d4e4a5f89874db1dbb53f2f2356ad58d77602"},
+    {file = "pyerfa-2.0.1.2-cp39-abi3-win_amd64.whl", hash = "sha256:0e3664a2d8f47c6e54fd445d551eb59ef4f496c21e7b8827111e3f2e84f2c145"},
+    {file = "pyerfa-2.0.1.2-pp39-pypy39_pp73-macosx_10_9_x86_64.whl", hash = "sha256:0bb6a4498ab2fea354417c5831ca48859bea85fc092466ba5c3bbbc0c66c1849"},
+    {file = "pyerfa-2.0.1.2-pp39-pypy39_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:4b4263db1ec97f2c5da5b8fffabab16bf24a2b72da54a66fa4fd540938c12c48"},
+    {file = "pyerfa-2.0.1.2-pp39-pypy39_pp73-win_amd64.whl", hash = "sha256:ff697fab6ab9e9b100da0c9b10a6e8711b2be61b9cb0f1dd2179c37f3face1f2"},
+    {file = "pyerfa-2.0.1.2.tar.gz", hash = "sha256:9a7fb7c8b0ddd0527f344faf891a3a0975b98fc0155219058a0bcf2fb3e1cb09"},
 ]
 
 [package.dependencies]

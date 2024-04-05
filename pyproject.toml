@@ -15,7 +15,7 @@ packages = [
 ]
 
 [tool.poetry.build]
-generate-setup-file = true
+generate-setup-file = false
 script = "build_extension.py"
 
 [tool.poetry.dependencies]

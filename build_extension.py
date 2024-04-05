@@ -1,10 +1,10 @@
-import os
+# import os
 from setuptools.dist import Distribution
 from setuptools.command.build_ext import build_ext
 from Cython.Build import cythonize
 
-os.environ['CC'] = 'clang'
-os.environ['LDSHARED'] = 'clang -shared'
+# os.environ['CC'] = 'clang'
+# os.environ['LDSHARED'] = 'clang -shared'
 
 extensions = []
 cmdclass = {'build_ext': build_ext}
