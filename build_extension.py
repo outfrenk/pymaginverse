@@ -6,7 +6,7 @@ from Cython.Build import cythonize
 # os.environ['CC'] = 'clang'
 # os.environ['LDSHARED'] = 'clang -shared'
 
-extensions = []
+extensions = ["geomagnetic_field_inversions/banded_tools/build_banded.pyx"]
 cmdclass = {'build_ext': build_ext}
 dist = Distribution(attrs=dict(
             cmdclass=dict(build_ext=cmdclass['build_ext']),
