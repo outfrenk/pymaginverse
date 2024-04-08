@@ -1,5 +1,5 @@
 # geomagnetic_field_inversions
-Library for the numerical inversion of geomagnetic field data. This code is based on Fortran Code provided by Monica Korte and two papers:
+Library for the numerical inversion of geomagnetic field data. This library is brough to you by Frenk Out, Maximilian Schanner, Liz van Grinsven, Monika Korte, and Lennart de Groot. This code is based on Fortran code used for the following two papers:
 - Korte, M., & Constable, C. (2003). [Continuous global geomagnetic field models for the past 3000 years.](https://www.sciencedirect.com/science/article/pii/S0031920103001651) Physics of the Earth and Planetary Interiors, 140(1-3), 73-89. [10.1016/j.pepi.2003.07.013](https://doi.org/10.1016/j.pepi.2003.07.013)
 - Korte, M., Donadini, F., & Constable, C. G. (2009). [Geomagnetic field for 0–3 ka: 2. A new series of time‐varying global models.](https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2008GC002297) Geochemistry, Geophysics, Geosystems, 10(6). [10.1029/2008GC002297](https://doi.org/10.1029/2008GC002297)
 
