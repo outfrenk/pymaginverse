@@ -14,6 +14,11 @@ packages = [
     {include = "geomagnetic_field_inversions"}
 ]
 
+include = [
+    # CUDA/C extensions must be included in the wheel distributions
+    {path = "geomagnetic_field_inversions/banded_tools/*.so", format = "wheel"},
+]
+
 [tool.poetry.build]
 generate-setup-file = false
 script = "build_extension.py"

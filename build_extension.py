@@ -41,7 +41,7 @@ build_ext_cmd.run()
 #     def build(setup_kwargs):
 #         # The file you want to compile
 #         extensions = [
-#             "banded_tools/build_banded.pyx"
+#             "geomagnetic_field_inversions/banded_tools/build_banded.pyx"
 #         ]
 #
 #         # gcc arguments hack: enable optimizations

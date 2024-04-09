@@ -9,7 +9,25 @@ The library consists of two main modules:
 - `geomagnetic_field_inversions/field_inversion.py`: contains the `FieldInversion`-class that performs the actual inversion of geomagnetic field data. It requires, besides the time vector over which the inversion will take place, an instance of `InputData` as minimum input.
 
 ## Installation
-In order to get the inversion code running, you need to have poetry *properly* installed. See the [website](https://python-poetry.org/docs/#installing-with-the-official-installer) of poetry, or run:
+### option a: pip
+The easiest way to get a working environment set up is using the conda dependency manager, e.g. from [here](https://github.com/conda-forge/miniforge).
+Replacing <env-name> with a name of your choice, you can create a conda environment with all dependencies provided using:
+```
+conda create --name <env-name> "python==3.11"
+```
+
+Then, activate your environment
+```
+conda activate <env-name>
+```
+
+Subsequently, enter the root directory of the repository (which you should have downloaded with either git clone or the download button above), to install the package:
+```
+pip install . -U
+```
+
+### Option b: poetry
+In order to get the inversion code running with poetry, you need to have poetry *properly* installed. See the [website](https://python-poetry.org/docs/#installing-with-the-official-installer) of poetry, or run:
 ```
 curl -sSL https://install.python-poetry.org | python3 -
 ```
@@ -30,6 +48,7 @@ Enter the root directory of the repository (which you should have downloaded wit
 poetry install
 ```
 
+## Uninstallation
 Uninstallation is possible by typing in the terminal (possibly in the specific virtual environment):
 ```
 pip uninstall geomagnetic_field_inversions
