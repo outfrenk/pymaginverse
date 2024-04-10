@@ -1,5 +1,5 @@
 # geomagnetic_field_inversions
-Library for the numerical inversion of geomagnetic field data. This code is based on Fortran Code provided by Monica Korte and two papers:
+Library for the numerical inversion of geomagnetic field data. This library is brough to you by Frenk Out, Maximilian Schanner, Liz van Grinsven, Monika Korte, and Lennart de Groot. This code is based on Fortran code used for the following two papers:
 - Korte, M., & Constable, C. (2003). [Continuous global geomagnetic field models for the past 3000 years.](https://www.sciencedirect.com/science/article/pii/S0031920103001651) Physics of the Earth and Planetary Interiors, 140(1-3), 73-89. [10.1016/j.pepi.2003.07.013](https://doi.org/10.1016/j.pepi.2003.07.013)
 - Korte, M., Donadini, F., & Constable, C. G. (2009). [Geomagnetic field for 0–3 ka: 2. A new series of time‐varying global models.](https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2008GC002297) Geochemistry, Geophysics, Geosystems, 10(6). [10.1029/2008GC002297](https://doi.org/10.1029/2008GC002297)
 
@@ -9,12 +9,34 @@ The library consists of two main modules:
 - `geomagnetic_field_inversions/field_inversion.py`: contains the `FieldInversion`-class that performs the actual inversion of geomagnetic field data. It requires, besides the time vector over which the inversion will take place, an instance of `InputData` as minimum input.
 
 ## Installation
-The easiest way to get a working set up is using the conda dependency manager, e.g. from [here](https://github.com/conda-forge/miniforge).
+### option a: pip
+The easiest way to get a working environment set up is using the conda dependency manager, e.g. from [here](https://github.com/conda-forge/miniforge).
 Replacing <env-name> with a name of your choice, you can create a conda environment with all dependencies provided using:
 ```
-conda create --name <env-name> clang cython llvm-openmp "python<=3.11"
+conda create --name <env-name> "python==3.11"
 ```
-(In order to get the inversion code running, you need to have the Clang compiler and the OpenMP libraries installed.)
+
+Then, activate your environment
+```
+conda activate <env-name>
+```
+
+Subsequently, enter the root directory of the repository (which you should have downloaded with either git clone or the download button above), to install the package:
+```
+pip install . -U
+```
+
+### Option b: poetry
+In order to get the inversion code running with poetry, you need to have poetry *properly* installed. See the [website](https://python-poetry.org/docs/#installing-with-the-official-installer) of poetry, or run:
+```
+curl -sSL https://install.python-poetry.org | python3 -
+```
+
+The easiest way to get a working environment set up is using the conda dependency manager, e.g. from [here](https://github.com/conda-forge/miniforge).
+Replacing <env-name> with a name of your choice, you can create a conda environment with all dependencies provided using:
+```
+conda create --name <env-name> "python==3.11"
+```
 
 Then, activate your environment
 ```
@@ -23,9 +45,10 @@ conda activate <env-name>
 
 Enter the root directory of the repository (which you should have downloaded with either git clone or the download button above), to install the package.
 ```
-pip install . -U
+poetry install
 ```
 
+## Uninstallation
 Uninstallation is possible by typing in the terminal (possibly in the specific virtual environment):
 ```
 pip uninstall geomagnetic_field_inversions

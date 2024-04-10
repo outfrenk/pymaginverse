@@ -1,3 +1,44 @@
+[tool.poetry]
+name = "geomagnetic-field-inversions"
+version = "1.0.0"
+description = "Python Library performing Geomagnetic Field inversions for (paleo)magnetic data"
+authors = ["Frenk Out <outfrenk@gmail.com>",
+	       "Maximilian Schanner",
+		   "Liz van Grinsven",
+		   "Monika Korte",
+		   "Lennart de Groot"]
+license = "MIT License"
+readme = "README.md"
+
+packages = [
+    {include = "geomagnetic_field_inversions"}
+]
+
+include = [
+    # CUDA/C extensions must be included in the wheel distributions
+    {path = "geomagnetic_field_inversions/banded_tools/*.so", format = "wheel"},
+]
+
+[tool.poetry.build]
+generate-setup-file = false
+script = "build_extension.py"
+
+[tool.poetry.dependencies]
+python = ">=3.9,<3.12"
+numpy = "^1.26.4"
+scipy = "^1.12.0"
+pandas = "^2.2.1"
+pathlib = "^1.0.1"
+tqdm = "^4.66.1"
+matplotlib = "^3.8.3"
+Cartopy = "^0.22.0"
+pyshtools = "4.10.4"
+cython = "^3.0"
+
+[tool.poetry.group.dev.dependencies]
+jupyter = "^1.0.0"
+pytest = "^8.0.2"
+
 [build-system]
-requires = ["Cython", "setuptools", "numpy"]
-build-backend = "setuptools.build_meta"
+requires = ["setuptools", "poetry-core>=1.1.14", "cython>=3.0", "numpy>=1.26"]
+build-backend = "poetry.core.masonry.api"
