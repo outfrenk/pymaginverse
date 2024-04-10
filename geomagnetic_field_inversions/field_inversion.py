@@ -503,8 +503,9 @@ class FieldInversion(object):
         if save_iterations:
             np.save(basedir / f'{file_name}_all.npy', self.coeffs_per_iteration)
         else:
-            gh_time = self.coeffs_per_iteration[-1]
-            np.save(basedir / f'{file_name}_final.npy', gh_time)
+            final_gh = self.coeffs_per_iteration[-1]
+            np.save(basedir / f'{file_name}_final.npy', final_gh)
+
         if save_dampnorm:
             np.savez(basedir / f'{file_name}_damp.npz',
                      spat_norm=self.spat_norm,
