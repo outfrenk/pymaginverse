@@ -33,7 +33,6 @@ tqdm = "^4.66.1"
 matplotlib = "^3.8.3"
 Cartopy = "^0.22.0"
 pyshtools = "4.10.4"
-numba = "^0.59.0"
 cython = "^3.0"
 
 [tool.poetry.group.dev.dependencies]
