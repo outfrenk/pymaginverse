@@ -5,3 +5,4 @@ __pycache__/
 doc/output/
 *egg-info/
 build_banded.c*
+dist/
