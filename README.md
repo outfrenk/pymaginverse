@@ -1,12 +1,12 @@
-# geomagnetic_field_inversions
+# pymaginverse
 Library for the numerical inversion of geomagnetic field data. This library is brough to you by Frenk Out, Maximilian Schanner, Liz van Grinsven, Monika Korte, and Lennart de Groot. This code is based on Fortran code used for the following two papers:
 - Korte, M., & Constable, C. (2003). [Continuous global geomagnetic field models for the past 3000 years.](https://www.sciencedirect.com/science/article/pii/S0031920103001651) Physics of the Earth and Planetary Interiors, 140(1-3), 73-89. [10.1016/j.pepi.2003.07.013](https://doi.org/10.1016/j.pepi.2003.07.013)
 - Korte, M., Donadini, F., & Constable, C. G. (2009). [Geomagnetic field for 0–3 ka: 2. A new series of time‐varying global models.](https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2008GC002297) Geochemistry, Geophysics, Geosystems, 10(6). [10.1029/2008GC002297](https://doi.org/10.1029/2008GC002297)
 
 ## Library
 The library consists of two main modules:
-- `geomagnetic_field_inversions/data_prep.py`: contains methods for correctly preparing data for the `FieldInversion`-class. This method stores all required parameters per station into one class, which can then be imported directly into `FieldInversion`. The class takes a csv-file of declination, inclination, intensity, x, y, z, and/or h-component magnetic data + accompanying data errors.
-- `geomagnetic_field_inversions/field_inversion.py`: contains the `FieldInversion`-class that performs the actual inversion of geomagnetic field data. It requires, besides the time vector over which the inversion will take place, an instance of `InputData` as minimum input.
+- `pymaginverse/data_prep.py`: contains methods for correctly preparing data for the `FieldInversion`-class. This method stores all required parameters per station into one class, which can then be imported directly into `FieldInversion`. The class takes a csv-file of declination, inclination, intensity, x, y, z, and/or h-component magnetic data + accompanying data errors.
+- `pymaginverse/field_inversion.py`: contains the `FieldInversion`-class that performs the actual inversion of geomagnetic field data. It requires, besides the time vector over which the inversion will take place, an instance of `InputData` as minimum input.
 
 ## Installation
 ### option a: pip
@@ -51,7 +51,7 @@ poetry install
 ## Uninstallation
 Uninstallation is possible by typing in the terminal (possibly in the specific virtual environment):
 ```
-pip uninstall geomagnetic_field_inversions
+pip uninstall pymaginverse
 ```
 ## Tutorial
 We have provided four tutorials to make the library easier to use and understand. You can find the jupyter notebooks containing the tutorials in the `doc`-folder.
@@ -71,5 +71,4 @@ After installation of pytest, you can test the code by typing `pytest`.
 The Article describing this library can be found here:
 
 ## Acknowledgements
-This Library is based on years of geomagnetic code development by:
-- many people
+This Python code is based on a version of Fortran codes that have been spread within the geomagnetic community by personal communication and in its original version were mainly written by David Gubbins, Kathryn Whaler, Jeremy Bloxham, and Andrew Jackson. The authors want to express their gratitude to Sanja Panovska for the fruitful discussions on the algorithm and its spatial and temporal damping options.

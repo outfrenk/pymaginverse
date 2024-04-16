@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "geomagnetic-field-inversions"
+name = "pymaginverse"
 version = "1.0.0"
 description = "Python Library performing Geomagnetic Field inversions for (paleo)magnetic data"
 authors = ["Frenk Out <outfrenk@gmail.com>",
@@ -11,12 +11,12 @@ license = "MIT License"
 readme = "README.md"
 
 packages = [
-    {include = "geomagnetic_field_inversions"}
+    {include = "pymaginverse"}
 ]
 
 include = [
     # CUDA/C extensions must be included in the wheel distributions
-    {path = "geomagnetic_field_inversions/banded_tools/*.so", format = "wheel"},
+    {path = "pymaginverse/banded_tools/*.so", format = "wheel"},
 ]
 
 [tool.poetry.build]

@@ -5,8 +5,8 @@ from matplotlib import pyplot as plt
 
 from pandas import read_csv
 
-from geomagnetic_field_inversions.data_prep import InputData
-from geomagnetic_field_inversions import FieldInversion
+from pymaginverse.data_prep import InputData
+from pymaginverse import FieldInversion
 
 from pymagglobal.utils import i2lm_l, i2lm_m
 

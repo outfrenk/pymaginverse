@@ -4,8 +4,8 @@ from pathlib import Path
 import numpy as np
 from pandas import read_csv
 
-from geomagnetic_field_inversions.data_prep import InputData
-from geomagnetic_field_inversions import FieldInversion
+from pymaginverse.data_prep import InputData
+from pymaginverse import FieldInversion
 
 path = Path(__file__).parent
 

@@ -6,7 +6,7 @@ from Cython.Build import cythonize
 # os.environ['CC'] = 'clang'
 # os.environ['LDSHARED'] = 'clang -shared'
 
-extensions = ["geomagnetic_field_inversions/banded_tools/build_banded.pyx"]
+extensions = ["pymaginverse/banded_tools/build_banded.pyx"]
 cmdclass = {'build_ext': build_ext}
 dist = Distribution(attrs=dict(
             cmdclass=dict(build_ext=cmdclass['build_ext']),
@@ -41,7 +41,7 @@ build_ext_cmd.run()
 #     def build(setup_kwargs):
 #         # The file you want to compile
 #         extensions = [
-#             "geomagnetic_field_inversions/banded_tools/build_banded.pyx"
+#             "pymaginverse/banded_tools/build_banded.pyx"
 #         ]
 #
 #         # gcc arguments hack: enable optimizations

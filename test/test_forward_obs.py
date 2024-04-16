@@ -6,8 +6,8 @@ from pandas import read_csv
 
 from scipy.interpolate import BSpline
 
-from geomagnetic_field_inversions.forward_modules.frechet import frechet_basis
-from geomagnetic_field_inversions.forward_modules.fwtools import (
+from pymaginverse.forward_modules.frechet import frechet_basis
+from pymaginverse.forward_modules.fwtools import (
     forward_obs,
     forward_obs_time,
 )

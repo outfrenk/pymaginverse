@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from pathlib import Path
-from geomagnetic_field_inversions import InputData, FieldInversion
+from pymaginverse import InputData, FieldInversion
 
 # load csv-file into InputData class
 path = Path().absolute()
