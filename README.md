@@ -1,3 +1,4 @@
+[![DOI](https://zenodo.org/badge/612286043.svg)](https://zenodo.org/doi/10.5281/zenodo.11098494)
 # pymaginverse
 Library for the numerical inversion of geomagnetic field data. This library is brough to you by Frenk Out, Maximilian Schanner, Liz van Grinsven, Monika Korte, and Lennart de Groot. This code is based on Fortran code used for the following two papers:
 - Korte, M., & Constable, C. (2003). [Continuous global geomagnetic field models for the past 3000 years.](https://www.sciencedirect.com/science/article/pii/S0031920103001651) Physics of the Earth and Planetary Interiors, 140(1-3), 73-89. [10.1016/j.pepi.2003.07.013](https://doi.org/10.1016/j.pepi.2003.07.013)
