@@ -2339,26 +2339,31 @@ files = [
 
 [[package]]
 name = "pyshtools"
-version = "4.12.2"
+version = "4.10.4"
 description = "SHTOOLS - Spherical Harmonic Tools"
 optional = false
-python-versions = ">=3.9"
+python-versions = ">=3.6"
 files = [
-    {file = "pyshtools-4.12.2-cp310-cp310-macosx_12_0_x86_64.whl", hash = "sha256:8f6a0409af53a1ee1f984c5f282cda0988faa44e0c38385ee4004555c1cef2f7"},
-    {file = "pyshtools-4.12.2-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:7e8a579ca7a97be77d0f80b9a8a9e372c5be31c7249cf51fbf448f33e561f47d"},
-    {file = "pyshtools-4.12.2-cp311-cp311-macosx_12_0_x86_64.whl", hash = "sha256:d3c2a3cf4eded9f8ffa4af27cda0d7b8d837d823eceeaf777011db168e73a46f"},
-    {file = "pyshtools-4.12.2-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:2cfc23214fb584b9a887c56f656840e53388b84b5c8581334b3c1e7ff5cb7d14"},
-    {file = "pyshtools-4.12.2-cp312-cp312-macosx_12_0_x86_64.whl", hash = "sha256:a552b172dfa0d5438de514c9866ba004d197907bf998b1fab2c368cabc0738f5"},
-    {file = "pyshtools-4.12.2-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:a4299d7f6857d0245215b5f0250ccf1691bc66030d099768c6793774c897f27b"},
-    {file = "pyshtools-4.12.2-cp39-cp39-macosx_10_16_x86_64.whl", hash = "sha256:27254a7f95f74b9f53eedd2de651afab0fdea4aee57330256f5ba0a03af94b43"},
-    {file = "pyshtools-4.12.2-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:cf4bfcfb7feb6414ec2c8a876bdc40aac54e69e48b6bec86721cc381caeacd3f"},
-    {file = "pyshtools-4.12.2.tar.gz", hash = "sha256:966f1a1b99af0e87d8e3ceed116d320cda12a3c93771336804cd6b206698d79a"},
+    {file = "pyshtools-4.10.4-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:d49f8c963295019fa8a080e97f5ac1ab4c11632f5756553bdc57709c86fee5f4"},
+    {file = "pyshtools-4.10.4-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:5e3cfcbbde9fb2d896688f6c8ed92279337d8415cd1476c48ea46eb18f8a96ec"},
+    {file = "pyshtools-4.10.4-cp310-cp310-win_amd64.whl", hash = "sha256:fe1892d9dfeef323ab14432ee0994fb8799da1755667e0a7dab1f91c30507c4c"},
+    {file = "pyshtools-4.10.4-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:3a10e57ded0e948051094d49048c2ce553d28b0d3b63075077a0fdcab30a50f7"},
+    {file = "pyshtools-4.10.4-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:565df0dbf7ec705952d88be1e3fe3a7cc054dcb0d7b663e8debccfa7deab2bdc"},
+    {file = "pyshtools-4.10.4-cp311-cp311-win_amd64.whl", hash = "sha256:404f63b9f333c8a0da655d81a5440aa9a29edf68cf8f73e2ab70a933ebb0d350"},
+    {file = "pyshtools-4.10.4-cp37-cp37m-win_amd64.whl", hash = "sha256:981ecfcc405c6899eb97a5629e6259f804203ac624cd37a924f06684a17f6955"},
+    {file = "pyshtools-4.10.4-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:8609b347ed08a68efa0aab52efad194dbe25da17579ca2536906a8caedb1a4d9"},
+    {file = "pyshtools-4.10.4-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:17dc43427107c75649c8a5b0dc626325d6418f5ce48ba322c8cb9a35ea3c0bb0"},
+    {file = "pyshtools-4.10.4-cp38-cp38-win_amd64.whl", hash = "sha256:6a14591517f100ebbe70159ccec140ea90c0d90cca1ac24d6c4ca3f15b423449"},
+    {file = "pyshtools-4.10.4-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:6d4eb629f425928764f246f9f68ffa39674d3bb89dbeb11e34643920b6ebe3e9"},
+    {file = "pyshtools-4.10.4-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:9abcdd31978df9eca944b264242d6891fdc1c7a86a0761a2ebbf2eef78d68184"},
+    {file = "pyshtools-4.10.4-cp39-cp39-win_amd64.whl", hash = "sha256:4f5adcb5925c533091711f8ec41a5951b108117203e9f707947eea7ac81d3ef4"},
+    {file = "pyshtools-4.10.4.tar.gz", hash = "sha256:4edbee572990603c40f25daf1c8ff5d3429ec1c52343e0118fc2ae28f1d5588a"},
 ]
 
 [package.dependencies]
 astropy = ">=4.0"
 matplotlib = ">=3.3"
-numpy = "*"
+numpy = ">=1.25.2"
 pooch = ">=1.1"
 requests = "*"
 scipy = ">=0.14.0"
@@ -2366,10 +2371,10 @@ tqdm = "*"
 xarray = "*"
 
 [package.extras]
-cartopy = ["cartopy (>=0.18.0)"]
+cartopy = ["cartopy (>=0.18.0)", "cython", "pyshp", "shapely", "six"]
 ducc = ["ducc0 (>=0.15)"]
 palettable = ["palettable (>=3.3)"]
-pygmt = ["pygmt (>=0.7)"]
+pygmt = ["pygmt (>=0.3)"]
 
 [[package]]
 name = "pytest"
@@ -3280,4 +3285,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.9,<3.12"
-content-hash = "ab99a11c2916b612ce050538a81f57bb27b20858a2df060bb9e6023f880c32ae"
+content-hash = "e86e1cb00d3341a7f3cbfee0d7face715b1fffc4c647d1fda6ebe4240cb423ba"
