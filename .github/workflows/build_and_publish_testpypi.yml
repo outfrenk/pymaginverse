@@ -9,7 +9,7 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ['3.9', '3.10', '3.11']
-        poetry-version: [1.2]
+        poetry-version: [1.8]
         os: [ubuntu-latest, windows-latest, macos-latest]
 
     runs-on: ${{ matrix.os }}
@@ -28,13 +28,15 @@ jobs:
         python -m pip install --upgrade pip
         python -m pip install poetry==${{ matrix.poetry-version }}
 
+
+    - name: Build with Poetry
+      shell: bash
+      run: |
+        python -m poetry build
+
     - name: Install dependencies
       shell: bash
       run: python -m poetry install
-
-    - name: Build with Poetry
-      run: |
-        python -m poetry build
 
     - name: Upload a Build Artifact
       uses: actions/upload-artifact@v3
@@ -52,7 +54,7 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ['3.11']
-        poetry-version: [1.2]
+        poetry-version: [1.8]
         os: [ubuntu-latest]
 
     runs-on: ${{ matrix.os }}
