@@ -10,15 +10,15 @@ jobs:
       matrix:
         python-version: ['3.9', '3.10', '3.11']
         poetry-version: [1.8]
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, windows-latest, macos-13]
 
     runs-on: ${{ matrix.os }}
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
 
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
 
@@ -58,6 +58,9 @@ jobs:
         os: [ubuntu-latest]
 
     runs-on: ${{ matrix.os }}
+    permissions:
+      id-token: write
+      contents: read
 
     steps:
     - name: Download all build objects (artifacts)
@@ -67,13 +70,12 @@ jobs:
       run: |
         ls -R
         mkdir dist
-        mv poetry-dist-objects-macos-latest/*.whl dist/
+        mv poetry-dist-objects-macos-13/*.whl dist/
         mv poetry-dist-objects-windows-latest/*.whl dist/
         mv poetry-dist-objects-ubuntu-latest/* dist/
 
     - name: Publish package to TestPyPI
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
-        user: __token__
-        password: ${{ secrets.TEST_PYPI_API_TOKEN }}
-        repository_url: https://test.pypi.org/legacy/
+          password: ${{ secrets.TOKEN }}
+          repository-url: https://test.pypi.org/legacy/
