@@ -11,11 +11,31 @@ jobs:
         python-version: ['3.9', '3.10', '3.11']
         poetry-version: [1.8]
         os: [ubuntu-latest, windows-latest, macos-latest]
+        toolchain:
+          - {compiler: gcc, version: 13}
+          - {compiler: intel, version: '2023.2'}
+          - {compiler: intel-classic, version: '2021.10'}
+          - {compiler: nvidia-hpc, version: '23.11'}
+        include:
+          - os: ubuntu-latest
+            toolchain: {compiler: gcc, version: 12}
+        exclude:
+          - os: macos-latest
+            toolchain: {compiler: intel, version: '2023.2'}
+          - os: macos-latest
+            toolchain: {compiler: nvidia-hpc, version: '23.11'}
+          - os: windows-latest
+            toolchain: {compiler: nvidia-hpc, version: '23.11'}
 
     runs-on: ${{ matrix.os }}
 
     steps:
     - uses: actions/checkout@v2
+    - uses: fortran-lang/setup-fortran@v1
+        id: setup-fortran
+        with:
+          compiler: ${{ matrix.toolchain.compiler }}
+          version: ${{ matrix.toolchain.version }}
 
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v4
