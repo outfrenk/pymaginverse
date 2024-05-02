@@ -28,13 +28,15 @@ jobs:
         python -m pip install --upgrade pip
         python -m pip install poetry==${{ matrix.poetry-version }}
 
+
+    - name: Build with Poetry
+      shell: bash
+      run: |
+        python -m poetry build
+
     - name: Install dependencies
       shell: bash
       run: python -m poetry install
-
-    - name: Build with Poetry
-      run: |
-        python -m poetry build
 
     - name: Upload a Build Artifact
       uses: actions/upload-artifact@v3
