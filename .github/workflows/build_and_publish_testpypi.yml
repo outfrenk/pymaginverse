@@ -63,6 +63,9 @@ jobs:
     - name: Download all build objects (artifacts)
       uses: actions/download-artifact@v4
 
+    - name: list files
+      uses: enricomarino/actions@v2
+
     - name: Extract files
       run: |
         ls -R
