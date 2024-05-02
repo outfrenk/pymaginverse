@@ -67,7 +67,7 @@ jobs:
       run: |
         ls -R
         mkdir dist
-        mv poetry-dist-objects-macos-latest/*.whl dist/
+        mv poetry-dist-objects-macos-13/*.whl dist/
         mv poetry-dist-objects-windows-latest/*.whl dist/
         mv poetry-dist-objects-ubuntu-latest/* dist/
 
