@@ -58,6 +58,9 @@ jobs:
         os: [ubuntu-latest]
 
     runs-on: ${{ matrix.os }}
+    permissions:
+      id-token: write
+      contents: read
 
     steps:
     - name: Download all build objects (artifacts)
@@ -74,4 +77,5 @@ jobs:
     - name: Publish package to TestPyPI
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
-        repository-url: https://test.pypi.org/legacy/
+          password: ${{ secrets.TOKEN }}
+          repository-url: https://test.pypi.org/legacy/
