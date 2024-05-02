@@ -32,7 +32,7 @@ pathlib = "^1.0.1"
 tqdm = "^4.66.1"
 matplotlib = "^3.8.3"
 Cartopy = "^0.22.0"
-pyshtools = "^4.10.4"
+pyshtools = "4.10.4"
 cython = "^3.0"
 
 [tool.poetry.group.dev.dependencies]
