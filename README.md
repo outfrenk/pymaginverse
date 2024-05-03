@@ -22,9 +22,14 @@ Then, activate your environment
 conda activate <env-name>
 ```
 
-Subsequently, enter the root directory of the repository (which you should have downloaded with either git clone or the download button above), to install the package:
+Subsequently, either enter the root directory of the repository (which you should have downloaded with either git clone or the download button above), to install the package:
 ```
 pip install . -U
+```
+
+or pip install directly from the pypi repository:
+```
+pip install pymaginverse
 ```
 
 ### Option b: poetry
