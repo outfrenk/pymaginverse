@@ -89,6 +89,16 @@ class InputData(object):
                             f"latitude or longitude out of range. \n"
                             f"Change before proceeding!")
 
+        # check if dec/inc/int values exist without error
+        fcond = (data['F'].notna() & data['dF'].isna())
+        dcond = (data['D'].notna() & data['dD'].isna())
+        icond = (data['I'].notna() & data['dI'].isna())
+        find = data.where((fcond | dcond | icond)).dropna(how='all').index
+        if find.size != 0:
+            raise Exception(f"Records with indices {find.values} contain "
+                            f"data without an error, please provide "
+                            f"an error or remove the data entry to proceed.")
+
         return data
 
     def geoc_transform_loc(self,
