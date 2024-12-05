@@ -267,6 +267,14 @@ def read_geomagia(fname: Union[str, Path],
                     'SigmaBa[microT]': 'dF', 'Dec[deg.]': 'D',
                     'Inc[deg.]': 'I', 'SiteLat[deg.]': 'lat',
                     'SiteLon[deg.]': 'lon', 'Alpha95[deg.]': 'alpha95'}
+        dat.rename(ren_dict, inplace=True, axis='columns')
+        dat.dropna(subset=['D', 'I', 'F'], how='all', inplace=True)
+        dat['alpha95'] = dat['alpha95'].where(
+            (dat['D'].isna() & dat['I'].isna()) ^ dat['alpha95'].notna(),
+            other=default_a95,
+        )
+        dat['dI'] = dat['alpha95'] * 57.3 / 140.
+        dat['dD'] = dat['dI'] / np.abs(np.cos(np.deg2rad(dat['I'])))
     # TODO: make better statement to differentiate between sed and volc
     except ValueError:
         dat = pd.read_csv(
@@ -282,37 +290,25 @@ def read_geomagia(fname: Union[str, Path],
         ren_dict = {'Age[yr.BP]': 't', 'Dec[deg.]': 'D', 'Inc[deg.]': 'I',
                     'Lat[deg.]': 'lat', 'Lon[deg.]': 'lon',
                     'SigmaDec[deg.]': 'dD', 'SigmaInc[deg.]': 'dI'}
-    dat.rename(ren_dict, inplace=True, axis='columns')
+        dat.rename(ren_dict, inplace=True, axis='columns')
+        dat.dropna(subset=['D', 'I'], how='all', inplace=True)
 
     # check if data already occurs and drop duplicates if wished so:
     if drop_duplicates:
-        dat.drop_duplicates(subset=['lat', 'lon', 't'],
-                            inplace=True)
+        dat.drop_duplicates(subset=['lat', 'lon', 't'], inplace=True)
     dat.dropna(subset=['lat', 'lon', 't'], inplace=True)
-    dat.dropna(subset=['D', 'I', 'F'], how='all', inplace=True)
     dat.reset_index(inplace=True, drop=True)
 
-    dat['alpha95'] = dat['alpha95'].where(
-        (dat['D'].isna() & dat['I'].isna()) ^ dat['alpha95'].notna(),
-        other=default_a95,
-    )
-    # dat['dat'] = np.clip(dat['dat'], 5, None)
-    # Correct sqrt(2) error
-    # dat['alpha95'] = np.clip(dat['alpha95'], np.sqrt(2) * 3.4, None)
-    dat['dI'] = dat['alpha95'] * 57.3 / 140.
     cond = dat['D'].notna() & dat['I'].isna()  # fix alpha95 issues
     # Get the corresponding indices
     ind = dat.where(cond).dropna(how='all').index
     if ind.size != 0:
         warn(f"Records with indices {ind.values} contain "
-             f"declination, but not inclination! No default error "
-             f"(force_error_d) has been inputted.\n"
+             f"declination, but no inclination! \n"
              f"To be able to use the provided data, these "
              f"records have been dropped from the output.",
              UserWarning)
         dat.drop(dat.where(cond).dropna(how='all').index,
                  inplace=True)
-
-    dat['dD'] = dat['dI'] / np.abs(np.cos(np.deg2rad(dat['I'])))
 
     return dat
