@@ -468,7 +468,7 @@ class FieldInversion(object):
                           save_dampnorm: bool = False,
                           ) -> None:
         """
-        Save the Gauss coefficients at every timestep
+        Save the time independent Gauss coefficients
 
         Parameters
         ----------
@@ -768,3 +768,28 @@ class FieldInversion(object):
                 'pymagglobal could not be found, please install to transform '
                 'the inversion result to a pymagglobal model.'
             )
+
+    def coefficients_csv(self,
+                         basedir: Union[Path, str] = '.',
+                         file_name: str = 'coeff'
+                         ) -> None:
+        """ saves Gauss coefficients per timestep in csv format
+
+        Parameters
+        ----------
+        basedir
+            path where files will be saved
+        file_name
+            optional name to add to files
+        """
+        # create labels
+        labels = []
+        for deg in np.arange(1, self.maxdegree + 1):
+            labels.append(f'g^0_{deg}')
+            for m in np.arange(1, deg + 1):
+                labels.extend([f'g^{m}_{deg}', f'h^{m}_{deg}'])
+        timeframe = pd.DataFrame(self.t_array, columns=['time'])
+        gaussframe = pd.DataFrame(self.coeffs_spline(
+            self.t_array).reshape(-1, self._nr_coeffs), columns=labels)
+        pd.concat([timeframe, gaussframe], axis=1).to_csv(
+            basedir / f'{file_name}.csv', sep=';', index=False)
