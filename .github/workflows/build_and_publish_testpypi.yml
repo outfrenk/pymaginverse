@@ -1,6 +1,9 @@
 name: build_and_publish_testpypi
 
-on: workflow_dispatch
+on:
+  workflow_dispatch
+  release:
+    types: [created, edited]
 
 jobs:
   build_packages:
