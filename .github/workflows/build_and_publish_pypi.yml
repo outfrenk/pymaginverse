@@ -1,7 +1,7 @@
 name: build_and_publish_pypi
 
 on:
-  workflow_dispatch
+  workflow_dispatch:
   release:
     types: [created, edited]
 
