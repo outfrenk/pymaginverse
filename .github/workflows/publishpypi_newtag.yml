@@ -1,9 +1,8 @@
 name: build_and_publish_pypi
 
 on:
-  label:
-    types:
-      - created
+  release:
+    types: [created]
 
 jobs:
   build_packages:
