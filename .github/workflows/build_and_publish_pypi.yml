@@ -1,6 +1,9 @@
 name: build_and_publish_pypi
 
-on: workflow_dispatch
+on:
+  label:
+    types:
+      - created
 
 jobs:
   build_packages:
