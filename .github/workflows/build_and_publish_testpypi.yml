@@ -38,7 +38,7 @@ jobs:
       run: python -m poetry install
 
     - name: Upload a Build Artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: poetry-dist-objects-${{ matrix.os }}
         path: |
@@ -63,7 +63,7 @@ jobs:
 
     steps:
     - name: Download all build objects (artifacts)
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
 
     - name: Extract files
       run: |
