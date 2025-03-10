@@ -40,7 +40,7 @@ jobs:
     - name: Upload a Build Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: poetry-dist-objects-${{ matrix.os }}
+        name: poetry-dist-objects-${{ matrix.os }}-${{ matrix.python-version }}
         path: |
           dist/*.whl
           dist/*.tar.gz
