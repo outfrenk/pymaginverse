@@ -308,9 +308,17 @@ class FieldInversion(object):
         if x0.ndim == 1 and len(x0) == self._nr_coeffs:
             self.x0 = x0.copy()
             self.coeffs_solution[:] = x0
+        elif (
+            x0.ndim == 2
+            and x0.shape[0] == self.nr_splines
+            and x0.shape[1] == self._nr_coeffs
+        ):
+            self.x0 = x0.copy()
+            self.coeffs_solution = x0.copy()
         else:
             raise Exception(f'x0 has incorrect shape: {x0.shape}. \n'
-                            f'It should have shape ({self._nr_coeffs},)')
+                            f'It should have shape ({self._nr_coeffs},) or '
+                            f'({self.nr_splines}, {self._nr_coeffs},).')
 
         for it in range(max_iter):  # start outer iteration loop
             if self.verbose:
