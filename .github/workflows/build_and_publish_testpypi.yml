@@ -72,7 +72,7 @@ jobs:
       run: |
         ls -R
         mkdir dist
-        mv pymaginverse-*/*.whl dist/
+        mv pymaginverse-*.whl dist/
 
     - name: Publish package to TestPyPI
       uses: pypa/gh-action-pypi-publish@release/v1
