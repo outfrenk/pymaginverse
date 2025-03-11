@@ -22,8 +22,6 @@ include = [
 [tool.poetry.build]
 generate-setup-file = false
 script = "build_extension.py"
-
-[tool.poetry]
 include = [{path = "pymaginverse/banded_tools/*.so", format = "wheel"}]
 
 [tool.poetry.dependencies]
