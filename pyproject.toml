@@ -14,14 +14,14 @@ packages = [
     {include = "pymaginverse"}
 ]
 
+[tool.poetry.build]
+generate-setup-file = false
+script = "build_extension.py"
+
 include = [
     # CUDA/C extensions must be included in the wheel distributions
     {path = "pymaginverse/banded_tools/*.so", format = "wheel"},
 ]
-
-[tool.poetry.build]
-generate-setup-file = false
-script = "build_extension.py"
 
 [tool.poetry.dependencies]
 python = ">=3.9,<3.13"
