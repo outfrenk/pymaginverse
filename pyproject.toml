@@ -16,7 +16,8 @@ packages = [
 
 include = [
     # CUDA/C extensions must be included in the wheel distributions
-    {path = "pymaginverse/banded_tools/*.so", format = ["sdist", "wheel"]},
+    {path = "pymaginverse/banded_tools/*.so", format = "wheel"},
+    {path = "pymaginverse/banded_tools/*.pyd", format = "wheel"}
 ]
 
 [tool.poetry.build]
