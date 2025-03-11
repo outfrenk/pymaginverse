@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pymaginverse"
-version = "1.1.4"
+version = "1.2.0"
 description = "Python Library performing Geomagnetic Field inversions for (paleo)magnetic data"
 authors = ["Frenk Out <outfrenk@gmail.com>",
 	       "Maximilian Schanner",
@@ -17,6 +17,7 @@ packages = [
 include = [
     # CUDA/C extensions must be included in the wheel distributions
     {path = "pymaginverse/banded_tools/*.so", format = "wheel"},
+    {path = "pymaginverse/banded_tools/*.pyd", format = "wheel"}
 ]
 
 [tool.poetry.build]
@@ -24,14 +25,14 @@ generate-setup-file = false
 script = "build_extension.py"
 
 [tool.poetry.dependencies]
-python = ">=3.9,<3.14"
+python = ">=3.9,<3.13"
 numpy = "^1.26.4"
 scipy = "^1.12.0"
 pandas = "^2.2.1"
 pathlib = "^1.0.1"
 tqdm = "^4.66.1"
 matplotlib = "^3.8.3"
-Cartopy = "^0.22.0"
+Cartopy = ">=0.18.0"
 pyshtools = "^4.10.4"
 cython = "^3.0"
 

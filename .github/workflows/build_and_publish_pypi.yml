@@ -1,16 +1,15 @@
 name: build_and_publish_pypi
 
 on: workflow_dispatch
-
 jobs:
   build_packages:
     name: Building wheels and main package
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.9', '3.10', '3.11']
+        python-version: ['3.9', '3.10', '3.11', '3.12']
         poetry-version: [1.8]
-        os: [ubuntu-latest, windows-latest, macos-13]
+        os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
 
     runs-on: ${{ matrix.os }}
 
@@ -39,9 +38,9 @@ jobs:
       run: python -m poetry install
 
     - name: Upload a Build Artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
-        name: poetry-dist-objects-${{ matrix.os }}
+        name: poetry-dist-objects-${{ matrix.os }}-${{ matrix.python-version }}
         path: |
           dist/*.whl
           dist/*.tar.gz
@@ -64,15 +63,16 @@ jobs:
 
     steps:
     - name: Download all build objects (artifacts)
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
+      with:
+        pattern: poetry-dist-objects-*
+        merge-multiple: true
 
     - name: Extract files
       run: |
         ls -R
         mkdir dist
-        mv poetry-dist-objects-macos-13/*.whl dist/
-        mv poetry-dist-objects-windows-latest/*.whl dist/
-        mv poetry-dist-objects-ubuntu-latest/* dist/
+        mv pymaginverse-*.whl dist/
 
     - name: Publish package to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
