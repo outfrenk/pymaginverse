@@ -23,6 +23,9 @@ include = [
 generate-setup-file = false
 script = "build_extension.py"
 
+[tool.poetry]
+include = [{path = "pymaginverse/banded_tools/*.so", format = "wheel"}]
+
 [tool.poetry.dependencies]
 python = ">=3.9,<3.13"
 numpy = "^1.26.4"
