@@ -76,6 +76,8 @@ After installation of pytest, you can test the code by typing `pytest`.
 
 ## Accompanying Article
 The Article describing this library can be found here:
+Out, F., Schanner, M., van Grinsven, L., Korte, M., & de Groot, L. V. (2025). Pymaginverse: A python package for global geomagnetic field modeling. Applied Computing and Geosciences, 100222.
+doi: [10.1016/j.acags.2025.100222](https://doi.org/10.1016/j.acags.2025.100222)
 
 ## Acknowledgements
 This Python code is based on a version of Fortran codes that have been spread within the geomagnetic community by personal communication and in its original version were mainly written by David Gubbins, Kathryn Whaler, Jeremy Bloxham, and Andrew Jackson. The authors want to express their gratitude to Sanja Panovska for the fruitful discussions on the algorithm and its spatial and temporal damping options.
